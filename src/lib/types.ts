@@ -62,3 +62,28 @@ export type ProgressEntry = {
   created_at: string
   created_by: string | null
 }
+
+export type Observation = {
+  id: string
+  operation_id: string
+  unit_id: string | null
+  lot_id: string | null
+  task_id: string | null
+  status: string
+  title: string
+  detail: string | null
+  priority: string | null
+  due_date: string | null
+  created_at: string
+  created_by: string | null
+}
+
+export type ObservationEvent = {
+  id: string
+  observation_id: string
+  visit_id: string | null
+  status: string | null
+  note: string | null
+  occurred_at: string
+  created_by: string | null
+}

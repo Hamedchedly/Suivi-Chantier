@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Company, Lot, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
+import type { Company, Lot, Observation, ObservationEvent, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
 
 function db() { if (!supabase) throw new Error('Supabase n’est pas configuré.'); return supabase }
 export async function operationData(operationId: string) {
@@ -69,6 +69,19 @@ export async function listProgressByOperation(operation_id: string): Promise<Pro
   const { data, error } = await db().from('progress_entries').select('id, operation_id, visit_id, unit_id, lot_id, task_id, progressed_at, percentage, status, comment, created_at, created_by').eq('operation_id', operation_id).order('progressed_at', { ascending: true }).order('created_at', { ascending: true })
   if (error) throw error
   return (data ?? []) as ProgressEntry[]
+}
+
+export async function listObservationsByOperation(operation_id: string): Promise<Observation[]> {
+  const { data, error } = await db().from('observations').select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, created_at, created_by').eq('operation_id', operation_id).order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Observation[]
+}
+
+export async function listObservationEvents(observationIds: string[]): Promise<ObservationEvent[]> {
+  if (observationIds.length === 0) return []
+  const { data, error } = await db().from('observation_events').select('id, observation_id, visit_id, status, note, occurred_at, created_by').in('observation_id', observationIds).order('occurred_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as ObservationEvent[]
 }
 
 export async function lastProgressForUnit(operation_id: string, unit_id: string): Promise<ProgressEntry[]> {

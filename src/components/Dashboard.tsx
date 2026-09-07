@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listProgressByOperation, listTasksByOperation } from '../lib/data'
-import { evolution, itemPoints, latestPerTask, latestPerTaskAndUnit, metricsFromPoints, type ScopeMetrics } from '../lib/dashboard'
+import { listObservationEvents, listObservationsByOperation, listProgressByOperation, listTasksByOperation } from '../lib/data'
+import { evolution, filterHistoryRows, itemPoints, latestPerTask, latestPerTaskAndUnit, metricsFromPoints, type ScopeMetrics } from '../lib/dashboard'
+import { buildObservationViews, filterObservationViewsByUnit, observationsForTask, type ObservationView } from '../lib/observations'
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Operation, ProgressEntry, Task, Unit } from '../lib/types'
 
-type Props = { operation: Operation; units: Unit[]; lots: Lot[] }
+type Props = {
+  operation: Operation
+  units: Unit[]
+  lots: Lot[]
+  initialTaskId?: string | null
+  initialUnitId?: string | null
+  onExitHistory?: () => void
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tous les statuts' },
@@ -24,7 +32,7 @@ const formatPercent = (value: number | null | undefined): string =>
 
 const formatDate = (iso: string): string => new Date(iso).toLocaleDateString('fr-FR')
 
-export function Dashboard({ operation, units, lots }: Props) {
+export function Dashboard({ operation, units, lots, initialTaskId = null, initialUnitId = null, onExitHistory }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [entries, setEntries] = useState<ProgressEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +41,9 @@ export function Dashboard({ operation, units, lots }: Props) {
   const [buildingFilter, setBuildingFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [locationFilter, setLocationFilter] = useState(initialUnitId ?? '')
+  const [observationViews, setObservationViews] = useState<ObservationView[]>([])
+  const [observationsLoading, setObservationsLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -125,9 +136,54 @@ export function Dashboard({ operation, units, lots }: Props) {
       .sort((a, b) => a.progressed_at.localeCompare(b.progressed_at) || a.created_at.localeCompare(b.created_at))
   }, [selectedTask, entries])
 
-  const taskEvolution = useMemo(
-    () => (selectedTask ? evolution(taskHistory) : { latest: null, previous: null, deltaPoints: null, direction: 'none' as const, first: false }),
-    [selectedTask, taskHistory]
+  const filteredHistory = useMemo(
+    () => filterHistoryRows(taskHistory, locationFilter || null),
+    [taskHistory, locationFilter]
+  )
+
+  const seriesEvolution = useMemo(
+    () => (selectedTask ? evolution(filteredHistory) : { latest: null, previous: null, deltaPoints: null, direction: 'none' as const, first: false }),
+    [selectedTask, filteredHistory]
+  )
+
+  const historyLocations = useMemo(() => {
+    const ids = new Set(taskHistory.map((row) => row.unit_id).filter((id): id is string => id !== null))
+    return units.filter((unit) => ids.has(unit.id))
+  }, [taskHistory, units])
+
+  useEffect(() => {
+    if (!initialTaskId || selectedTask || tasks.length === 0) return
+    const found = tasks.find((task) => task.id === initialTaskId)
+    if (found) {
+      setSelectedTask(found)
+      setLocationFilter(initialUnitId ?? '')
+    }
+  }, [tasks, initialTaskId, initialUnitId, selectedTask])
+
+  useEffect(() => {
+    if (!selectedTask) {
+      setObservationViews([])
+      return
+    }
+    let cancelled = false
+    setObservationsLoading(true)
+    void (async () => {
+      try {
+        const observations = observationsForTask(await listObservationsByOperation(operation.id), selectedTask.id, selectedTask.lot_id)
+        const events = await listObservationEvents(observations.map((observation) => observation.id))
+        if (!cancelled) setObservationViews(buildObservationViews(observations, events))
+      } catch {
+        if (!cancelled) setObservationViews([])
+      } finally {
+        if (!cancelled) setObservationsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedTask, operation.id])
+
+  const filteredObservations = useMemo(
+    () => filterObservationViewsByUnit(observationViews, locationFilter || null),
+    [observationViews, locationFilter]
   )
 
   const lotName = (lotId: string): string => lots.find((lot) => lot.id === lotId)?.name ?? ''
@@ -141,43 +197,68 @@ export function Dashboard({ operation, units, lots }: Props) {
     return <section className="stack"><p className="eyebrow">{operation.name}</p><h2>Tableau de bord</h2><p className="notice error">{error}</p></section>
   }
   if (selectedTask) {
-    const latest = taskEvolution.latest
+    const latest = seriesEvolution.latest
+    const onBack = onExitHistory ?? (() => setSelectedTask(null))
     return (
       <section className="stack">
         <p className="eyebrow">{operation.name}</p>
         <h2>Historique de la tâche</h2>
-        <button type="button" className="link" onClick={() => setSelectedTask(null)}>← Retour au tableau de bord</button>
+        <button type="button" className="link" onClick={onBack}>← Retour</button>
         <div className="panel">
           <p className="eyebrow">{lotName(selectedTask.lot_id)}</p>
           <h3>{selectedTask.name}{selectedTask.reference ? ` (${selectedTask.reference})` : ''}</h3>
           <p className="muted">{taskScopeLabel(selectedTask)}</p>
-          {latest && (
-            <dl className="kv">
-              <dt>Dernière visite</dt><dd>{formatDate(latest.progressed_at)}</dd>
-              <dt>Avancement</dt><dd>{formatPercent(latest.percentage)}</dd>
-              <dt>Statut</dt><dd>{latest.status ? STATUS_LABEL[latest.status] ?? latest.status : '—'}</dd>
-              {latest.comment && <><dt>Note</dt><dd>{latest.comment}</dd></>}
-            </dl>
+          <div className="filters">
+            <label>Localisation<select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+              <option value="">Toutes les localisations</option>
+              {historyLocations.map((unit) => <option key={unit.id} value={unit.id}>{unit.code ?? ''} {unit.name}</option>)}
+            </select></label>
+          </div>
+          {filteredHistory.length === 0
+            ? <p className="notice">Aucune progression enregistrée pour cette tâche et cette localisation.</p>
+            : latest && (
+              <>
+                <dl className="kv">
+                  <dt>Dernière visite</dt><dd>{formatDate(latest.progressed_at)}</dd>
+                  <dt>Avancement</dt><dd>{formatPercent(latest.percentage)}</dd>
+                  <dt>Statut</dt><dd>{latest.status ? STATUS_LABEL[latest.status] ?? latest.status : '—'}</dd>
+                </dl>
+                {latest.comment && <div className="note-block"><h4>NOTE DE PROGRESSION</h4><p>« {latest.comment} »</p></div>}
+              </>
+            )}
+          {filteredHistory.length > 0 && (
+            seriesEvolution.first
+              ? <p className="muted">Première saisie.</p>
+              : seriesEvolution.latest && seriesEvolution.previous && seriesEvolution.latest.percentage !== null && seriesEvolution.previous.percentage !== null
+                ? <p className={seriesEvolution.direction === 'down' ? 'delta down' : 'delta'}>
+                    {formatPercent(seriesEvolution.previous.percentage)} → {formatPercent(seriesEvolution.latest.percentage)}
+                    {seriesEvolution.direction === 'up' ? ` · +${seriesEvolution.deltaPoints} points` : seriesEvolution.direction === 'down' ? ` · Baisse de ${-seriesEvolution.deltaPoints!} points` : ' · inchangé'}
+                  </p>
+                : <p className="muted">Progression non chiffrée sur la dernière visite.</p>
           )}
-          {taskEvolution.first
-            ? <p className="muted">Première saisie.</p>
-            : taskEvolution.latest && taskEvolution.previous && taskEvolution.latest.percentage !== null && taskEvolution.previous.percentage !== null
-              ? <p className={taskEvolution.direction === 'down' ? 'delta down' : 'delta'}>
-                  {formatPercent(taskEvolution.previous.percentage)} → {formatPercent(taskEvolution.latest.percentage)}
-                  {taskEvolution.direction === 'up' ? ` · +${taskEvolution.deltaPoints} points` : taskEvolution.direction === 'down' ? ` · Baisse de ${-taskEvolution.deltaPoints!} points` : ' · inchangé'}
-                </p>
-              : <p className="muted">Progression non chiffrée sur la dernière visite.</p>}
         </div>
-        {taskHistory.length === 0 && <p className="notice">Aucune progression enregistrée pour cette tâche.</p>}
-        <h3>Historique ({taskHistory.length})</h3>
+        <h3>Historique ({filteredHistory.length})</h3>
         <ul className="history">
-          {taskHistory.map((row) => (
+          {filteredHistory.map((row) => (
             <li key={row.id} className="history-entry">
               <span className="history-date">{formatDate(row.progressed_at)}</span>
               <strong>{formatPercent(row.percentage)}</strong>
               <span>{row.status ? STATUS_LABEL[row.status] ?? row.status : '—'}</span>
               {row.comment && <p className="note">« {row.comment} »</p>}
               <p className="muted">Localisation : {unitName(row.unit_id)}{row.created_by ? ` · par ${row.created_by.slice(0, 8)}` : ''}</p>
+            </li>
+          ))}
+        </ul>
+        <h3>Observations ({filteredObservations.length})</h3>
+        {observationsLoading && <p className="notice">Chargement…</p>}
+        {!observationsLoading && filteredObservations.length === 0 && <p className="notice">Aucune observation enregistrée pour cette tâche.</p>}
+        <ul className="history">
+          {filteredObservations.map((view) => (
+            <li key={view.id} className="history-entry">
+              <span className="history-date">{formatDate(view.date)}</span>
+              <strong>{view.status ? STATUS_LABEL[view.status] ?? view.status : '—'}</strong>
+              <p>{view.content}</p>
+              <p className="muted">Localisation : {unitName(view.unitId)}{view.visitId ? ' · liée à une visite' : ''}{view.createdBy ? ` · par ${view.createdBy.slice(0, 8)}` : ''}</p>
             </li>
           ))}
         </ul>

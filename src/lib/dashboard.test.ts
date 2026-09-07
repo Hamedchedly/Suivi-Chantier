@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   descendants,
   evolution,
+  filterHistoryRows,
   itemPoints,
   latestPerTask,
   latestPerTaskAndUnit,
@@ -158,5 +159,34 @@ describe('descendants', () => {
   it('collects a unit and all its nested children', () => {
     const units = [unit('b1', null), unit('b2', null), unit('l1', 'b1'), unit('l2', 'b1'), unit('z1', 'b2')]
     expect(descendants('b1', units).sort()).toEqual(['b1', 'l1', 'l2'])
+  })
+})
+
+describe('history by location', () => {
+  it('filters rows for one unit while null keeps every location', () => {
+    const rows = [
+      entry('gen', 'l1', 'lot1', 25, 'in_progress', '2026-08-29T08:00:00Z'),
+      entry('gen', 'l1', 'lot1', 60, 'in_progress', '2026-09-04T08:00:00Z'),
+      entry('gen', 'l2', 'lot1', 100, 'done', '2026-09-11T08:00:00Z'),
+      entry(null, null, 'lot1', 50, 'in_progress', '2026-09-02T08:00:00Z')
+    ]
+    expect(filterHistoryRows(rows, null)).toHaveLength(4)
+    const onlyL1 = filterHistoryRows(rows, 'l1')
+    expect(onlyL1.map((row) => row.progressed_at)).toEqual(['2026-08-29T08:00:00Z', '2026-09-04T08:00:00Z'])
+  })
+  it('computes the evolution on the selected location series only', () => {
+    const rows = [
+      entry('gen', 'l1', 'lot1', 25, 'in_progress', '2026-08-29T08:00:00Z'),
+      entry('gen', 'l1', 'lot1', 60, 'in_progress', '2026-09-04T08:00:00Z'),
+      entry('gen', 'l1', 'lot1', 100, 'done', '2026-09-11T08:00:00Z'),
+      entry('gen', 'l2', 'lot1', 80, 'in_progress', '2026-09-10T08:00:00Z')
+    ]
+    const l1 = evolution(filterHistoryRows(rows, 'l1'))
+    expect(l1.direction).toBe('up')
+    expect(l1.deltaPoints).toBe(40)
+    expect(l1.latest?.percentage).toBe(100)
+    const l2 = evolution(filterHistoryRows(rows, 'l2'))
+    expect(l2.first).toBe(true)
+    expect(l2.latest?.percentage).toBe(80)
   })
 })

@@ -4,7 +4,7 @@ import { latestByTask, progressAverage, type ProgressRow } from '../lib/progress
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Task, Unit } from '../lib/types'
 
-type Props = { operationId: string; units: Unit[]; lots: Lot[] }
+type Props = { operationId: string; units: Unit[]; lots: Lot[]; onOpenTask?: (taskId: string, unitId: string | null) => void }
 
 interface TaskDraft { percentage: number; status: string; comment: string }
 
@@ -23,7 +23,7 @@ const autoStatus = (percentage: number): string => percentage >= 100 ? 'done' : 
 const formatPercent = (value: number | null | undefined): string => value === null || value === undefined ? '—' : `${Math.round(value)} %`
 const formatDate = (iso: string): string => new Date(iso).toLocaleDateString('fr-FR')
 
-export function VisitForm({ operationId, units, lots }: Props) {
+export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
   const [unitId, setUnitId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -211,6 +211,7 @@ export function VisitForm({ operationId, units, lots }: Props) {
                       saved={Boolean(saved[task.id])}
                       onDraft={(patch) => setDraft(task.id, patch)}
                       onSave={() => void saveRow(task.id, task.lot_id, task.name, task.id)}
+                      onOpenTask={onOpenTask ? () => onOpenTask(task.id, unitId) : undefined}
                     />
                   )
                 )}
@@ -255,8 +256,8 @@ function Controls(props: { draft: TaskDraft; saving: boolean; saved: boolean; on
   )
 }
 
-function ProgressCard(props: { task: Task; draft: TaskDraft; last: ProgressRow | undefined; saving: boolean; saved: boolean; onDraft: (patch: Partial<TaskDraft>) => void; onSave: () => void }) {
-  const { task, last, ...controls } = props
+function ProgressCard(props: { task: Task; draft: TaskDraft; last: ProgressRow | undefined; saving: boolean; saved: boolean; onDraft: (patch: Partial<TaskDraft>) => void; onSave: () => void; onOpenTask?: () => void }) {
+  const { task, last, onOpenTask, ...controls } = props
   return (
     <div className="task-entry">
       <div className="task-line">
@@ -267,6 +268,7 @@ function ProgressCard(props: { task: Task; draft: TaskDraft; last: ProgressRow |
         ? <p className="last-line">Dernière visite : {formatDate(last.progressed_at)} · {formatPercent(last.percentage)}{last.comment ? ` · « ${last.comment} »` : ''}</p>
         : <p className="last-line muted">Nouvelle tâche suivie</p>}
       <Controls {...controls} />
+      {onOpenTask && <button type="button" className="link" onClick={onOpenTask}>Voir l’historique</button>}
     </div>
   )
 }

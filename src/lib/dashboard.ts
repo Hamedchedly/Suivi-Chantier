@@ -119,3 +119,12 @@ export function descendants(unitId: string, units: Unit[]): string[] {
   walk(unitId)
   return result
 }
+
+/**
+ * History filtered for one location. Passing null keeps every location
+ * (used by the "Toutes les localisations" option).
+ */
+export function filterHistoryRows(rows: ProgressEntry[], unitId: string | null): ProgressEntry[] {
+  if (unitId === null) return rows
+  return rows.filter((row) => row.unit_id === unitId)
+}
