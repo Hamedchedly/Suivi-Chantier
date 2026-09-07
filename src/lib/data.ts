@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Company, Lot, Task, TaskValues, Unit, Visit } from './types'
+import type { Company, Lot, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
 
 function db() { if (!supabase) throw new Error('Supabase n’est pas configuré.'); return supabase }
 export async function operationData(operationId: string) {
@@ -57,4 +57,16 @@ export async function moveTask(operation_id: string, task_id: string, direction:
   const current = tasks[index]
   await db().from('tasks').update({ sort_order: neighbor.sort_order }).eq('id', current.id).eq('operation_id', operation_id)
   await db().from('tasks').update({ sort_order: current.sort_order }).eq('id', neighbor.id).eq('operation_id', operation_id)
+}
+
+export async function listTasksByOperation(operation_id: string): Promise<Task[]> {
+  const { data, error } = await db().from('tasks').select('id, operation_id, lot_id, parent_id, reference, name, section, unit, quantity, unit_price, amount, weight, task_type, sort_order, unit_id').eq('operation_id', operation_id).order('lot_id', { ascending: true }).order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as Task[]
+}
+
+export async function lastProgressForUnit(operation_id: string, unit_id: string): Promise<ProgressEntry[]> {
+  const { data, error } = await db().from('progress_entries').select('id, operation_id, visit_id, unit_id, lot_id, task_id, progressed_at, percentage, status, comment, created_at, created_by').eq('operation_id', operation_id).or(`unit_id.eq.${unit_id},unit_id.is.null`).order('progressed_at', { ascending: false }).order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as ProgressEntry[]
 }

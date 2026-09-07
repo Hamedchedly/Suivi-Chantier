@@ -39,3 +39,26 @@ export type TaskValues = {
 }
 
 export type Visit = { id: string; operation_id: string; visited_at: string; title: string | null; note: string | null }
+
+export type ProgressStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'done'
+  | 'blocked'
+  | 'postponed'
+  | 'not_applicable'
+
+export type ProgressEntry = {
+  id: string
+  operation_id: string
+  visit_id: string | null
+  unit_id: string | null
+  lot_id: string
+  task_id: string | null
+  progressed_at: string
+  percentage: number | null
+  status: string | null
+  comment: string | null
+  created_at: string
+  created_by: string | null
+}
