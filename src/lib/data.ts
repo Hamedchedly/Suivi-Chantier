@@ -65,6 +65,12 @@ export async function listTasksByOperation(operation_id: string): Promise<Task[]
   return (data ?? []) as Task[]
 }
 
+export async function listProgressByOperation(operation_id: string): Promise<ProgressEntry[]> {
+  const { data, error } = await db().from('progress_entries').select('id, operation_id, visit_id, unit_id, lot_id, task_id, progressed_at, percentage, status, comment, created_at, created_by').eq('operation_id', operation_id).order('progressed_at', { ascending: true }).order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ProgressEntry[]
+}
+
 export async function lastProgressForUnit(operation_id: string, unit_id: string): Promise<ProgressEntry[]> {
   const { data, error } = await db().from('progress_entries').select('id, operation_id, visit_id, unit_id, lot_id, task_id, progressed_at, percentage, status, comment, created_at, created_by').eq('operation_id', operation_id).or(`unit_id.eq.${unit_id},unit_id.is.null`).order('progressed_at', { ascending: false }).order('created_at', { ascending: false })
   if (error) throw error
