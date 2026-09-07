@@ -4,4 +4,38 @@ export type UnitKind = 'building' | 'dwelling' | 'common_area' | 'exterior' | 'z
 export type Unit = { id: string; operation_id: string; parent_id: string | null; kind: UnitKind; code: string | null; name: string; floor: string | null; sort_order: number }
 export type Company = { id: string; operation_id: string; name: string; contact_name: string | null; email: string | null; phone: string | null }
 export type Lot = { id: string; operation_id: string; number: string | null; code: string | null; name: string; company_id: string | null; weighting_method: 'simple' | 'weighted'; sort_order: number }
+export type TaskKind = 'section' | 'item'
+
+export type Task = {
+  id: string
+  operation_id: string
+  lot_id: string
+  parent_id: string | null
+  reference: string | null
+  name: string
+  section: string | null
+  unit: string | null
+  quantity: number | null
+  unit_price: number | null
+  amount: number | null
+  weight: number
+  task_type: TaskKind
+  sort_order: number
+  unit_id: string | null
+}
+
+export type TaskValues = {
+  task_type: TaskKind
+  name: string
+  reference?: string | null
+  section?: string | null
+  unit?: string | null
+  quantity?: number | null
+  unit_price?: number | null
+  amount?: number | null
+  parent_id?: string | null
+  unit_id?: string | null
+  sort_order?: number
+}
+
 export type Visit = { id: string; operation_id: string; visited_at: string; title: string | null; note: string | null }

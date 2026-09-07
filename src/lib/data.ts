@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Company, Lot, Unit, UnitKind, Visit } from './types'
+import type { Company, Lot, Task, TaskValues, Unit, Visit } from './types'
 
 function db() { if (!supabase) throw new Error('Supabase n’est pas configuré.'); return supabase }
 export async function operationData(operationId: string) {
@@ -22,3 +22,39 @@ export async function setAssignment(operation_id: string, lot_id: string, unit_i
 export async function effectiveAssignments(unitId: string) { const { data, error } = await db().rpc('effective_lot_assignments', { target_unit: unitId }); if (error) throw error; return data as { lot_id: string; enabled: boolean; source: 'specific' | 'inherited' }[] }
 export async function startVisit(operation_id: string, values: Pick<Visit, 'title' | 'note'>) { const { data, error } = await db().from('visits').insert({ operation_id, ...values }).select().single(); if (error) throw error; return data as Visit }
 export async function addProgress(operation_id: string, visit_id: string, unit_id: string | null, lot_id: string, task_id: string | null, percentage: number | null, status: string, comment: string) { const { error } = await db().from('progress_entries').insert({ operation_id, visit_id, unit_id, lot_id, task_id, percentage, status, comment }); if (error) throw error }
+
+export async function listTasks(operation_id: string, lot_id: string): Promise<Task[]> {
+  const { data, error } = await db().from('tasks').select('id, operation_id, lot_id, parent_id, reference, name, section, unit, quantity, unit_price, amount, weight, task_type, sort_order, unit_id').eq('operation_id', operation_id).eq('lot_id', lot_id).order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as Task[]
+}
+
+export async function addTask(operation_id: string, lot_id: string, values: TaskValues): Promise<Task> {
+  const { data, error } = await db().from('tasks').insert({
+    operation_id,
+    lot_id,
+    task_type: values.task_type,
+    name: values.name,
+    reference: values.reference ?? null,
+    section: values.section ?? null,
+    unit: values.unit ?? null,
+    quantity: values.quantity ?? null,
+    unit_price: values.unit_price ?? null,
+    amount: values.amount ?? null,
+    parent_id: values.parent_id ?? null,
+    unit_id: values.unit_id ?? null,
+    sort_order: values.sort_order ?? 0,
+    weight: values.task_type === 'section' ? 0 : undefined
+  }).select('id, operation_id, lot_id, parent_id, reference, name, section, unit, quantity, unit_price, amount, weight, task_type, sort_order, unit_id').single()
+  if (error) throw error
+  return data as Task
+}
+
+export async function moveTask(operation_id: string, task_id: string, direction: -1 | 1, tasks: Task[]): Promise<void> {
+  const index = tasks.findIndex((task) => task.id === task_id)
+  const neighbor = tasks[index + direction]
+  if (!neighbor) return
+  const current = tasks[index]
+  await db().from('tasks').update({ sort_order: neighbor.sort_order }).eq('id', current.id).eq('operation_id', operation_id)
+  await db().from('tasks').update({ sort_order: current.sort_order }).eq('id', neighbor.id).eq('operation_id', operation_id)
+}
