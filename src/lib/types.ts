@@ -74,6 +74,7 @@ export type Observation = {
   detail: string | null
   priority: string | null
   due_date: string | null
+  responsible_user_id: string | null
   created_at: string
   created_by: string | null
 }
@@ -86,4 +87,19 @@ export type ObservationEvent = {
   note: string | null
   occurred_at: string
   created_by: string | null
+}
+
+export type ObservationHistory = {
+  id: string
+  observation_id: string
+  changed_at: string
+  changed_by: string | null
+  action: string
+  snapshot: Record<string, unknown>
+}
+
+export type OperationMember = {
+  operation_id: string
+  user_id: string
+  role: 'owner' | 'admin' | 'member' | 'viewer'
 }

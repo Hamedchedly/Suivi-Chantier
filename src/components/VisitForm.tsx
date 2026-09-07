@@ -23,7 +23,7 @@ import {
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Task, Unit } from '../lib/types'
 
-type Props = { operationId: string; units: Unit[]; lots: Lot[]; onOpenTask?: (taskId: string, unitId: string | null) => void }
+type Props = { operationId: string; units: Unit[]; lots: Lot[]; onOpenTask?: (taskId: string, unitId: string | null) => void; onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: 'task' | 'visit' }) => void }
 
 interface TaskDraft { percentage: number; status: string; comment: string }
 
@@ -42,7 +42,7 @@ const autoStatus = (percentage: number): string => percentage >= 100 ? 'done' : 
 const formatPercent = (value: number | null | undefined): string => value === null || value === undefined ? '—' : `${Math.round(value)} %`
 const formatDate = (iso: string): string => new Date(iso).toLocaleDateString('fr-FR')
 
-export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
+export function VisitForm({ operationId, units, lots, onOpenTask, onOpenObservation }: Props) {
   const [unitId, setUnitId] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -316,6 +316,7 @@ export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
                         <select value={view.status ?? 'new'} onChange={(event) => void changeObservationStatus(view, event.target.value)} aria-label="Statut de l’observation">
                           {OBSERVATION_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
+                        {onOpenObservation && <button type="button" className="link" onClick={() => onOpenObservation(view.id, { taskId: view.taskId, unitId, origin: 'visit' })}>Fiche observation</button>}
                         {view.taskId && onOpenTask && <button type="button" className="link" onClick={() => onOpenTask(view.taskId as string, unitId)}>Fiche tâche</button>}
                       </div>
                     </li>

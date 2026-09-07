@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  OBSERVATION_PRIORITY_OPTIONS,
   OBSERVATION_STATUS_OPTIONS,
   buildObservationInsert,
   buildObservationViews,
+  buildTimeline,
+  dueDateLabel,
+  dueDateState,
   eventHistoryForObservation,
   filterObservationViewsByUnit,
   observationsForLocation,
   observationsForTask,
+  observationPriorityLabel,
   observationStatusLabel
 } from './observations'
 import type { Observation, ObservationEvent } from './types'
@@ -23,6 +28,7 @@ const observation = (overrides: Partial<Observation> = {}): Observation => ({
   detail: null,
   priority: null,
   due_date: null,
+  responsible_user_id: null,
   created_at: '2026-09-01T08:00:00Z',
   created_by: null,
   ...overrides
@@ -137,5 +143,49 @@ describe('filterObservationViewsByUnit', () => {
     ]
     expect(filterObservationViewsByUnit(views, 'u1').map((view) => view.id)).toEqual(['g', 'l1'])
     expect(filterObservationViewsByUnit(views, null)).toHaveLength(3)
+  })
+})
+
+describe('priorities and due dates', () => {
+  it('uses only the real priority CHECK values', () => {
+    const values = OBSERVATION_PRIORITY_OPTIONS.map((option) => option.value)
+    expect(values).toEqual(['low', 'normal', 'high', 'critical'])
+    expect(values).not.toContain('urgent')
+  })
+  it('labels priorities', () => {
+    expect(observationPriorityLabel('high')).toBe('Haute')
+    expect(observationPriorityLabel('unknown')).toBe('unknown')
+    expect(observationPriorityLabel(null)).toBe('—')
+  })
+  it('classifies due dates as none, future, today or overdue', () => {
+    expect(dueDateState(null, '2026-09-07')).toBe('none')
+    expect(dueDateState('', '2026-09-07')).toBe('none')
+    expect(dueDateState('2026-12-01', '2026-09-07')).toBe('future')
+    expect(dueDateState('2026-09-07', '2026-09-07')).toBe('today')
+    expect(dueDateState('2026-08-01', '2026-09-07')).toBe('overdue')
+    expect(dueDateLabel(dueDateState('2026-08-01', '2026-09-07'))).toBe('Échéance dépassée')
+  })
+})
+
+describe('buildTimeline', () => {
+  it('merges events and audit rows in chronological order without losing history', () => {
+    const historyRow = { id: 'h1', observation_id: 'o1', changed_at: '2026-09-12T08:00:00Z', changed_by: 'u1', action: 'UPDATE', snapshot: { status: 'to_verify' } }
+    const items = buildTimeline(
+      [
+        event({ observation_id: 'o1', status: 'new', occurred_at: '2026-09-11T08:00:00Z' }),
+        event({ observation_id: 'o1', status: 'done', note: 'Correction constatée.', occurred_at: '2026-09-18T08:00:00Z' })
+      ],
+      [historyRow]
+    )
+    expect(items).toHaveLength(3)
+    expect(items.map((item) => item.date)).toEqual([
+      '2026-09-11T08:00:00Z',
+      '2026-09-12T08:00:00Z',
+      '2026-09-18T08:00:00Z'
+    ])
+    expect(items[0].source).toBe('event')
+    expect(items[1].source).toBe('audit')
+    expect(items[1].status).toBe('to_verify')
+    expect(items[2].note).toBe('Correction constatée.')
   })
 })

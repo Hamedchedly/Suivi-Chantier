@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Company, Lot, Observation, ObservationEvent, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
+import type { Company, Lot, Observation, ObservationEvent, ObservationHistory, OperationMember, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
 
 function db() { if (!supabase) throw new Error('Supabase n’est pas configuré.'); return supabase }
 export async function operationData(operationId: string) {
@@ -72,7 +72,7 @@ export async function listProgressByOperation(operation_id: string): Promise<Pro
 }
 
 export async function listObservationsByOperation(operation_id: string): Promise<Observation[]> {
-  const { data, error } = await db().from('observations').select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, created_at, created_by').eq('operation_id', operation_id).order('created_at', { ascending: false })
+  const { data, error } = await db().from('observations').select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, responsible_user_id, created_at, created_by').eq('operation_id', operation_id).order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as Observation[]
 }
@@ -105,7 +105,7 @@ export async function createObservation(values: {
     priority: values.priority ?? 'normal',
     due_date: values.due_date ?? null,
     status: values.status ?? 'new'
-  }).select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, created_at, created_by').single()
+  }).select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, responsible_user_id, created_at, created_by').single()
   if (error) throw error
   return data as Observation
 }
@@ -124,6 +124,30 @@ export async function createObservationEvent(values: { observation_id: string; v
 export async function updateObservationStatus(operation_id: string, observation_id: string, status: string): Promise<void> {
   const { error } = await db().from('observations').update({ status }).eq('id', observation_id).eq('operation_id', operation_id)
   if (error) throw error
+}
+
+export async function getObservation(operation_id: string, observation_id: string): Promise<Observation | null> {
+  const { data, error } = await db().from('observations').select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, responsible_user_id, created_at, created_by').eq('id', observation_id).eq('operation_id', operation_id).maybeSingle()
+  if (error) throw error
+  return (data as Observation | null) ?? null
+}
+
+export async function updateObservation(operation_id: string, observation_id: string, patch: { title?: string; detail?: string | null; priority?: string; due_date?: string | null }): Promise<Observation> {
+  const { data, error } = await db().from('observations').update(patch).eq('id', observation_id).eq('operation_id', operation_id).select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, responsible_user_id, created_at, created_by').single()
+  if (error) throw error
+  return data as Observation
+}
+
+export async function listObservationHistory(observation_id: string): Promise<ObservationHistory[]> {
+  const { data, error } = await db().from('observation_history').select('id, observation_id, changed_at, changed_by, action, snapshot').eq('observation_id', observation_id).order('changed_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ObservationHistory[]
+}
+
+export async function listOperationMembers(operation_id: string): Promise<OperationMember[]> {
+  const { data, error } = await db().from('operation_members').select('operation_id, user_id, role').eq('operation_id', operation_id)
+  if (error) throw error
+  return (data ?? []) as OperationMember[]
 }
 
 export async function lastProgressForUnit(operation_id: string, unit_id: string): Promise<ProgressEntry[]> {

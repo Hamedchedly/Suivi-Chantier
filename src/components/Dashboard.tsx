@@ -12,6 +12,7 @@ type Props = {
   initialTaskId?: string | null
   initialUnitId?: string | null
   onExitHistory?: () => void
+  onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: 'task' | 'visit' }) => void
 }
 
 const STATUS_OPTIONS = [
@@ -32,7 +33,7 @@ const formatPercent = (value: number | null | undefined): string =>
 
 const formatDate = (iso: string): string => new Date(iso).toLocaleDateString('fr-FR')
 
-export function Dashboard({ operation, units, lots, initialTaskId = null, initialUnitId = null, onExitHistory }: Props) {
+export function Dashboard({ operation, units, lots, initialTaskId = null, initialUnitId = null, onExitHistory, onOpenObservation }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [entries, setEntries] = useState<ProgressEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -259,6 +260,11 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
               <strong>{observationStatusLabel(view.status)}</strong>
               <p>{view.content}</p>
               <p className="muted">Localisation : {unitName(view.unitId)}{view.visitId ? ' · liée à une visite' : ''}{view.createdBy ? ` · par ${view.createdBy.slice(0, 8)}` : ''}</p>
+              {onOpenObservation && (
+                <div className="row">
+                  <button type="button" className="link" onClick={() => onOpenObservation(view.id, { taskId: view.taskId, unitId: locationFilter || null, origin: 'task' })}>Fiche observation</button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

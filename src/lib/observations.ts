@@ -2,7 +2,7 @@
 // (ProgressEntry.comment) and an observation (business object persisting over
 // time) is kept strict in the UI.
 
-import type { Observation, ObservationEvent } from './types'
+import type { Observation, ObservationEvent, ObservationHistory } from './types'
 
 export interface ObservationView {
   id: string
@@ -124,4 +124,85 @@ export function buildObservationEventInsert(values: { observation_id: string; vi
     status: values.status ?? null,
     note: values.note ?? null
   }
+}
+
+// Priority values are the exact CHECK values from migration 001.
+export const OBSERVATION_PRIORITY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'low', label: 'Basse' },
+  { value: 'normal', label: 'Normale' },
+  { value: 'high', label: 'Haute' },
+  { value: 'critical', label: 'Critique' }
+]
+
+export function observationPriorityLabel(priority: string | null | undefined): string {
+  if (!priority) return '—'
+  return OBSERVATION_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? priority
+}
+
+export type DueDateState = 'none' | 'future' | 'today' | 'overdue'
+
+export function dueDateState(dueDate: string | null | undefined, today: string): DueDateState {
+  if (!dueDate) return 'none'
+  const due = new Date(dueDate)
+  const reference = new Date(today)
+  const dayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const delta = dayStart(due) - dayStart(reference)
+  if (delta < 0) return 'overdue'
+  if (delta === 0) return 'today'
+  return 'future'
+}
+
+export function dueDateLabel(state: DueDateState): string {
+  switch (state) {
+    case 'none': return 'Aucune échéance'
+    case 'future': return 'Échéance à venir'
+    case 'today': return 'Échéance aujourd’hui'
+    case 'overdue': return 'Échéance dépassée'
+  }
+}
+
+export interface ObservationTimelineItem {
+  id: string
+  date: string
+  source: 'event' | 'audit'
+  status: string | null
+  note: string | null
+  action: string | null
+  changedBy: string | null
+}
+
+const snapshotStatus = (snapshot: Record<string, unknown>): string | null =>
+  typeof snapshot.status === 'string' ? snapshot.status : null
+
+/**
+ * Merged, chronological timeline. observation_events carry user evolutions
+ * (status + note), observation_history rows are automatic snapshots written by
+ * the trigger on every insert/update. Both are append-only and preserved.
+ */
+export function buildTimeline(events: ObservationEvent[], history: ObservationHistory[]): ObservationTimelineItem[] {
+  const eventItems: ObservationTimelineItem[] = events.map((event) => ({
+    id: `event-${event.id}`,
+    date: event.occurred_at,
+    source: 'event',
+    status: event.status,
+    note: event.note,
+    action: null,
+    changedBy: event.created_by
+  }))
+  const auditItems: ObservationTimelineItem[] = history.map((row) => ({
+    id: `audit-${row.id}`,
+    date: row.changed_at,
+    source: 'audit',
+    status: snapshotStatus(row.snapshot),
+    note: null,
+    action: row.action,
+    changedBy: row.changed_by
+  }))
+  return [...eventItems, ...auditItems].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.source.localeCompare(b.source) || a.id.localeCompare(b.id)
+  )
+}
+
+export function shortUser(userId: string | null): string {
+  return userId ? userId.slice(0, 8) : '—'
 }
