@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { buildObservationViews, filterObservationViewsByUnit, observationsForTask } from './observations'
+import {
+  OBSERVATION_STATUS_OPTIONS,
+  buildObservationInsert,
+  buildObservationViews,
+  eventHistoryForObservation,
+  filterObservationViewsByUnit,
+  observationsForLocation,
+  observationsForTask,
+  observationStatusLabel
+} from './observations'
 import type { Observation, ObservationEvent } from './types'
 
 let obsId = 0
@@ -64,6 +73,58 @@ describe('buildObservationViews', () => {
     expect(views[0].content).toContain('Défaut constaté')
     expect(views[0].visitId).toBe('v9')
     expect(views[1].content).toBe('Point sec')
+  })
+})
+
+describe('statuses and insert builders', () => {
+  it('statuses match the schema CHECK exactly', () => {
+    const values = OBSERVATION_STATUS_OPTIONS.map((option) => option.value)
+    expect(values).toContain('new')
+    expect(values).toContain('to_verify')
+    expect(values).toContain('done')
+    expect(values).not.toContain('in_progress')
+  })
+  it('translates known statuses and keeps unknown ones readable', () => {
+    expect(observationStatusLabel('new')).toBe('Nouveau')
+    expect(observationStatusLabel('to_verify')).toBe('À vérifier')
+    expect(observationStatusLabel('done')).toBe('Fait')
+    expect(observationStatusLabel('mystery')).toBe('mystery')
+    expect(observationStatusLabel(null)).toBe('—')
+  })
+  it('builds an observation insert with location, lot and task', () => {
+    const insert = buildObservationInsert('op', { title: 'Défaut', unit_id: 'u1', lot_id: 'lot1', task_id: 't1', status: 'blocked', due_date: '2026-09-30' })
+    expect(insert).toMatchObject({ operation_id: 'op', unit_id: 'u1', lot_id: 'lot1', task_id: 't1', status: 'blocked', due_date: '2026-09-30', priority: 'normal' })
+  })
+  it('builds a general observation when no lot or task is given', () => {
+    const insert = buildObservationInsert('op', { title: 'Point général', unit_id: 'u1' })
+    expect(insert.task_id).toBeNull()
+    expect(insert.lot_id).toBeNull()
+    expect(insert.status).toBe('new')
+  })
+})
+
+describe('observationsForLocation', () => {
+  it('keeps unit-specific and general observations only', () => {
+    const all = [
+      observation({ id: 'a', unit_id: 'u1' }),
+      observation({ id: 'b', unit_id: null }),
+      observation({ id: 'c', unit_id: 'u2' })
+    ]
+    expect(observationsForLocation(all, 'u1').map((item) => item.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('eventHistoryForObservation', () => {
+  it('keeps every evolution event, oldest first, without rewriting history', () => {
+    const events = [
+      event({ observation_id: 'o1', status: 'to_verify', occurred_at: '2026-09-05T08:00:00Z' }),
+      event({ observation_id: 'o1', status: 'new', occurred_at: '2026-09-01T08:00:00Z' }),
+      event({ observation_id: 'other', status: 'done', occurred_at: '2026-09-09T08:00:00Z' })
+    ]
+    const history = eventHistoryForObservation(events, 'o1')
+    expect(history).toHaveLength(2)
+    expect(history[0].status).toBe('new')
+    expect(history[1].status).toBe('to_verify')
   })
 })
 

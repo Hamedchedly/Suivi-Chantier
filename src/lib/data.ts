@@ -84,6 +84,48 @@ export async function listObservationEvents(observationIds: string[]): Promise<O
   return (data ?? []) as ObservationEvent[]
 }
 
+export async function createObservation(values: {
+  operation_id: string
+  unit_id?: string | null
+  lot_id?: string | null
+  task_id?: string | null
+  title: string
+  detail?: string | null
+  priority?: string | null
+  due_date?: string | null
+  status?: string
+}): Promise<Observation> {
+  const { data, error } = await db().from('observations').insert({
+    operation_id: values.operation_id,
+    unit_id: values.unit_id ?? null,
+    lot_id: values.lot_id ?? null,
+    task_id: values.task_id ?? null,
+    title: values.title,
+    detail: values.detail ?? null,
+    priority: values.priority ?? 'normal',
+    due_date: values.due_date ?? null,
+    status: values.status ?? 'new'
+  }).select('id, operation_id, unit_id, lot_id, task_id, status, title, detail, priority, due_date, created_at, created_by').single()
+  if (error) throw error
+  return data as Observation
+}
+
+export async function createObservationEvent(values: { observation_id: string; visit_id?: string | null; status?: string | null; note?: string | null }): Promise<ObservationEvent> {
+  const { data, error } = await db().from('observation_events').insert({
+    observation_id: values.observation_id,
+    visit_id: values.visit_id ?? null,
+    status: values.status ?? null,
+    note: values.note ?? null
+  }).select('id, observation_id, visit_id, status, note, occurred_at, created_by').single()
+  if (error) throw error
+  return data as ObservationEvent
+}
+
+export async function updateObservationStatus(operation_id: string, observation_id: string, status: string): Promise<void> {
+  const { error } = await db().from('observations').update({ status }).eq('id', observation_id).eq('operation_id', operation_id)
+  if (error) throw error
+}
+
 export async function lastProgressForUnit(operation_id: string, unit_id: string): Promise<ProgressEntry[]> {
   const { data, error } = await db().from('progress_entries').select('id, operation_id, visit_id, unit_id, lot_id, task_id, progressed_at, percentage, status, comment, created_at, created_by').eq('operation_id', operation_id).or(`unit_id.eq.${unit_id},unit_id.is.null`).order('progressed_at', { ascending: false }).order('created_at', { ascending: false })
   if (error) throw error

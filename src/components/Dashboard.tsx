@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listObservationEvents, listObservationsByOperation, listProgressByOperation, listTasksByOperation } from '../lib/data'
 import { evolution, filterHistoryRows, itemPoints, latestPerTask, latestPerTaskAndUnit, metricsFromPoints, type ScopeMetrics } from '../lib/dashboard'
-import { buildObservationViews, filterObservationViewsByUnit, observationsForTask, type ObservationView } from '../lib/observations'
+import { buildObservationViews, filterObservationViewsByUnit, observationsForTask, observationStatusLabel, type ObservationView } from '../lib/observations'
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Operation, ProgressEntry, Task, Unit } from '../lib/types'
 
@@ -256,7 +256,7 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
           {filteredObservations.map((view) => (
             <li key={view.id} className="history-entry">
               <span className="history-date">{formatDate(view.date)}</span>
-              <strong>{view.status ? STATUS_LABEL[view.status] ?? view.status : '—'}</strong>
+              <strong>{observationStatusLabel(view.status)}</strong>
               <p>{view.content}</p>
               <p className="muted">Localisation : {unitName(view.unitId)}{view.visitId ? ' · liée à une visite' : ''}{view.createdBy ? ` · par ${view.createdBy.slice(0, 8)}` : ''}</p>
             </li>

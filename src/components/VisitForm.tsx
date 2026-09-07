@@ -1,6 +1,25 @@
-import { useMemo, useState } from 'react'
-import { addProgress, effectiveAssignments, lastProgressForUnit, listTasksByOperation, startVisit } from '../lib/data'
+import { useMemo, useState, type FormEvent } from 'react'
+import {
+  addProgress,
+  createObservation,
+  createObservationEvent,
+  effectiveAssignments,
+  lastProgressForUnit,
+  listObservationEvents,
+  listObservationsByOperation,
+  listTasksByOperation,
+  startVisit,
+  updateObservationStatus
+} from '../lib/data'
 import { latestByTask, progressAverage, type ProgressRow } from '../lib/progress'
+import {
+  OBSERVATION_STATUS_OPTIONS,
+  buildObservationEventInsert,
+  buildObservationInsert,
+  buildObservationViews,
+  observationsForLocation,
+  type ObservationView
+} from '../lib/observations'
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Task, Unit } from '../lib/types'
 
@@ -35,6 +54,14 @@ export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
   const [history, setHistory] = useState<ProgressRow[]>([])
   const [drafts, setDrafts] = useState<Record<string, TaskDraft>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
+  const [unitObservations, setUnitObservations] = useState<ObservationView[]>([])
+  const [obsFormOpen, setObsFormOpen] = useState(false)
+  const [obsContent, setObsContent] = useState('')
+  const [obsLotId, setObsLotId] = useState('')
+  const [obsTaskId, setObsTaskId] = useState('')
+  const [obsStatus, setObsStatus] = useState('new')
+  const [obsDueDate, setObsDueDate] = useState('')
+  const [obsSaving, setObsSaving] = useState(false)
 
   const buildings = units.filter((unit) => unit.kind === 'building')
   const standalone = units.filter((unit) => unit.kind === 'common_area' || unit.kind === 'exterior' || unit.kind === 'zone')
@@ -69,12 +96,74 @@ export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
   const setDraft = (taskId: string, patch: Partial<TaskDraft>) =>
     setDrafts((previous) => ({ ...previous, [taskId]: { ...draftOf(previous, taskId), ...patch } }))
 
+  async function reloadObservations(id: string) {
+    const allObservations = await listObservationsByOperation(operationId)
+    const scoped = observationsForLocation(allObservations, id)
+    const events = scoped.length ? await listObservationEvents(scoped.map((observation) => observation.id)) : []
+    setUnitObservations(buildObservationViews(scoped, events))
+  }
+
+  const obsTaskOptions = useMemo(
+    () => (obsLotId ? tasks.filter((task) => task.lot_id === obsLotId && task.task_type === 'item') : []),
+    [obsLotId, tasks]
+  )
+
+  const lotLabel = (lotId: string | null): string => {
+    if (!lotId) return ''
+    const lot = lots.find((candidate) => candidate.id === lotId)
+    return lot ? `${lot.number ?? lot.code ?? ''} ${lot.name}`.trim() : ''
+  }
+
+  async function submitObservation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!unitId || !obsContent.trim()) return
+    setObsSaving(true)
+    try {
+      const activeVisit = await ensureVisit()
+      const created = await createObservation(buildObservationInsert(operationId, {
+        title: obsContent.trim(),
+        unit_id: unitId,
+        lot_id: obsLotId || null,
+        task_id: obsTaskId || null,
+        status: obsStatus,
+        due_date: obsDueDate || null
+      }))
+      await createObservationEvent(buildObservationEventInsert({ observation_id: created.id, visit_id: activeVisit, status: obsStatus, note: obsContent.trim() }))
+      await reloadObservations(unitId)
+      setObsContent('')
+      setObsLotId('')
+      setObsTaskId('')
+      setObsStatus('new')
+      setObsDueDate('')
+      setObsFormOpen(false)
+      setMessage('Observation enregistrée.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Enregistrement impossible.')
+    } finally {
+      setObsSaving(false)
+    }
+  }
+
+  async function changeObservationStatus(observation: ObservationView, status: string) {
+    if (!unitId) return
+    try {
+      const activeVisit = await ensureVisit()
+      await updateObservationStatus(operationId, observation.id, status)
+      await createObservationEvent(buildObservationEventInsert({ observation_id: observation.id, visit_id: activeVisit, status }))
+      await reloadObservations(unitId)
+      setMessage('Statut de l’observation mis à jour.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Mise à jour impossible.')
+    }
+  }
+
   async function changeUnit(id: string) {
     setUnitId(id)
     setTasks([])
     setEffective([])
     setHistory([])
     setSaved({})
+    setUnitObservations([])
     if (!id) return
     setLoading(true)
     try {
@@ -84,6 +173,7 @@ export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
       const rows = await lastProgressForUnit(operationId, id)
       setTasks(operationTasks)
       setHistory(rows)
+      await reloadObservations(id)
       const defaults: Record<string, TaskDraft> = {}
       for (const task of operationTasks) {
         const row = latestByTask(rows).get(task.id)
@@ -187,6 +277,51 @@ export function VisitForm({ operationId, units, lots, onOpenTask }: Props) {
             </p>
             <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Objet de la visite (facultatif)"/>
             <button type="button" className="link" onClick={() => void changeUnit('')}>← Changer de localisation</button>
+          </div>
+
+          <div className="panel">
+            <div className="row">
+              <h3>Observations ({unitObservations.length})</h3>
+              <button type="button" className="mini" onClick={() => setObsFormOpen((open) => !open)}>{obsFormOpen ? 'Fermer' : '+ Ajouter une observation'}</button>
+            </div>
+            {obsFormOpen && (
+              <form className="form-grid" onSubmit={(event) => void submitObservation(event)}>
+                <label>Description<textarea required value={obsContent} onChange={(event) => setObsContent(event.target.value)} placeholder="Contenu de l’observation"/></label>
+                <label>Lot<select value={obsLotId} onChange={(event) => { setObsLotId(event.target.value); setObsTaskId('') }}>
+                  <option value="">Aucun lot</option>
+                  {applicableLots.map((lot) => <option key={lot.id} value={lot.id}>{lot.number ?? lot.code ?? ''} {lot.name}</option>)}
+                </select></label>
+                <label>Tâche<select value={obsTaskId} onChange={(event) => setObsTaskId(event.target.value)} disabled={!obsLotId}>
+                  <option value="">Aucune tâche</option>
+                  {obsTaskOptions.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+                </select></label>
+                <label>Statut<select value={obsStatus} onChange={(event) => setObsStatus(event.target.value)}>
+                  {OBSERVATION_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select></label>
+                <label>Échéance<input type="date" value={obsDueDate} onChange={(event) => setObsDueDate(event.target.value)}/></label>
+                <button disabled={obsSaving || !obsContent.trim()}>{obsSaving ? 'Enregistrement…' : 'Enregistrer l’observation'}</button>
+                <p className="muted">Photos : bouton prévu — stockage/annotation traités dans une étape dédiée (pas de base64 en base).</p>
+              </form>
+            )}
+            {unitObservations.length === 0
+              ? <p className="notice">Aucune observation pour cette localisation.</p>
+              : (
+                <ul className="history">
+                  {unitObservations.map((view) => (
+                    <li key={view.id} className="history-entry">
+                      <span className="history-date">{formatDate(view.date)}</span>
+                      <p>{view.content}</p>
+                      <p className="muted">{view.lotId ? lotLabel(view.lotId) : ''}{view.visitId ? ' · liée à la visite' : ''}{view.createdBy ? ` · par ${view.createdBy.slice(0, 8)}` : ''}</p>
+                      <div className="row">
+                        <select value={view.status ?? 'new'} onChange={(event) => void changeObservationStatus(view, event.target.value)} aria-label="Statut de l’observation">
+                          {OBSERVATION_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                        {view.taskId && onOpenTask && <button type="button" className="link" onClick={() => onOpenTask(view.taskId as string, unitId)}>Fiche tâche</button>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
           </div>
 
           {applicableLots.length === 0 && <p className="notice">Aucun lot applicable à cette localisation.</p>}
