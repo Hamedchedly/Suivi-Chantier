@@ -180,3 +180,13 @@ legend { color: var(--navy); font-weight: 700; font-size: .9rem; padding: 0 6px 
 @media (min-width: 641px) {
   .app-shell { border-left: 1px solid var(--line); border-right: 1px solid var(--line); min-height: 100vh }
 }
+
+/* Authentification */
+.auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px }
+.auth-card { width: 100%; max-width: 400px; padding: 22px }
+.auth-card h1 { margin-bottom: 10px }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px }
+.page-head > div { min-width: 0 }
+.account { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: #cfe0ee; font-size: .78rem; white-space: nowrap }
+.account-email { max-width: 180px; overflow: hidden; text-overflow: ellipsis }
+.account-out { background: rgba(255, 255, 255, .14); border: 0; color: #fff; border-radius: 20px; padding: 5px 12px; font-size: .8rem; cursor: pointer }
