@@ -3,16 +3,20 @@ import { listObservationEvents, listObservationsByOperation, listProgressByOpera
 import { evolution, filterHistoryRows, itemPoints, latestPerTask, latestPerTaskAndUnit, metricsFromPoints, type ScopeMetrics } from '../lib/dashboard'
 import { buildObservationViews, filterObservationViewsByUnit, observationsForTask, observationStatusLabel, type ObservationView } from '../lib/observations'
 import { filterApplicableTasks } from '../lib/scope'
-import type { Lot, Operation, ProgressEntry, Task, Unit } from '../lib/types'
+import type { Company, Lot, Observation, Operation, ProgressEntry, Task, Unit } from '../lib/types'
+
+type ObservationContextOrigin = 'task' | 'visit' | 'dashboard'
 
 type Props = {
   operation: Operation
   units: Unit[]
   lots: Lot[]
+  companies: Company[]
   initialTaskId?: string | null
   initialUnitId?: string | null
   onExitHistory?: () => void
-  onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: 'task' | 'visit' }) => void
+  onStartVisit?: () => void
+  onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: ObservationContextOrigin }) => void
 }
 
 const STATUS_OPTIONS = [
@@ -33,7 +37,7 @@ const formatPercent = (value: number | null | undefined): string =>
 
 const formatDate = (iso: string): string => new Date(iso).toLocaleDateString('fr-FR')
 
-export function Dashboard({ operation, units, lots, initialTaskId = null, initialUnitId = null, onExitHistory, onOpenObservation }: Props) {
+export function Dashboard({ operation, units, lots, companies, initialTaskId = null, initialUnitId = null, onExitHistory, onStartVisit, onOpenObservation }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [entries, setEntries] = useState<ProgressEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,6 +49,7 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
   const [locationFilter, setLocationFilter] = useState(initialUnitId ?? '')
   const [observationViews, setObservationViews] = useState<ObservationView[]>([])
   const [observationsLoading, setObservationsLoading] = useState(false)
+  const [operationObservations, setOperationObservations] = useState<Observation[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -52,13 +57,15 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
     setError(null)
     void (async () => {
       try {
-        const [operationTasks, operationEntries] = await Promise.all([
+        const [operationTasks, operationEntries, operationObservations] = await Promise.all([
           listTasksByOperation(operation.id),
-          listProgressByOperation(operation.id)
+          listProgressByOperation(operation.id),
+          listObservationsByOperation(operation.id)
         ])
         if (cancelled) return
         setTasks(operationTasks)
         setEntries(operationEntries)
+        setOperationObservations(operationObservations)
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Erreur de chargement.')
       } finally {
@@ -81,6 +88,18 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
     [tasks, lots, latestOp]
   )
   const globalMetrics = useMemo(() => metricsFromPoints(globalPoints), [globalPoints])
+
+  const openPoints = useMemo(() => {
+    const rank: Record<string, number> = { critical: 0, high: 1, normal: 2, low: 3 }
+    return operationObservations
+      .filter((observation) => observation.status !== 'done' && observation.status !== 'cancelled')
+      .sort((a, b) => (rank[a.priority ?? 'normal'] ?? 2) - (rank[b.priority ?? 'normal'] ?? 2) || b.created_at.localeCompare(a.created_at))
+  }, [operationObservations])
+
+  const companyOfLot = (lotId: string): Company | undefined => {
+    const lot = lots.find((candidate) => candidate.id === lotId)
+    return lot ? companies.find((company) => company.id === lot.company_id) : undefined
+  }
 
   const visibleLots = useMemo(
     () => lots.filter((lot) => !lotFilter || lot.id === lotFilter).sort((a, b) => a.sort_order - b.sort_order),
@@ -274,18 +293,45 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
 
   return (
     <section className="stack">
-      <p className="eyebrow">{operation.name}</p>
-      <h2>Tableau de bord</h2>
+      <div className="hero">
+        <p className="eyebrow">{operation.name}</p>
+        {operation.address ? <p className="muted">{operation.address}</p> : null}
+        <h2>Avancement du chantier</h2>
+        {onStartVisit && <button type="button" className="btn primary big" onClick={onStartVisit}>▶ Démarrer la visite</button>}
+      </div>
 
       <div className="panel big">
         <h3>Avancement global</h3>
         <p className="metric big-number">{globalMetrics.average === null ? 'Non suivie' : formatPercent(globalMetrics.average)}</p>
         <Bar value={globalMetrics.average} />
         <p className="muted">
-          {globalMetrics.tracked}/{globalMetrics.total} tâches suivies · {globalMetrics.done} terminées · {globalMetrics.blocked} bloquées
-          {globalMetrics.untracked > 0 ? ` · ${globalMetrics.untracked} non suivies` : ''}
+          {globalMetrics.done} terminées · {globalMetrics.inProgress} en cours · {globalMetrics.blocked} bloquées
+        </p>
+        <p className="muted small">
+          {globalMetrics.tracked}/{globalMetrics.total} tâches suivies · {globalMetrics.notStarted} non commencées · {globalMetrics.untracked} non suivies
         </p>
       </div>
+
+      {openPoints.length > 0 && (
+        <div className="panel">
+          <h3>Points à traiter ({openPoints.length})</h3>
+          <ul className="task-list">
+            {openPoints.slice(0, 12).map((point) => (
+              <li key={point.id}>
+                {onOpenObservation ? (
+                  <button type="button" className={`task-link point ${point.priority === 'critical' || point.priority === 'high' ? 'critical' : ''}`} onClick={() => onOpenObservation(point.id, { taskId: point.task_id, unitId: point.unit_id, origin: 'dashboard' })}>
+                    <span>{point.title}</span>
+                    <span className="badge">{observationStatusLabel(point.status)}</span>
+                  </button>
+                ) : (
+                  <span className="task-link"><span>{point.title}</span><span className="badge">{observationStatusLabel(point.status)}</span></span>
+                )}
+              </li>
+            ))}
+            {openPoints.length > 12 && <li className="muted">+ {openPoints.length - 12} autre(s) point(s)…</li>}
+          </ul>
+        </div>
+      )}
 
       <div className="filters">
         <select value={lotFilter} onChange={(event) => setLotFilter(event.target.value)} aria-label="Filtre lot">
@@ -303,17 +349,28 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
 
       <h3>Lots</h3>
       {lotCards.length === 0 && <p className="notice">Aucun lot{lotFilter ? ' pour ce filtre' : ''}.</p>}
-      {lotCards.map(({ lot, metrics, items }) => (
-        <details key={lot.id} className="panel">
-          <summary>
-            <strong>{lot.number ?? lot.code ?? ''} — {lot.name}</strong>
-            <span>{metrics.average === null ? 'Non suivie' : formatPercent(metrics.average)}</span>
-          </summary>
-          <Bar value={metrics.average} />
-          <p className="muted">
-            {metrics.total} tâche(s) · {metrics.started} commencée(s) · {metrics.done} terminée(s) · {metrics.blocked} bloquée(s)
-            {metrics.untracked > 0 ? ` · ${metrics.untracked} non suivie(s)` : ''}
-          </p>
+      {lotCards.map(({ lot, metrics, items }) => {
+        const company = companyOfLot(lot.id)
+        const isDpgf = items.some((item) => item.import_id || item.source_sheet)
+        return (
+          <details key={lot.id} className="panel lot">
+            <summary>
+              <span className="lot-heading">
+                <strong>{lot.number ?? lot.code ?? ''}</strong>
+                <span>{lot.name}</span>
+              </span>
+              <span className="lot-percent">{metrics.average === null ? 'Non suivie' : formatPercent(metrics.average)}</span>
+            </summary>
+            <Bar value={metrics.average} />
+            <div className="chips">
+              {company && <span className="chip">{company.name}</span>}
+              {isDpgf && <span className="chip muted">DPGF</span>}
+              {metrics.total > 0 && <span className="chip">{metrics.total} tâche(s)</span>}
+              {metrics.done > 0 && <span className="chip ok">{metrics.done} terminée(s)</span>}
+              {metrics.inProgress > 0 && <span className="chip">{metrics.inProgress} en cours</span>}
+              {metrics.blocked > 0 && <span className="chip warn">{metrics.blocked} bloquée(s)</span>}
+              {metrics.untracked > 0 && <span className="chip">{metrics.untracked} non suivie(s)</span>}
+            </div>
           {items.length > 0 && (
             <ul className="task-list">
               {items.map((item) => {
@@ -330,8 +387,9 @@ export function Dashboard({ operation, units, lots, initialTaskId = null, initia
             </ul>
           )}
           {items.length === 0 && <p className="muted">Aucune tâche correspondant au filtre de statut.</p>}
-        </details>
-      ))}
+          </details>
+        )
+      })}
 
       <h3>Bâtiments</h3>
       {buildingCards.length === 0 && <p className="notice">Aucun bâtiment{buildingFilter ? ' pour ce filtre' : ''}.</p>}

@@ -108,6 +108,20 @@ describe('metrics', () => {
     expect(progressAverage(points.map((point) => ({ percentage: point.percentage, status: point.status ?? '', quantity: point.quantity, amount: point.amount })), 'quantity')).toBe(62.5)
     expect(progressAverage(points.map((point) => ({ percentage: point.percentage, status: point.status ?? '', quantity: point.quantity, amount: point.amount })), 'amount')).toBe(50)
   })
+  it('counts in-progress, done and not-started separately', () => {
+    const tasks = [task('a', 'item', 'lot1'), task('b', 'item', 'lot1'), task('c', 'item', 'lot1'), task('d', 'item', 'lot1')]
+    const latest = latestPerTask([
+      entry('a', null, 'lot1', 60, 'in_progress', '2026-09-01T08:00:00Z'),
+      entry('b', null, 'lot1', 100, 'done', '2026-09-01T08:00:00Z'),
+      entry('c', null, 'lot1', 0, 'not_started', '2026-09-01T08:00:00Z')
+    ])
+    const metrics = metricsFromPoints(itemPoints(tasks, (taskId) => latest.get(taskId)))
+    expect(metrics.inProgress).toBe(1)
+    expect(metrics.done).toBe(1)
+    expect(metrics.notStarted).toBe(1)
+    expect(metrics.untracked).toBe(1)
+    expect(metrics.started).toBe(2)
+  })
   it('untracked tasks are never shown as zero', () => {
     const tasks = [task('a', 'item', 'lot1'), task('b', 'item', 'lot1')]
     const points = itemPoints(tasks, () => undefined)

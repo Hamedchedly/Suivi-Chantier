@@ -22,6 +22,8 @@ export type Task = {
   task_type: TaskKind
   sort_order: number
   unit_id: string | null
+  import_id?: string | null
+  source_sheet?: string | null
 }
 
 export type TaskValues = {
@@ -102,4 +104,23 @@ export type OperationMember = {
   operation_id: string
   user_id: string
   role: 'owner' | 'admin' | 'member' | 'viewer'
+}
+
+export type ScheduleItem = {
+  id: string
+  operation_id: string
+  lot_id: string | null
+  task_id: string | null
+  unit_id: string | null
+  parent_id: string | null
+  title: string
+  planned_start: string | null
+  planned_end: string | null
+  planned_duration: number | null
+  actual_start: string | null
+  actual_end: string | null
+  progress: number | null
+  status: string | null
+  notes: string | null
+  sort_order: number
 }

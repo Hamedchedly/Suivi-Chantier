@@ -23,7 +23,7 @@ import {
 import { filterApplicableTasks } from '../lib/scope'
 import type { Lot, Task, Unit } from '../lib/types'
 
-type Props = { operationId: string; units: Unit[]; lots: Lot[]; onOpenTask?: (taskId: string, unitId: string | null) => void; onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: 'task' | 'visit' }) => void }
+type Props = { operationId: string; units: Unit[]; lots: Lot[]; onOpenTask?: (taskId: string, unitId: string | null) => void; onOpenObservation?: (observationId: string, context: { taskId: string | null; unitId: string | null; origin: 'task' | 'visit' | 'dashboard' }) => void }
 
 interface TaskDraft { percentage: number; status: string; comment: string }
 

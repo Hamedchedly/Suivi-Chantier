@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Company, Lot, Observation, ObservationEvent, ObservationHistory, OperationMember, ProgressEntry, Task, TaskValues, Unit, Visit } from './types'
+import type { Company, Lot, Observation, ObservationEvent, ObservationHistory, OperationMember, ProgressEntry, ScheduleItem, Task, TaskValues, Unit, Visit } from './types'
 
 function db() { if (!supabase) throw new Error('Supabase n’est pas configuré.'); return supabase }
 export async function operationData(operationId: string) {
@@ -60,9 +60,15 @@ export async function moveTask(operation_id: string, task_id: string, direction:
 }
 
 export async function listTasksByOperation(operation_id: string): Promise<Task[]> {
-  const { data, error } = await db().from('tasks').select('id, operation_id, lot_id, parent_id, reference, name, section, unit, quantity, unit_price, amount, weight, task_type, sort_order, unit_id').eq('operation_id', operation_id).order('lot_id', { ascending: true }).order('sort_order', { ascending: true })
+  const { data, error } = await db().from('tasks').select('id, operation_id, lot_id, parent_id, reference, name, section, unit, quantity, unit_price, amount, weight, task_type, sort_order, unit_id, import_id, source_sheet').eq('operation_id', operation_id).order('lot_id', { ascending: true }).order('sort_order', { ascending: true })
   if (error) throw error
   return (data ?? []) as Task[]
+}
+
+export async function listScheduleItems(operation_id: string): Promise<ScheduleItem[]> {
+  const { data, error } = await db().from('schedule_items').select('id, operation_id, lot_id, task_id, unit_id, parent_id, title, planned_start, planned_end, planned_duration, actual_start, actual_end, progress, status, notes, sort_order').eq('operation_id', operation_id).order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ScheduleItem[]
 }
 
 export async function listProgressByOperation(operation_id: string): Promise<ProgressEntry[]> {

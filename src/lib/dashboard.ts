@@ -84,8 +84,10 @@ export interface ScopeMetrics {
   tracked: number
   untracked: number
   started: number
+  inProgress: number
   done: number
   blocked: number
+  notStarted: number
   average: number | null
 }
 
@@ -93,15 +95,17 @@ export function metricsFromPoints(points: Point[]): ScopeMetrics {
   const total = points.length
   const trackedPoints = points.filter((point) => point.has)
   const tracked = trackedPoints.length
-  const started = trackedPoints.filter((point) => point.status === 'in_progress' || point.status === 'done').length
   const done = trackedPoints.filter((point) => point.status === 'done').length
+  const inProgress = trackedPoints.filter((point) => point.status === 'in_progress').length
   const blocked = trackedPoints.filter((point) => point.status === 'blocked').length
+  const notStarted = trackedPoints.filter((point) => point.status === 'not_started').length
+  const started = done + inProgress
   const average = progressAverage(
     trackedPoints
       .filter((point) => point.percentage !== null && point.status !== 'not_applicable')
       .map((point) => ({ percentage: point.percentage, status: point.status ?? '', quantity: point.quantity, amount: point.amount }))
   )
-  return { total, tracked, untracked: total - tracked, started, done, blocked, average }
+  return { total, tracked, untracked: total - tracked, started, inProgress, done, blocked, notStarted, average }
 }
 
 export function itemPoints(tasks: Task[], snapshotOf: (taskId: string) => ProgressEntry | undefined): Point[] {
