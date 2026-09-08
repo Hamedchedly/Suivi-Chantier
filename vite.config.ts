@@ -18,5 +18,10 @@ export default defineConfig({
       },
       workbox: { navigateFallback: '/index.html' }
     })
-  ]
+  ],
+  preview: {
+    // Railway serves the built app via `vite preview` (see railway.toml).
+    // Vite 7 validates the Host header and rejects unknown domains otherwise.
+    allowedHosts: ['suivi-chantier-production-396f.up.railway.app']
+  }
 })
