@@ -174,6 +174,55 @@ legend { color: var(--navy); font-weight: 700; font-size: .9rem; padding: 0 6px 
 .tree h4 { margin: 10px 0 2px }
 .tree .row { margin-top: 6px }
 
+/* ════════ NEW V5 REDESIGN ════════ */
+body { max-width: 100%; padding-bottom: 100px }
+
+/* KPI Grid */
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px }
+@media (min-width: 768px) { .kpi-grid { grid-template-columns: repeat(4, 1fr) } }
+.kpi-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px }
+.kpi-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; font-weight: 600; margin-bottom: 8px }
+.kpi-value { font-size: 28px; font-weight: 600; color: var(--navy) }
+.kpi-value.ok { color: var(--ok) }
+.kpi-value.warn { color: var(--bad) }
+
+/* Lots */
+.lot-card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px }
+.lot-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px }
+.lot-name { font-weight: 600; color: var(--navy); font-size: .95rem }
+.lot-desc { font-size: .85rem; color: var(--muted) }
+.lot-progress { font-size: 20px; font-weight: 600; color: var(--navy2); text-align: right }
+.lot-status { font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-top: 4px; display: inline-block }
+.lot-status.ok { background: var(--ok-bg); color: var(--ok) }
+.lot-status.late { background: var(--bad-bg); color: var(--bad) }
+.progress-bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 8px }
+.progress-fill { height: 100%; border-radius: 4px; background: var(--navy2); transition: width .3s }
+.progress-fill.late { background: var(--bad) }
+
+/* Button */
+.btn-primary { width: 100%; padding: 12px 16px; background: var(--navy); color: #fff; border: 0; border-radius: 10px; font-weight: 600; font-size: .95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px }
+.btn-primary:hover { background: var(--navy2) }
+
+/* Navigation */
+.bot-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: flex; justify-content: space-around; padding-bottom: env(safe-area-inset-bottom, 8px); z-index: 100 }
+@media (min-width: 768px) { .bot-nav { justify-content: center; gap: 32px; padding: 12px 24px } }
+.nav-btn { flex: 1; padding: 8px 4px 10px; border: 0; background: 0; cursor: pointer; font-size: .7rem; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 4px; border-top: 2.5px solid transparent; transition: color .2s }
+@media (min-width: 768px) { .nav-btn { flex: 0 0 auto; padding: 8px 16px } }
+.nav-btn.active { color: var(--navy); border-top-color: var(--navy2) }
+.nav-btn svg { width: 20px; height: 20px; stroke-width: 1.5 }
+
+/* Sections */
+section { margin-bottom: 24px }
+.section-title { font-size: .8rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: .05em; margin-bottom: 12px }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px }
+
+/* Rhythm */
+.rhythm-item { display: flex; align-items: center; gap: 12px; margin-bottom: 12px }
+.rhythm-name { font-size: .85rem; color: var(--muted); min-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rhythm-bar { flex: 1; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden }
+.rhythm-fill { height: 100%; background: var(--navy2); border-radius: 6px }
+.rhythm-pct { font-size: .85rem; font-weight: 600; color: var(--navy); min-width: 50px; text-align: right }
+
 @media (max-width: 360px) {
   .filters { grid-template-columns: 1fr }
   .big-number { font-size: 2.2rem }
