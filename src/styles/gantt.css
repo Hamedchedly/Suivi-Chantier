@@ -1,0 +1,219 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   GANTT STYLING
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Toolbar */
+.g-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.gtb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #d1dce5;
+  border-radius: 4px;
+  background: #fff;
+  color: #5c6f80;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.gtb:hover {
+  background: #f3f6f9;
+  color: #0b3b60;
+}
+
+.gtb.on {
+  background: #0b3b60;
+  color: white;
+  border-color: #0b3b60;
+}
+
+/* Gantt Table Wrapper */
+.gantt-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: white;
+  border: 1px solid #e3e9ee;
+}
+
+.gantt-tbl {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.gantt-tbl th {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e3e9ee;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #0b3b60;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.gantt-task-header {
+  width: 160px;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #f8fafc;
+}
+
+.gantt-progress-header {
+  width: 40px;
+  text-align: center;
+}
+
+.gantt-timeline-header {
+  min-width: 600px;
+  position: relative;
+  font-size: 10px;
+  color: #5c6f80;
+}
+
+/* Table Rows */
+.gantt-row {
+  border-bottom: 0.5px solid #e3e9ee;
+  transition: background 0.15s;
+}
+
+.gantt-row:hover {
+  background: #f9fbfd;
+}
+
+.gantt-row.critical .gantt-task-cell {
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.gantt-row.milestone .gantt-bar {
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 50% 85%, 18% 100%, 0% 38%);
+}
+
+/* Task Cell (left sticky column) */
+.gantt-task-cell {
+  padding: 8px 10px;
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  background: white;
+  font-size: 12px;
+  color: #1f2937;
+}
+
+.gantt-row:hover .gantt-task-cell {
+  background: #f9fbfd;
+}
+
+/* Progress Cell */
+.gantt-progress-cell {
+  padding: 8px 10px;
+  text-align: center;
+  color: #5c6f80;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* Timeline Cell (Gantt bars) */
+.gantt-timeline-cell {
+  padding: 8px 5px;
+  position: relative;
+  min-width: 600px;
+}
+
+.gantt-timeline-container {
+  position: relative;
+  height: 28px;
+  background: linear-gradient(to right, transparent 0%, transparent calc(100% - 1px), #e3e9ee 100%);
+  border-radius: 2px;
+}
+
+/* Gantt Bar */
+.gantt-bar {
+  position: absolute;
+  height: 20px;
+  top: 4px;
+  border-radius: 2px;
+  cursor: grab;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.gantt-bar:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Status Colors */
+.gantt-bar[style*="rgb(21, 128, 61)"] {
+  /* green - completed */
+}
+
+.gantt-bar[style*="rgb(24, 95, 165)"] {
+  /* blue - in-progress */
+}
+
+.gantt-bar[style*="rgb(185, 28, 28)"] {
+  /* red - delayed/blocked */
+}
+
+.gantt-bar[style*="rgb(120, 113, 108)"] {
+  /* gray - not-started */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gantt-tbl th {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+
+  .gantt-task-header {
+    width: 120px;
+  }
+
+  .gantt-timeline-header {
+    font-size: 9px;
+  }
+
+  .gantt-task-cell {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .gantt-progress-cell {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  .gantt-timeline-cell {
+    padding: 6px 4px;
+  }
+
+  .gantt-bar {
+    height: 16px;
+    top: 6px;
+  }
+
+  .gantt-timeline-container {
+    height: 24px;
+  }
+
+  .gtb {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+}
