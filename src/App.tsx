@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
 import { AppShell } from './components/layout/AppShell'
-import { Dashboard as NewDashboard } from './components/screens/Dashboard'
-import { Dashboard } from './components/Dashboard'
-import { Login, AccountBar } from './components/Login'
+import { Dashboard } from './components/screens/Dashboard'
 import { Administration } from './components/Administration'
 import { ObservationDetail } from './components/ObservationDetail'
 import { OperationForm } from './components/OperationForm'
@@ -32,8 +29,6 @@ export default function App() {
   const [assignments, setAssignments] = useState<Array<{ lot_id: string; unit_id: string | null; scope: string }>>([])
   const [historyTarget, setHistoryTarget] = useState<{ taskId: string; unitId: string | null } | null>(null)
   const [observationTarget, setObservationTarget] = useState<ObservationTarget | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [authReady, setAuthReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadOperations = async () => {
@@ -59,37 +54,9 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!supabase) {
-      setAuthReady(true)
-      return
-    }
-    let mounted = true
-    void supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session)
-        setAuthReady(true)
-      }
-    })
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, current) => {
-      setSession(current)
-    })
-    return () => {
-      mounted = false
-      subscription.subscription.unsubscribe()
-    }
+    // Load mock operations on mount
+    void loadOperations()
   }, [])
-
-  useEffect(() => {
-    if (session) {
-      setSelected(null)
-      setHistoryTarget(null)
-      setObservationTarget(null)
-      setTab('dashboard')
-      void loadOperations()
-    } else {
-      setOperations([])
-    }
-  }, [session])
 
   useEffect(() => {
     void loadData()
@@ -166,21 +133,9 @@ export default function App() {
             }}
           />
         ) : historyTarget ? (
-          <Dashboard
-            operation={currentOperation}
-            units={units}
-            lots={lots}
-            companies={companies}
-            initialTaskId={historyTarget.taskId}
-            initialUnitId={historyTarget.unitId}
-            onExitHistory={() => {
-              setHistoryTarget(null)
-              setTab('visit')
-            }}
-            onOpenObservation={openObservation}
-          />
+          <Dashboard />
         ) : tab === 'dashboard' ? (
-          <NewDashboard />
+          <Dashboard />
         ) : tab === 'visit' ? (
           <VisitForm
             operationId={currentOperation.id}
