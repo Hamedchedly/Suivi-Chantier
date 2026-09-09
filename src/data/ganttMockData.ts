@@ -1,371 +1,133 @@
-import { GanttTask } from '../types/gantt'
+import { GanttTask, TaskStatus } from '../types/gantt'
 
 const today = new Date()
-const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000)
+today.setHours(0, 0, 0, 0)
+const addDays = (n: number) => new Date(today.getTime() + n * 86400000)
 
-export const GANTT_TASKS: GanttTask[] = [
-  // LOT 05 - Menuiseries
+interface LeafSpec {
+  logement: string
+  zone: string
+  label: string
+  base: [number, number]      // baseline (contractual) offsets in days
+  plan?: [number, number]     // planned offsets (defaults to base = no slip)
+  progress: number
+  status: TaskStatus
+  critical?: boolean
+  milestone?: boolean
+  deps?: string[]
+}
+
+interface LotSpec {
+  id: string
+  lotId: string
+  title: string
+  responsible: string
+  company: string
+  progress: number
+  status: TaskStatus
+  critical: boolean
+  deps: string[]
+  leaves: LeafSpec[]
+}
+
+const LOTS: LotSpec[] = [
   {
-    id: 'T-05-00',
-    lot_id: 'L05',
-    title: 'LOT 05 - Menuiseries int. / Isolation',
-    description: 'Ensemble du lot',
-    planned_start: addDays(today, -15),
-    planned_end: addDays(today, 20),
-    planned_duration: 35,
-    progress: 82,
-    status: 'in-progress',
-    priority: 'high',
-    responsible_user: 'Jean Dupont',
-    company_id: 'SMP',
-    dependencies: [],
-    is_milestone: false,
-    is_critical: true,
-    children: [
-      {
-        id: 'T-05-01',
-        parent_id: 'T-05-00',
-        lot_id: 'L05',
-        title: 'Préparation & démolition',
-        planned_start: addDays(today, -15),
-        planned_end: addDays(today, -8),
-        planned_duration: 7,
-        actual_start: addDays(today, -15),
-        actual_end: addDays(today, -8),
-        actual_duration: 7,
-        progress: 100,
-        status: 'completed',
-        priority: 'high',
-        company_id: 'SMP',
-        dependencies: [],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-05-02',
-        parent_id: 'T-05-00',
-        lot_id: 'L05',
-        title: 'Isolation thermique',
-        planned_start: addDays(today, -8),
-        planned_end: addDays(today, 3),
-        planned_duration: 11,
-        actual_start: addDays(today, -8),
-        actual_end: addDays(today, 1),
-        actual_duration: 9,
-        progress: 100,
-        status: 'completed',
-        priority: 'high',
-        company_id: 'SMP',
-        dependencies: ['T-05-01'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-05-03',
-        parent_id: 'T-05-00',
-        lot_id: 'L05',
-        title: 'Installation menuiseries',
-        planned_start: addDays(today, 3),
-        planned_end: addDays(today, 12),
-        planned_duration: 9,
-        actual_start: addDays(today, 1),
-        progress: 75,
-        status: 'in-progress',
-        priority: 'high',
-        company_id: 'SMP',
-        dependencies: ['T-05-02'],
-        is_milestone: false,
-        is_critical: true,
-      },
-      {
-        id: 'T-05-04',
-        parent_id: 'T-05-00',
-        lot_id: 'L05',
-        title: 'Finitions & tests',
-        planned_start: addDays(today, 12),
-        planned_end: addDays(today, 20),
-        planned_duration: 8,
-        progress: 0,
-        status: 'not-started',
-        priority: 'medium',
-        company_id: 'SMP',
-        dependencies: ['T-05-03'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-05-JAL',
-        parent_id: 'T-05-00',
-        lot_id: 'L05',
-        title: 'Jalon: Lot 05 réceptionné',
-        planned_start: addDays(today, 20),
-        planned_end: addDays(today, 20),
-        planned_duration: 0,
-        progress: 0,
-        status: 'not-started',
-        priority: 'high',
-        dependencies: ['T-05-04'],
-        is_milestone: true,
-        is_critical: true,
-      },
+    id: 'T-05-00', lotId: 'L05', title: 'LOT 05 - Menuiseries int. / Isolation',
+    responsible: 'Jean Dupont', company: 'SMP', progress: 82, status: 'in-progress', critical: true, deps: [],
+    leaves: [
+      { logement: 'A-101', zone: 'BAT-A', label: 'Menuiseries A-101', base: [-15, -8], progress: 100, status: 'completed' },
+      { logement: 'A-102', zone: 'BAT-A', label: 'Menuiseries A-102', base: [-8, 0], progress: 100, status: 'completed', deps: ['T-05-A101'] },
+      { logement: 'B-201', zone: 'BAT-B', label: 'Menuiseries B-201', base: [0, 8], progress: 60, status: 'in-progress', critical: true, deps: ['T-05-A102'] },
+      { logement: 'B-202', zone: 'BAT-B', label: 'Menuiseries B-202', base: [8, 18], progress: 0, status: 'not-started', deps: ['T-05-B201'] },
     ],
   },
-
-  // LOT 06 - Électricité
   {
-    id: 'T-06-00',
-    lot_id: 'L06',
-    title: 'LOT 06 - Électricité / Contrôle accès',
-    planned_start: addDays(today, -5),
-    planned_end: addDays(today, 35),
-    planned_duration: 40,
-    progress: 64,
-    status: 'in-progress',
-    priority: 'high',
-    responsible_user: 'Marie Martin',
-    company_id: 'ELEC',
-    dependencies: [],
-    is_milestone: false,
-    is_critical: true,
-    children: [
-      {
-        id: 'T-06-01',
-        parent_id: 'T-06-00',
-        lot_id: 'L06',
-        title: 'Câblage principal',
-        planned_start: addDays(today, -5),
-        planned_end: addDays(today, 8),
-        planned_duration: 13,
-        actual_start: addDays(today, -5),
-        progress: 90,
-        status: 'in-progress',
-        priority: 'high',
-        company_id: 'ELEC',
-        dependencies: [],
-        is_milestone: false,
-        is_critical: true,
-      },
-      {
-        id: 'T-06-02',
-        parent_id: 'T-06-00',
-        lot_id: 'L06',
-        title: 'Installation tableaux',
-        planned_start: addDays(today, 8),
-        planned_end: addDays(today, 18),
-        planned_duration: 10,
-        progress: 30,
-        status: 'in-progress',
-        priority: 'high',
-        company_id: 'ELEC',
-        dependencies: ['T-06-01'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-06-03',
-        parent_id: 'T-06-00',
-        lot_id: 'L06',
-        title: 'Contrôle d\'accès',
-        planned_start: addDays(today, 18),
-        planned_end: addDays(today, 28),
-        planned_duration: 10,
-        progress: 0,
-        status: 'not-started',
-        priority: 'medium',
-        company_id: 'ELEC',
-        dependencies: ['T-06-02'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-06-04',
-        parent_id: 'T-06-00',
-        lot_id: 'L06',
-        title: 'Tests & mise en service',
-        planned_start: addDays(today, 28),
-        planned_end: addDays(today, 35),
-        planned_duration: 7,
-        progress: 0,
-        status: 'not-started',
-        priority: 'high',
-        company_id: 'ELEC',
-        dependencies: ['T-06-03'],
-        is_milestone: false,
-        is_critical: false,
-      },
+    id: 'T-06-00', lotId: 'L06', title: 'LOT 06 - Électricité / Contrôle accès',
+    responsible: 'Marie Martin', company: 'ELEC', progress: 64, status: 'in-progress', critical: true, deps: [],
+    leaves: [
+      { logement: 'A-101', zone: 'BAT-A', label: 'Électricité A-101', base: [-5, 4], progress: 100, status: 'completed' },
+      { logement: 'A-102', zone: 'BAT-A', label: 'Électricité A-102', base: [4, 12], progress: 70, status: 'in-progress', critical: true, deps: ['T-06-A101'] },
+      { logement: 'B-201', zone: 'BAT-B', label: 'Électricité B-201', base: [12, 22], progress: 20, status: 'in-progress', deps: ['T-06-A102'] },
+      { logement: 'B-202', zone: 'BAT-B', label: 'Électricité B-202', base: [22, 32], progress: 0, status: 'not-started', deps: ['T-06-B201'] },
     ],
   },
-
-  // LOT 07 - CVC (EN RETARD)
   {
-    id: 'T-07-00',
-    lot_id: 'L07',
-    title: 'LOT 07 - CVC',
-    planned_start: addDays(today, -20),
-    planned_end: addDays(today, 25),
-    planned_duration: 45,
-    progress: 51,
-    status: 'delayed',
-    priority: 'critical',
-    responsible_user: 'Pierre Lécuyer',
-    company_id: 'SOVECLIM',
-    dependencies: ['T-05-00', 'T-06-00'],
-    is_milestone: false,
-    is_critical: true,
-    total_float: -4, // EN RETARD!
-    children: [
-      {
-        id: 'T-07-01',
-        parent_id: 'T-07-00',
-        lot_id: 'L07',
-        title: 'Conduits & gaines',
-        planned_start: addDays(today, -20),
-        planned_end: addDays(today, -10),
-        planned_duration: 10,
-        actual_start: addDays(today, -20),
-        actual_end: addDays(today, -5),
-        actual_duration: 15,
-        progress: 100,
-        status: 'completed',
-        priority: 'high',
-        company_id: 'SOVECLIM',
-        dependencies: [],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-07-02',
-        parent_id: 'T-07-00',
-        lot_id: 'L07',
-        title: 'Pompes & compresseurs',
-        planned_start: addDays(today, -10),
-        planned_end: addDays(today, 5),
-        planned_duration: 15,
-        actual_start: addDays(today, -5),
-        progress: 40,
-        status: 'delayed',
-        priority: 'critical',
-        company_id: 'SOVECLIM',
-        dependencies: ['T-07-01'],
-        is_milestone: false,
-        is_critical: true,
-      },
-      {
-        id: 'T-07-03',
-        parent_id: 'T-07-00',
-        lot_id: 'L07',
-        title: 'Régulation & automation',
-        planned_start: addDays(today, 5),
-        planned_end: addDays(today, 18),
-        planned_duration: 13,
-        progress: 0,
-        status: 'blocked',
-        priority: 'high',
-        company_id: 'SOVECLIM',
-        dependencies: ['T-07-02'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-07-04',
-        parent_id: 'T-07-00',
-        lot_id: 'L07',
-        title: 'Tests de performance',
-        planned_start: addDays(today, 18),
-        planned_end: addDays(today, 25),
-        planned_duration: 7,
-        progress: 0,
-        status: 'not-started',
-        priority: 'high',
-        company_id: 'SOVECLIM',
-        dependencies: ['T-07-03'],
-        is_milestone: false,
-        is_critical: false,
-      },
+    id: 'T-07-00', lotId: 'L07', title: 'LOT 07 - CVC',
+    responsible: 'Pierre Lécuyer', company: 'SOVECLIM', progress: 51, status: 'delayed', critical: true, deps: ['T-05-00', 'T-06-00'],
+    leaves: [
+      { logement: 'A-101', zone: 'BAT-A', label: 'CVC A-101', base: [-20, -10], plan: [-20, -8], progress: 100, status: 'completed' },
+      { logement: 'A-102', zone: 'BAT-A', label: 'CVC A-102', base: [-10, 2], plan: [-5, 9], progress: 40, status: 'delayed', critical: true, deps: ['T-07-A101'] },
+      { logement: 'B-201', zone: 'BAT-B', label: 'CVC B-201', base: [2, 14], plan: [9, 21], progress: 0, status: 'blocked', deps: ['T-07-A102'] },
+      { logement: 'B-202', zone: 'BAT-B', label: 'CVC B-202', base: [14, 24], plan: [21, 31], progress: 0, status: 'not-started', deps: ['T-07-B201'] },
     ],
   },
-
-  // LOT 08 - Embellissements
   {
-    id: 'T-08-00',
-    lot_id: 'L08',
-    title: 'LOT 08 - Embellissements',
-    planned_start: addDays(today, 10),
-    planned_end: addDays(today, 45),
-    planned_duration: 35,
-    progress: 32,
-    status: 'in-progress',
-    priority: 'medium',
-    responsible_user: 'Anne Legrand',
-    company_id: 'SORETHERM',
-    dependencies: ['T-05-00', 'T-06-00'],
-    is_milestone: false,
-    is_critical: false,
-    children: [
-      {
-        id: 'T-08-01',
-        parent_id: 'T-08-00',
-        lot_id: 'L08',
-        title: 'Peinture & revêtements',
-        planned_start: addDays(today, 10),
-        planned_end: addDays(today, 20),
-        planned_duration: 10,
-        actual_start: addDays(today, 10),
-        progress: 60,
-        status: 'in-progress',
-        priority: 'medium',
-        company_id: 'SORETHERM',
-        dependencies: [],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-08-02',
-        parent_id: 'T-08-00',
-        lot_id: 'L08',
-        title: 'Carrelage & finitions',
-        planned_start: addDays(today, 20),
-        planned_end: addDays(today, 35),
-        planned_duration: 15,
-        progress: 15,
-        status: 'in-progress',
-        priority: 'medium',
-        company_id: 'SORETHERM',
-        dependencies: ['T-08-01'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-08-03',
-        parent_id: 'T-08-00',
-        lot_id: 'L08',
-        title: 'Nettoyage final',
-        planned_start: addDays(today, 35),
-        planned_end: addDays(today, 40),
-        planned_duration: 5,
-        progress: 0,
-        status: 'not-started',
-        priority: 'low',
-        company_id: 'SORETHERM',
-        dependencies: ['T-08-02'],
-        is_milestone: false,
-        is_critical: false,
-      },
-      {
-        id: 'T-08-JAL',
-        parent_id: 'T-08-00',
-        lot_id: 'L08',
-        title: 'Jalon: Projet livré',
-        planned_start: addDays(today, 45),
-        planned_end: addDays(today, 45),
-        planned_duration: 0,
-        progress: 0,
-        status: 'not-started',
-        priority: 'critical',
-        dependencies: ['T-08-03'],
-        is_milestone: true,
-        is_critical: true,
-      },
+    id: 'T-08-00', lotId: 'L08', title: 'LOT 08 - Embellissements',
+    responsible: 'Anne Legrand', company: 'SORETHERM', progress: 32, status: 'in-progress', critical: false, deps: ['T-05-00', 'T-06-00'],
+    leaves: [
+      { logement: 'A-101', zone: 'BAT-A', label: 'Embellissements A-101', base: [10, 20], progress: 60, status: 'in-progress' },
+      { logement: 'A-102', zone: 'BAT-A', label: 'Embellissements A-102', base: [20, 30], progress: 15, status: 'in-progress', deps: ['T-08-A101'] },
+      { logement: 'B-201', zone: 'BAT-B', label: 'Embellissements B-201', base: [30, 38], progress: 0, status: 'not-started', deps: ['T-08-A102'] },
+      { logement: 'B-202', zone: 'BAT-B', label: 'Embellissements B-202', base: [38, 45], progress: 0, status: 'not-started', deps: ['T-08-B201'] },
+      { logement: 'COM', zone: 'COMMUNS', label: 'Jalon: Projet livré', base: [45, 45], progress: 0, status: 'not-started', milestone: true, critical: true, deps: ['T-08-B202'] },
     ],
   },
 ]
+
+function buildLot(spec: LotSpec): GanttTask {
+  const prefix = `T-${spec.lotId.slice(1)}` // 'L05' -> 'T-05'
+  const children: GanttTask[] = spec.leaves.map(leaf => {
+    const [bs, be] = leaf.base
+    const [ps, pe] = leaf.plan ?? leaf.base
+    const suffix = leaf.logement.replace('-', '')
+    return {
+      id: `${prefix}-${suffix}`,
+      parent_id: spec.id,
+      lot_id: spec.lotId,
+      zone_id: leaf.zone,
+      logement_id: leaf.logement,
+      title: leaf.label,
+      planned_start: addDays(ps),
+      planned_end: addDays(pe),
+      planned_duration: pe - ps,
+      baseline_start: addDays(bs),
+      baseline_end: addDays(be),
+      progress: leaf.progress,
+      status: leaf.status,
+      priority: leaf.critical ? 'critical' : 'medium',
+      company_id: spec.company,
+      dependencies: leaf.deps ?? [],
+      is_milestone: leaf.milestone ?? false,
+      is_critical: leaf.critical ?? false,
+    }
+  })
+
+  // Parent spans the union of its children's baseline/planned dates
+  const minBase = Math.min(...children.map(c => (c.baseline_start ?? c.planned_start).getTime()))
+  const maxBase = Math.max(...children.map(c => (c.baseline_end ?? c.planned_end).getTime()))
+  const minPlan = Math.min(...children.map(c => c.planned_start.getTime()))
+  const maxPlan = Math.max(...children.map(c => c.planned_end.getTime()))
+
+  return {
+    id: spec.id,
+    lot_id: spec.lotId,
+    title: spec.title,
+    description: 'Ensemble du lot',
+    planned_start: new Date(minPlan),
+    planned_end: new Date(maxPlan),
+    planned_duration: Math.round((maxPlan - minPlan) / 86400000),
+    baseline_start: new Date(minBase),
+    baseline_end: new Date(maxBase),
+    progress: spec.progress,
+    status: spec.status,
+    priority: spec.critical ? 'critical' : 'high',
+    responsible_user: spec.responsible,
+    company_id: spec.company,
+    dependencies: spec.deps,
+    is_milestone: false,
+    is_critical: spec.critical,
+    children,
+  }
+}
+
+export const GANTT_TASKS: GanttTask[] = LOTS.map(buildLot)

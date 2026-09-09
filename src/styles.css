@@ -129,16 +129,6 @@ button.task-link:active { background: #e9f1f8 }
 .note-block h4 { margin: 0 0 2px }
 
 
-/* Gantt */
-.gantt-row { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 8px 0; border-bottom: 1px solid #eef3f7 }
-.gantt-row:last-child { border-bottom: 0 }
-.gantt-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .9rem }
-.gantt-label strong { color: var(--ink) }
-.gantt-track { position: relative; height: 14px; background: #eef3f7; border-radius: 7px }
-.gantt-bar { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #0f5a90, #1f8bd2); border-radius: 7px; min-width: 4px }
-.gantt-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
-.gantt-row.compact { display: flex; justify-content: space-between; gap: 8px; align-items: center }
-
 /* Visite */
 .task-entry { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px 12px; margin: 8px 0 }
 .task-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline }

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, Upload } from 'lucide-react'
+import { loadState, saveState } from '../../lib/storage'
 
 type ConfigTab = 'project' | 'lots' | 'email' | 'export' | 'backup'
 
@@ -11,6 +12,15 @@ interface ProjectConfig {
   amo: string
 }
 
+interface LotContact {
+  id: string
+  name: string
+  company: string
+  contactName: string
+  email: string
+  phone: string
+}
+
 const MOCK_PROJECT: ProjectConfig = {
   name: 'Gambetta — Réhabilitation',
   address: '111 Rue Gambetta, 51100 Reims',
@@ -19,9 +29,27 @@ const MOCK_PROJECT: ProjectConfig = {
   amo: 'Consultant Projet XYZ',
 }
 
+const LOTS_STORAGE_KEY = 'sc-lots-config-v1'
+
+const DEFAULT_LOTS: LotContact[] = [
+  { id: 'L05', name: 'LOT 05 - Menuiseries int. / Isolation', company: 'SMP Aménagement', contactName: 'Jean Dupont', email: 'j.dupont@smp.fr', phone: '06 12 34 56 78' },
+  { id: 'L06', name: 'LOT 06 - Électricité / Contrôle accès', company: 'Soveclim Services', contactName: 'Marie Martin', email: 'm.martin@soveclim.fr', phone: '06 23 45 67 89' },
+  { id: 'L07', name: 'LOT 07 - CVC', company: 'Soveclim Services', contactName: 'Pierre Lécuyer', email: 'p.lecuyer@soveclim.fr', phone: '06 34 56 78 90' },
+  { id: 'L08', name: 'LOT 08 - Embellissements', company: 'Soretherm', contactName: 'Anne Legrand', email: 'a.legrand@soretherm.fr', phone: '06 45 67 89 01' },
+]
+
 export function Config() {
   const [activeTab, setActiveTab] = useState<ConfigTab>('project')
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>(MOCK_PROJECT)
+  const [lots, setLots] = useState<LotContact[]>(() => loadState<LotContact[]>(LOTS_STORAGE_KEY, DEFAULT_LOTS))
+
+  useEffect(() => {
+    saveState(LOTS_STORAGE_KEY, lots)
+  }, [lots])
+
+  const updateLot = (id: string, field: keyof LotContact, value: string) => {
+    setLots(prev => prev.map(l => (l.id === id ? { ...l, [field]: value } : l)))
+  }
 
   const tabs: { id: ConfigTab; label: string }[] = [
     { id: 'project', label: 'Projet' },
@@ -187,8 +215,25 @@ export function Config() {
 
         {/* Lots Tab */}
         {activeTab === 'lots' && (
-          <div>
-            <p style={{ color: '#5c6f80', fontSize: '13px' }}>Configuration des lots et contacts en développement.</p>
+          <div style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {lots.map(lot => (
+              <div key={lot.id} style={{ border: '1px solid #e3e9ee', borderRadius: '10px', padding: '12px', background: '#fff' }}>
+                <div style={{ fontWeight: '600', color: '#0b3b60', fontSize: '13px', marginBottom: '10px' }}>{lot.name}</div>
+                <LotField label="Entreprise" value={lot.company} onChange={v => updateLot(lot.id, 'company', v)} />
+                <LotField label="Contact" value={lot.contactName} onChange={v => updateLot(lot.id, 'contactName', v)} />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <LotField label="Email" value={lot.email} onChange={v => updateLot(lot.id, 'email', v)} type="email" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <LotField label="Téléphone" value={lot.phone} onChange={v => updateLot(lot.id, 'phone', v)} type="tel" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: '11px', color: '#5c6f80' }}>
+              Les modifications sont enregistrées automatiquement.
+            </div>
           </div>
         )}
 
@@ -303,6 +348,20 @@ export function Config() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function LotField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div style={{ marginBottom: '8px' }}>
+      <label style={{ fontSize: '10px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '4px' }}>{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #d1dce5', fontSize: '13px', boxSizing: 'border-box' }}
+      />
     </div>
   )
 }

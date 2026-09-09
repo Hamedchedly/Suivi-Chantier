@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 
 interface GanttTableProps {
@@ -16,6 +16,10 @@ interface DragState {
   originalEnd?: Date
   isDragging?: boolean
   mode?: 'move' | 'resize-start' | 'resize-end'
+}
+
+interface DepLine {
+  x1: number; y1: number; x2: number; y2: number; critical: boolean
 }
 
 const MONTH_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -53,22 +57,50 @@ function buildHeaders(startDate: Date, daysInRange: number, dayWidthPx: number) 
   while (day < daysInRange) {
     const date = new Date(startDate.getTime() + day * msPerDay)
     const dow = date.getDay() || 7
-    const daysUntilMonday = 8 - dow
-    const span = Math.min(daysUntilMonday, daysInRange - day)
-    weeks.push({
-      label: `S${isoWeek(date)}`,
-      leftPx: day * dayWidthPx,
-      widthPx: span * dayWidthPx,
-    })
+    const span = Math.min(8 - dow, daysInRange - day)
+    weeks.push({ label: `S${isoWeek(date)}`, leftPx: day * dayWidthPx, widthPx: span * dayWidthPx })
     day += span
   }
 
   return { months, weeks }
 }
 
+// Accumulate offsetLeft/offsetTop up the offsetParent chain until `ancestor`.
+// Needed because .gantt-timeline-cell is position:relative and becomes the
+// container's offsetParent, so a single offsetLeft is only relative to the <td>.
+function offsetWithin(el: HTMLElement, ancestor: HTMLElement) {
+  let x = 0, y = 0
+  let node: HTMLElement | null = el
+  while (node && node !== ancestor) {
+    x += node.offsetLeft
+    y += node.offsetTop
+    node = node.offsetParent as HTMLElement | null
+  }
+  return { x, y }
+}
+
+// Flatten the tree into the visible row order, respecting expansion state.
+function flattenVisible(
+  tasks: GanttTask[],
+  expanded: Set<string>,
+  depth = 0,
+  acc: { task: GanttTask; depth: number }[] = [],
+) {
+  for (const t of tasks) {
+    acc.push({ task: t, depth })
+    if (t.children?.length && expanded.has(t.id)) {
+      flattenVisible(t.children, expanded, depth + 1, acc)
+    }
+  }
+  return acc
+}
+
 export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate }: GanttTableProps) {
   const [dragState, setDragState] = useState<DragState>({})
-  const tableRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [depLines, setDepLines] = useState<DepLine[]>([])
+  const [svgSize, setSvgSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
   const dayWidthPx = viewState.view === 'week' ? 24 : 12
   const msPerDay = 86400000
@@ -82,6 +114,17 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const todayVisible = todayOffset >= 0 && todayOffset < daysInRange
   const todayLeftPx = todayOffset * dayWidthPx
 
+  const visible = flattenVisible(tasks, viewState.expandedTasks)
+
+  // Geometry of a bar for given start/end dates, clamped to the visible range.
+  const geom = (start: Date, end: Date) => {
+    const s = Math.max(0, Math.floor((start.getTime() - viewState.startDate.getTime()) / msPerDay))
+    const e = Math.min(daysInRange, Math.ceil((end.getTime() - viewState.startDate.getTime()) / msPerDay))
+    const leftPx = s * dayWidthPx
+    const widthPx = Math.max(1, e - s) * dayWidthPx
+    return { leftPx, widthPx }
+  }
+
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
     e.preventDefault()
     setDragState({
@@ -94,19 +137,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     })
   }
 
-  const handleMouseMove = useCallback((_e: MouseEvent) => {
-    // Visual feedback could be added here
-  }, [])
+  const handleMouseMove = useCallback((_e: MouseEvent) => {}, [])
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
     setDragState(prev => {
       if (
-        prev.isDragging &&
-        prev.taskId &&
-        prev.startX !== undefined &&
-        prev.originalStart &&
-        prev.originalEnd &&
-        onTaskUpdate
+        prev.isDragging && prev.taskId && prev.startX !== undefined &&
+        prev.originalStart && prev.originalEnd && onTaskUpdate
       ) {
         const daysShift = Math.round((e.clientX - prev.startX) / dayWidthPx)
         if (daysShift !== 0) {
@@ -117,13 +154,9 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               planned_end: new Date(prev.originalEnd.getTime() + msShift),
             })
           } else if (prev.mode === 'resize-start') {
-            onTaskUpdate(prev.taskId, {
-              planned_start: new Date(prev.originalStart.getTime() + msShift),
-            })
+            onTaskUpdate(prev.taskId, { planned_start: new Date(prev.originalStart.getTime() + msShift) })
           } else if (prev.mode === 'resize-end') {
-            onTaskUpdate(prev.taskId, {
-              planned_end: new Date(prev.originalEnd.getTime() + msShift),
-            })
+            onTaskUpdate(prev.taskId, { planned_end: new Date(prev.originalEnd.getTime() + msShift) })
           }
         }
       }
@@ -142,6 +175,41 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     }
   }, [dragState.isDragging, handleMouseMove, handleMouseUp])
 
+  // Measure bar positions from the DOM and derive dependency lines.
+  // Robust to responsive column widths and variable row heights.
+  useLayoutEffect(() => {
+    if (!viewState.depsVisible) {
+      setDepLines([])
+      return
+    }
+    const anchor = wrapperRef.current
+    if (!anchor) return
+    setSvgSize({ w: anchor.scrollWidth, h: anchor.scrollHeight })
+    const pos = new Map<string, { x1: number; x2: number; y: number }>()
+    for (const { task } of visible) {
+      const el = containerRefs.current.get(task.id)
+      if (!el) continue
+      const { leftPx, widthPx } = geom(task.planned_start, task.planned_end)
+      const { x: baseX, y: baseY } = offsetWithin(el, anchor)
+      pos.set(task.id, {
+        x1: baseX + leftPx,
+        x2: baseX + leftPx + widthPx,
+        y: baseY + el.offsetHeight / 2,
+      })
+    }
+    const lines: DepLine[] = []
+    for (const { task } of visible) {
+      for (const depId of task.dependencies) {
+        const from = pos.get(depId) // predecessor
+        const to = pos.get(task.id) // successor
+        if (from && to) {
+          lines.push({ x1: from.x2, y1: from.y, x2: to.x1, y2: to.y, critical: task.is_critical })
+        }
+      }
+    }
+    setDepLines(lines)
+  }, [tasks, viewState.expandedTasks, viewState.depsVisible, viewState.view, viewState.startDate, viewState.endDate])
+
   const getStatusColor = (status: GanttTask['status']) => {
     if (status === 'completed')  return '#15803d'
     if (status === 'in-progress') return '#185fa5'
@@ -150,24 +218,21 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return '#6b21a8'
   }
 
-  const renderTaskRow = (task: GanttTask, depth = 0): JSX.Element[] => {
+  const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
 
-    const taskStart = Math.max(
-      0,
-      Math.floor((task.planned_start.getTime() - viewState.startDate.getTime()) / msPerDay),
-    )
-    const taskEnd = Math.min(
-      daysInRange,
-      Math.ceil((task.planned_end.getTime() - viewState.startDate.getTime()) / msPerDay),
-    )
-    const taskWidth = Math.max(1, taskEnd - taskStart)
-    const taskLeftPx = taskStart * dayWidthPx
+    const bar = geom(task.planned_start, task.planned_end)
+    const base = task.baseline_start && task.baseline_end
+      ? geom(task.baseline_start, task.baseline_end)
+      : null
 
-    const rows: JSX.Element[] = [
+    const tooltip = base
+      ? `${task.title} • ${task.progress}%\nContractuel: ${task.baseline_start!.toLocaleDateString('fr')} → ${task.baseline_end!.toLocaleDateString('fr')}\nPlanifié: ${task.planned_start.toLocaleDateString('fr')} → ${task.planned_end.toLocaleDateString('fr')}`
+      : `${task.title} • ${task.progress}%`
+
+    return (
       <tr key={task.id} className={`gantt-row${task.is_critical ? ' critical' : ''}${task.is_milestone ? ' milestone' : ''}`}>
-        {/* Task name column */}
         <td className="gantt-task-cell">
           <div style={{ paddingLeft: `${depth * 14}px`, display: 'flex', alignItems: 'center', gap: 4 }}>
             {hasChildren ? (
@@ -186,116 +251,131 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
           </div>
         </td>
 
-        {/* Progress column */}
         <td className="gantt-progress-cell">{task.progress}%</td>
 
-        {/* Timeline column */}
         <td className="gantt-timeline-cell">
-          <div className="gantt-timeline-container" style={{ width: daysInRange * dayWidthPx }}>
+          <div
+            className="gantt-timeline-container"
+            style={{ width: daysInRange * dayWidthPx }}
+            ref={el => {
+              if (el) containerRefs.current.set(task.id, el)
+              else containerRefs.current.delete(task.id)
+            }}
+          >
             {/* Today marker */}
             {todayVisible && (
-              <div
-                style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(185,28,28,.35)', zIndex: 1, pointerEvents: 'none' }}
-              />
+              <div style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(185,28,28,.35)', zIndex: 1, pointerEvents: 'none' }} />
             )}
+
+            {/* Baseline (contractual) hatched bar */}
+            {base && !task.is_milestone && (
+              <div className="gantt-baseline" style={{ left: base.leftPx, width: base.widthPx }} />
+            )}
+
             {/* Left resize handle */}
             <div
               onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
-              style={{ position: 'absolute', left: taskLeftPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 3 }}
+              style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
             />
-            {/* Bar */}
+
+            {/* Actual/planned bar */}
             <div
               className="gantt-bar"
               onMouseDown={e => handleBarMouseDown(task, e, 'move')}
               style={{
-                left: taskLeftPx,
-                width: taskWidth * dayWidthPx,
+                left: bar.leftPx,
+                width: bar.widthPx,
                 backgroundColor: getStatusColor(task.status),
-                opacity: task.is_milestone ? 0.85 : 1,
                 cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
               }}
-              title={`${task.title} • ${task.progress}% • ${task.planned_start.toLocaleDateString('fr')} → ${task.planned_end.toLocaleDateString('fr')}`}
+              title={tooltip}
             >
-              {/* Remaining (uncompleted) portion shown lighter; completed stays solid */}
-              {task.progress < 100 && (
+              {task.progress < 100 && !task.is_milestone && (
                 <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
               )}
-              {taskWidth * dayWidthPx > 30 && (
-                <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '20px' }}>
+              {bar.widthPx > 30 && !task.is_milestone && (
+                <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '14px' }}>
                   {task.progress}%
                 </span>
               )}
             </div>
+
             {/* Right resize handle */}
             <div
               onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
-              style={{ position: 'absolute', left: taskLeftPx + taskWidth * dayWidthPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 3 }}
+              style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
             />
           </div>
         </td>
-      </tr>,
-    ]
-
-    if (hasChildren && isExpanded) {
-      for (const child of task.children!) {
-        rows.push(...renderTaskRow(child, depth + 1))
-      }
-    }
-
-    return rows
+      </tr>
+    )
   }
 
   return (
-    <div className="gantt-table-wrapper" ref={tableRef}>
-      <table className="gantt-tbl" style={{ userSelect: dragState.isDragging ? 'none' : 'auto' }}>
-        <thead>
-          {/* Month row */}
-          <tr>
-            <th className="gantt-task-header" rowSpan={2}>Tâche</th>
-            <th className="gantt-progress-header" rowSpan={2}>%</th>
-            <th className="gantt-date-header" style={{ position: 'relative', height: 22, padding: 0, minWidth: daysInRange * dayWidthPx }}>
-              <div style={{ position: 'relative', height: 22 }}>
-                {months.map((m, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      position: 'absolute', left: m.leftPx, width: m.widthPx,
-                      fontSize: 10, fontWeight: 700, color: '#0b3b60',
-                      padding: '4px 6px', overflow: 'hidden', whiteSpace: 'nowrap',
-                      borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%',
-                    }}
-                  >
-                    {m.label}
-                  </div>
-                ))}
-              </div>
-            </th>
-          </tr>
-          {/* Week row */}
-          <tr>
-            <th className="gantt-date-header" style={{ position: 'relative', height: 20, padding: 0, borderTop: '1px solid #e3e9ee' }}>
-              <div style={{ position: 'relative', height: 20 }}>
-                {weeks.map((w, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      position: 'absolute', left: w.leftPx, width: w.widthPx,
-                      fontSize: 9, color: '#5c6f80',
-                      padding: '3px 3px', overflow: 'hidden', whiteSpace: 'nowrap',
-                      borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%',
-                    }}
-                  >
-                    {w.label}
-                  </div>
-                ))}
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map(task => renderTaskRow(task))}
-        </tbody>
-      </table>
+    <div className="gantt-table-wrapper" ref={wrapperRef}>
+        <table className="gantt-tbl" style={{ userSelect: dragState.isDragging ? 'none' : 'auto' }}>
+          <thead>
+            <tr>
+              <th className="gantt-task-header">Tâche</th>
+              <th className="gantt-progress-header">%</th>
+              <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx }}>
+                {/* Month row */}
+                <div style={{ position: 'relative', height: 22 }}>
+                  {months.map((m, i) => (
+                    <div key={i} style={{ position: 'absolute', left: m.leftPx, width: m.widthPx, fontSize: 10, fontWeight: 700, color: '#0b3b60', padding: '4px 6px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%' }}>
+                      {m.label}
+                    </div>
+                  ))}
+                </div>
+                {/* Week row */}
+                <div style={{ position: 'relative', height: 20, borderTop: '1px solid #e3e9ee' }}>
+                  {weeks.map((w, i) => (
+                    <div key={i} style={{ position: 'absolute', left: w.leftPx, width: w.widthPx, fontSize: 9, color: '#5c6f80', padding: '3px 3px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%' }}>
+                      {w.label}
+                    </div>
+                  ))}
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map(({ task, depth }) => renderRow(task, depth))}
+          </tbody>
+        </table>
+
+        {/* Dependency lines overlay (absolute child of the scroll container → scrolls with content) */}
+        {viewState.depsVisible && depLines.length > 0 && (
+          <svg
+            className="gantt-deps"
+            width={svgSize.w}
+            height={svgSize.h}
+            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}
+          >
+            <defs>
+              <marker id="dep-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
+              </marker>
+              <marker id="dep-arrow-crit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#b91c1c" />
+              </marker>
+            </defs>
+            {depLines.map((l, i) => {
+              const elbow = l.x1 + 10
+              const d = `M ${l.x1} ${l.y1} L ${elbow} ${l.y1} L ${elbow} ${l.y2} L ${l.x2} ${l.y2}`
+              return (
+                <path
+                  key={i}
+                  d={d}
+                  fill="none"
+                  stroke={l.critical ? '#b91c1c' : '#94a3b8'}
+                  strokeWidth={1.3}
+                  strokeDasharray={l.critical ? undefined : '3 2'}
+                  markerEnd={`url(#${l.critical ? 'dep-arrow-crit' : 'dep-arrow'})`}
+                />
+              )
+            })}
+          </svg>
+        )}
     </div>
   )
 }

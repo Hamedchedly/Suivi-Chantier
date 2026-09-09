@@ -4,6 +4,8 @@ export interface GanttTask {
   id: string
   parent_id?: string
   lot_id: string
+  zone_id?: string
+  logement_id?: string
   title: string
   description?: string
 
@@ -40,6 +42,7 @@ export interface GanttViewState {
   startDate: Date
   endDate: Date
   selectedLotId?: string | null // filter by lot
+  selectedZoneId?: string | null // filter by logement
   depsVisible: boolean
   expandedTasks: Set<string>
 }

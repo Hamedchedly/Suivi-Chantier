@@ -7,9 +7,21 @@
   display: flex;
   gap: 6px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.gtb-select {
+  padding: 6px 8px;
+  border: 1px solid #d1dce5;
+  border-radius: 4px;
+  background: #fff;
+  color: #0b3b60;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 160px;
 }
 
 .gtb {
@@ -41,6 +53,7 @@
 
 /* Gantt Table Wrapper */
 .gantt-table-wrapper {
+  position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   background: white;
@@ -149,20 +162,33 @@
   border-radius: 2px;
 }
 
-/* Gantt Bar */
+/* Baseline (contractual) hatched bar — sits behind the actual bar */
+.gantt-baseline {
+  position: absolute;
+  top: 3px;
+  height: 22px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(45deg, #c8d2db 0 4px, #eef2f6 4px 8px);
+  border: 1px solid #cfd8e0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Gantt Bar — thinner, overlaid on top of the baseline hatch */
 .gantt-bar {
   position: absolute;
-  height: 20px;
-  top: 4px;
+  height: 14px;
+  top: 7px;
   border-radius: 2px;
   cursor: grab;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: box-shadow 0.2s;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  z-index: 2;
 }
 
 .gantt-bar:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
 }
 
 /* Status Colors */

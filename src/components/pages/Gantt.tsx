@@ -2,11 +2,13 @@ import { useState, useMemo, useEffect } from 'react'
 import { Eye, EyeOff, RotateCcw } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
+import { ZONES } from '../../data/zones'
 import { loadState, saveState } from '../../lib/storage'
 import GanttTable from '../gantt/GanttTable'
 import '../../styles/gantt.css'
 
-const GANTT_STORAGE_KEY = 'sc-gantt-v1'
+// v2: data model gained zone_id / logement_id — invalidate v1 stored trees
+const GANTT_STORAGE_KEY = 'sc-gantt-v2'
 
 const LOTS = [
   { id: 'L05', name: 'LOT 05' },
@@ -26,9 +28,29 @@ const updateTaskInList = (
     return t
   })
 
+// Combined AND filter: keep lots matching lotId; within each, keep only children
+// matching zoneId (a logement id). Parent lots with no matching child are dropped.
+const filterTasks = (
+  tasks: GanttTask[],
+  lotId: string | null,
+  zoneId: string | null,
+): GanttTask[] => {
+  let out = lotId ? tasks.filter(t => t.lot_id === lotId) : tasks
+  if (zoneId) {
+    out = out
+      .map(lot => {
+        const children = (lot.children ?? []).filter(c => c.logement_id === zoneId)
+        return children.length ? { ...lot, children } : null
+      })
+      .filter((t): t is GanttTask => t !== null)
+  }
+  return out
+}
+
 export function Gantt() {
   const [view, setView] = useState<'week' | 'month'>('week')
   const [selectedLot, setSelectedLot] = useState<string | null>(null)
+  const [selectedZone, setSelectedZone] = useState<string | null>(null)
   const [depsVisible, setDepsVisible] = useState(true)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() =>
@@ -46,16 +68,17 @@ export function Gantt() {
   const endDate = new Date()
   endDate.setDate(endDate.getDate() + 63)
 
-  const filteredTasks = useMemo(() => {
-    if (!selectedLot) return ganttTasks
-    return ganttTasks.filter(t => t.lot_id === selectedLot)
-  }, [selectedLot, ganttTasks])
+  const filteredTasks = useMemo(
+    () => filterTasks(ganttTasks, selectedLot, selectedZone),
+    [selectedLot, selectedZone, ganttTasks],
+  )
 
   const viewState: GanttViewState = {
     view,
     startDate,
     endDate,
     selectedLotId: selectedLot,
+    selectedZoneId: selectedZone,
     depsVisible,
     expandedTasks,
   }
@@ -70,7 +93,7 @@ export function Gantt() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      {/* Toolbar */}
+      {/* Toolbar — row 1: lot filters */}
       <div className="g-toolbar">
         <button
           className={`gtb ${!selectedLot ? 'on' : ''}`}
@@ -87,6 +110,25 @@ export function Gantt() {
             {lot.name}
           </button>
         ))}
+      </div>
+
+      {/* Toolbar — row 2: zone filter + controls */}
+      <div className="g-toolbar">
+        <select
+          className="gtb-select"
+          value={selectedZone ?? ''}
+          onChange={e => setSelectedZone(e.target.value || null)}
+          title="Filtrer par zone / logement"
+        >
+          <option value="">⊞ Toutes zones</option>
+          {ZONES.map(zone => (
+            <optgroup key={zone.id} label={zone.label}>
+              {zone.logements.map(l => (
+                <option key={l.id} value={l.id}>{l.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
         <div style={{ flex: 1 }} />
         <button
           className={`gtb ${depsVisible ? 'on' : ''}`}
