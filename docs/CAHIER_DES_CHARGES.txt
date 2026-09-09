@@ -1,0 +1,2027 @@
+# CAHIER DES CHARGES
+
+## Application de pilotage et de suivi des chantiers de réhabilitation
+
+### Version 1.0 — Septembre 2026
+
+---
+
+# 1. CONTEXTE
+
+L'application `Suivi-Chantier` devient une application dédiée exclusivement au **pilotage des opérations de réhabilitation/construction**, depuis la préparation du chantier jusqu'à la réception et la levée des réserves.
+
+Elle est **totalement indépendante de l'application de suivi de patrimoine**.
+
+Il ne faut donc pas chercher à fusionner les deux applications.
+
+L'application doit permettre de centraliser :
+
+* opérations ;
+* bâtiments ;
+* logements/zones ;
+* lots ;
+* entreprises ;
+* DPGF ;
+* prestations ;
+* planning ;
+* avancement ;
+* visites ;
+* observations ;
+* réserves ;
+* photos ;
+* documents ;
+* CR de chantier ;
+* RFI ;
+* VISA ;
+* marchés ;
+* avenants ;
+* situations ;
+* suivi financier ;
+* alertes et retards.
+
+L'objectif n'est pas de créer un simple outil de compte-rendu.
+
+L'objectif est de créer un **système de pilotage du chantier**, dans lequel le planning, le terrain, les documents et les données financières sont interconnectés.
+
+---
+
+# 2. SOCLE TECHNIQUE À CONSERVER
+
+Repository principal :
+
+https://github.com/Hamedchedly/Suivi-Chantier
+
+Branches actuellement présentes :
+
+* `main`
+* `develop`
+* `feature/v5-connected`
+* `codex/inspecter-le-depot-et-etablir-socle-v5`
+* `codex/inspecter-le-depot-et-etablir-socle-v5-fvx7cb`
+* `codex/inspecter-le-depot-et-etablir-socle-v5-0h7taf`
+
+## Décision
+
+Utiliser :
+
+**`develop` comme branche fonctionnelle de référence.**
+
+Ne pas repartir de `main`.
+
+Ne pas repartir de `feature/v5-connected`.
+
+Ne pas jeter le modèle actuel.
+
+Avant toute modification :
+
+1. analyser intégralement le dépôt ;
+2. analyser `develop` ;
+3. comparer les autres branches ;
+4. identifier les différences utiles ;
+5. vérifier l'état réel de Supabase ;
+6. vérifier les migrations existantes ;
+7. vérifier les tests ;
+8. établir une cartographie de l'existant.
+
+Le `develop` actuel contient déjà :
+
+* authentification ;
+* opérations ;
+* administration ;
+* dashboard ;
+* import DPGF ;
+* visites ;
+* observations ;
+* avancement ;
+* planning ;
+* modèle financier ;
+* RLS ;
+* tests unitaires.
+
+Le modèle TypeScript actuel contient notamment `Operation`, `Unit`, `Company`, `Lot`, `Task`, `Visit`, `ProgressEntry`, `Observation` et `ScheduleItem`.
+
+---
+
+# 3. PRINCIPES D'ARCHITECTURE
+
+## 3.1 Une seule source de vérité
+
+Supabase/PostgreSQL est la source de vérité.
+
+Le frontend ne doit jamais contenir de données métier codées en dur.
+
+Toutes les données doivent être rattachées à une `operation_id`.
+
+---
+
+## 3.2 Architecture multi-opérations
+
+Une même instance doit pouvoir gérer :
+
+* Gambetta ;
+* Jean d'Orbais ;
+* Sucy ;
+* autres opérations futures.
+
+Chaque opération possède ses propres :
+
+* bâtiments ;
+* logements ;
+* lots ;
+* entreprises ;
+* tâches ;
+* planning ;
+* observations ;
+* documents ;
+* finances.
+
+---
+
+# 4. STRUCTURE MÉTIER
+
+Structure principale :
+
+```text
+OPÉRATION
+│
+├── BÂTIMENT
+│   │
+│   ├── LOGEMENT
+│   ├── PARTIE COMMUNE
+│   ├── ZONE
+│   └── EXTÉRIEUR
+│
+├── LOT
+│   │
+│   ├── ENTREPRISE
+│   ├── PRESTATIONS
+│   └── DPGF
+│
+├── PLANNING
+│
+├── VISITES
+│
+├── OBSERVATIONS
+│
+├── RÉSERVES
+│
+├── DOCUMENTS
+│
+├── RFI
+│
+├── VISA
+│
+├── CR CHANTIER
+│
+└── FINANCES
+```
+
+Le modèle actuel possède déjà une hiérarchie d'unités permettant bâtiment/logement/common_area/exterior/zone.
+
+---
+
+# 5. MODULE OPÉRATIONS
+
+Créer/maintenir :
+
+* nom ;
+* adresse ;
+* référence interne ;
+* maître d'ouvrage ;
+* MOE ;
+* AMO ;
+* date de démarrage ;
+* date contractuelle de fin ;
+* statut ;
+* budget global ;
+* entreprise générale ou lots séparés ;
+* membres de l'équipe.
+
+Statuts :
+
+```text
+Préparation
+Consultation
+Travaux
+OPR
+Réception
+Levée de réserves
+Clôturée
+Archivée
+```
+
+---
+
+# 6. MODULE BÂTIMENTS / LOGEMENTS
+
+Chaque unité doit pouvoir être :
+
+* bâtiment ;
+* entrée ;
+* logement ;
+* local ;
+* partie commune ;
+* zone technique ;
+* extérieur.
+
+Chaque élément possède :
+
+* code ;
+* nom ;
+* étage ;
+* parent ;
+* adresse/localisation ;
+* observations ;
+* tâches ;
+* prestations ;
+* photos ;
+* réserves.
+
+---
+
+# 7. MODULE LOTS / ENTREPRISES
+
+Un lot contient :
+
+* numéro ;
+* code ;
+* nom ;
+* entreprise ;
+* montant marché ;
+* responsable ;
+* téléphone ;
+* email ;
+* statut.
+
+Exemple :
+
+```text
+LOT 05 — MENUISERIES INTÉRIEURES / ISOLATION
+LOT 06 — ÉLECTRICITÉ / CONTRÔLE D'ACCÈS
+LOT 07 — PLOMBERIE / VENTILATION / CHAUFFAGE
+LOT 08 — EMBELLISSEMENTS
+```
+
+---
+
+# 8. MODULE DPGF
+
+Conserver et améliorer l'import DPGF existant.
+
+Une ligne DPGF doit pouvoir être reliée à :
+
+* lot ;
+* bâtiment ;
+* logement ;
+* prestation ;
+* tâche planning ;
+* avancement ;
+* montant.
+
+Le modèle actuel possède déjà des tâches avec :
+
+* référence ;
+* section ;
+* unité ;
+* quantité ;
+* prix unitaire ;
+* montant ;
+* pondération ;
+* localisation ;
+* source d'import.
+
+---
+
+# 9. MODULE PLANNING — PRIORITÉ ABSOLUE
+
+Le planning doit devenir l'un des modules centraux de l'application.
+
+Le planning actuel est seulement une première visualisation : lignes, dates, progression et détection simple du retard.
+
+Il doit être remplacé par un **véritable moteur Gantt interactif**.
+
+---
+
+# 10. GANTT INTERACTIF
+
+S'inspirer fortement de :
+
+DingPlan
+https://github.com/realworldbuilder/dingplan
+
+DingPlan fournit notamment :
+
+* Gantt Canvas ;
+* tâches déplaçables ;
+* redimensionnement ;
+* dépendances ;
+* swimlanes ;
+* jalons ;
+* progression ;
+* ressources ;
+* coûts ;
+* templates WBS ;
+* PDF ;
+* XER ;
+* import/export ;
+* AI Composer.
+
+Le dépôt contient notamment un modèle `Task` avec durée, effectif, dépendances, métier, jalons, priorité, statut, responsables, matériaux, coût, progression, sous-tâches et calendrier samedi/dimanche.
+
+Ne pas copier aveuglément l'architecture DingPlan.
+
+Réutiliser les concepts et, si juridiquement/techniquement approprié, certains composants open source compatibles avec la licence du projet.
+
+---
+
+# 11. STRUCTURE D'UNE TÂCHE DE PLANNING
+
+Une tâche doit pouvoir contenir :
+
+```text
+id
+operation_id
+parent_id
+lot_id
+task_id
+unit_id
+
+title
+description
+
+planned_start
+planned_end
+planned_duration
+
+actual_start
+actual_end
+actual_duration
+
+progress
+
+status
+
+priority
+
+responsible_user
+company_id
+
+dependencies
+
+baseline_start
+baseline_end
+
+total_float
+free_float
+
+is_milestone
+is_critical
+
+notes
+```
+
+Statuts :
+
+```text
+Non commencé
+En cours
+Terminé
+Bloqué
+Reporté
+Annulé
+```
+
+---
+
+# 12. HIÉRARCHIE WBS
+
+Le Gantt doit supporter des tâches hiérarchiques :
+
+```text
+LOT 07
+│
+├── Préparation
+│
+├── Approvisionnement
+│
+├── Installation
+│   ├── Bâtiment A
+│   ├── Bâtiment B
+│   └── Bâtiment C
+│
+└── Essais / réception
+```
+
+Une tâche parent doit pouvoir être :
+
+* repliée ;
+* développée ;
+* affichée comme synthèse ;
+* calculée automatiquement à partir des enfants.
+
+---
+
+# 13. DRAG & DROP
+
+Le Gantt doit permettre :
+
+### Déplacement
+
+Déplacer une tâche horizontalement = modifier sa date.
+
+### Redimensionnement
+
+Tirer le bord gauche/droit = modifier durée.
+
+### Déplacement vertical
+
+Changer de lot/swimlane.
+
+### Multi-sélection
+
+Déplacer plusieurs tâches ensemble.
+
+### Snap
+
+Accrochage au jour/semaine selon le niveau de zoom.
+
+---
+
+# 14. DÉPENDANCES
+
+Supporter :
+
+```text
+FS — Finish to Start
+SS — Start to Start
+FF — Finish to Finish
+SF — Start to Finish
+```
+
+Avec éventuellement :
+
+```text
+Lag +2 jours
+Lag -1 jour
+```
+
+Le schéma Supabase actuel possède déjà une table `schedule_dependencies` et les quatre types de dépendance.
+
+C'est donc une fonctionnalité à **finaliser**, pas à reconstruire conceptuellement.
+
+---
+
+# 15. CALENDRIER DE TRAVAIL
+
+Le moteur doit gérer :
+
+* lundi-vendredi ;
+* samedi travaillé ;
+* dimanche travaillé exceptionnellement ;
+* jours fériés ;
+* congés chantier ;
+* calendrier propre à l'opération.
+
+Une durée de 10 jours doit signifier :
+
+**10 jours travaillés**, et non 10 jours calendaires.
+
+---
+
+# 16. JALONS
+
+Créer des jalons :
+
+```text
+Démarrage chantier
+Livraison
+Fin lot
+OPR
+Réception
+Levée réserves
+Mise à disposition
+```
+
+---
+
+# 17. BASELINE
+
+Fonction essentielle.
+
+Permettre de figer :
+
+```text
+Planning contractuel V0
+```
+
+Puis :
+
+```text
+Planning V1
+Planning V2
+Planning V3
+```
+
+Comparer les versions.
+
+Afficher :
+
+```text
+Prévu initial
+Prévu actuel
+Réel
+Écart
+```
+
+Exemple :
+
+```text
+Lot 05
+Contractuel : 01/09 → 15/09
+Actuel      : 04/09 → 22/09
+Réel        : 05/09 → ...
+Écart       : +7 jours
+```
+
+---
+
+# 18. CHEMIN CRITIQUE / CPM
+
+Implémenter un véritable moteur CPM.
+
+Calculer :
+
+* Early Start ;
+* Early Finish ;
+* Late Start ;
+* Late Finish ;
+* Total Float ;
+* Free Float ;
+* Critical Path.
+
+Une tâche avec :
+
+```text
+Total Float = 0
+```
+
+est critique.
+
+Ajouter :
+
+**Afficher le chemin critique**
+
+Les tâches critiques sont visuellement distinguées.
+
+Le projet DingPlan identifie lui-même le CPM/critical path comme une fonctionnalité majeure de différenciation.
+
+---
+
+# 19. AUTO-SCHEDULING
+
+Bouton :
+
+**Recalculer le planning**
+
+Le système recalcule automatiquement les dates à partir :
+
+* des dépendances ;
+* des durées ;
+* du calendrier ;
+* des contraintes ;
+* des jalons.
+
+Détecter :
+
+* dépendance impossible ;
+* boucle ;
+* conflit ;
+* tâche dépassant une contrainte ;
+* fin chantier dépassée.
+
+---
+
+# 20. LOOKAHEAD
+
+Créer une vue :
+
+**Lookahead 3 semaines**
+
+Et option :
+
+**Lookahead 6 semaines**
+
+Afficher :
+
+* tâches à venir ;
+* entreprise ;
+* responsable ;
+* localisation ;
+* prérequis ;
+* blocages ;
+* statut ;
+* retard potentiel.
+
+Le concept est cohérent avec les outils modernes : Procore connecte notamment planning, lookahead, tâches, RFI et observations.
+
+---
+
+# 21. VUE PLANNING PAR LOT
+
+Exemple :
+
+```text
+LOT 05
+████████████
+
+LOT 06
+      █████████████
+
+LOT 07
+          ███████████████
+
+LOT 08
+                 █████████████
+```
+
+Filtres :
+
+* lot ;
+* entreprise ;
+* bâtiment ;
+* logement ;
+* statut ;
+* retard ;
+* responsable ;
+* criticité.
+
+---
+
+# 22. VUE PLANNING PAR LOGEMENT
+
+Le planning doit également pouvoir être visualisé :
+
+```text
+Bâtiment A
+
+A101
+  Lot 05 █████
+  Lot 06     █████
+  Lot 07          ███
+
+A102
+  Lot 05 ███████
+  Lot 08          █████
+```
+
+Le planning actuel possède déjà une vue `lots` / `dwellings`, qui constitue une bonne base fonctionnelle.
+
+---
+
+# 23. PLANNING RÉEL VS AVANCEMENT
+
+Une tâche doit afficher :
+
+```text
+Avancement théorique : 80 %
+Avancement réel       : 55 %
+Écart                  : -25 %
+```
+
+Créer automatiquement :
+
+**⚠ Retard potentiel**
+
+---
+
+# 24. CONNEXION PLANNING / TERRAIN
+
+C'est une fonctionnalité structurante.
+
+Une tâche planning doit pouvoir être reliée à :
+
+* visite ;
+* observation ;
+* réserve ;
+* photo ;
+* document ;
+* RFI ;
+* VISA ;
+* décision ;
+* commande ;
+* livraison.
+
+Exemple :
+
+```text
+LOT 07
+Installation chaudière
+
+↓
+Planning
+
+↓
+Observation chantier
+
+↓
+Photo
+
+↓
+Blocage fournisseur
+
+↓
+Retard de 5 jours
+
+↓
+Impact chemin critique
+```
+
+---
+
+# 25. MODULE VISITES
+
+Conserver le module actuel et l'améliorer.
+
+Une visite doit contenir :
+
+* date ;
+* heure ;
+* participants ;
+* météo facultative ;
+* objet ;
+* compte rendu ;
+* photos ;
+* observations ;
+* décisions ;
+* tâches créées ;
+* réserves créées.
+
+---
+
+# 26. MODULE OBSERVATIONS
+
+Conserver le système historisé existant.
+
+Une observation doit pouvoir être :
+
+* localisée ;
+* attribuée ;
+* priorisée ;
+* commentée ;
+* photographiée ;
+* liée à une tâche ;
+* liée à un lot ;
+* liée à une entreprise ;
+* liée à un logement.
+
+Statuts :
+
+```text
+Ouverte
+En cours
+Bloquée
+Résolue
+Vérifiée
+Clôturée
+```
+
+Chaque modification doit rester historisée.
+
+---
+
+# 27. MODULE RÉSERVES
+
+Créer un module distinct ou une spécialisation d'observation.
+
+Une réserve doit contenir :
+
+* numéro ;
+* localisation ;
+* lot ;
+* description ;
+* photo ;
+* responsable ;
+* date ;
+* échéance ;
+* statut ;
+* date de levée ;
+* preuve de levée.
+
+Statuts :
+
+```text
+À traiter
+En cours
+Déclarée levée
+À vérifier
+Validée
+Refusée
+```
+
+---
+
+# 28. MODULE RFI
+
+Créer :
+
+```text
+RFI
+├── numéro
+├── objet
+├── question
+├── lot
+├── entreprise
+├── localisation
+├── demandeur
+├── destinataire
+├── date demande
+├── date réponse attendue
+├── réponse
+├── documents
+├── statut
+└── historique
+```
+
+Statuts :
+
+```text
+Brouillon
+Ouverte
+En attente
+Répondue
+Validée
+Clôturée
+```
+
+Les RFI doivent pouvoir être liées à une activité planning.
+
+Procore utilise justement cette logique de connexion entre RFI et planning afin d'identifier l'impact des délais.
+
+---
+
+# 29. MODULE VISA / SUBMITTALS
+
+Créer :
+
+```text
+VISA
+├── document
+├── lot
+├── entreprise
+├── version
+├── soumis le
+├── soumis par
+├── vérificateur
+├── décision
+├── commentaires
+└── historique
+```
+
+Statuts :
+
+```text
+À soumettre
+Soumis
+En cours d'examen
+Visa avec observations
+Validé
+Refusé
+À resoumettre
+```
+
+Le versioning et la traçabilité des validations sont des fonctionnalités centrales des outils comme Procore.
+
+---
+
+# 30. MODULE DOCUMENTS / GED
+
+Documents par :
+
+```text
+Opération
+Bâtiment
+Lot
+Entreprise
+Planning
+RFI
+VISA
+CR
+Marché
+```
+
+Types :
+
+* CCTP ;
+* DPGF ;
+* plans ;
+* DOE ;
+* notices ;
+* fiches techniques ;
+* PV ;
+* courriers ;
+* contrats ;
+* avenants ;
+* photos ;
+* CR.
+
+Gestion des versions :
+
+```text
+V1
+V2
+V3
+```
+
+Afficher toujours :
+
+**Dernière version**
+
+et conserver les précédentes.
+
+---
+
+# 31. PLANS
+
+Prévoir un futur module de plans permettant :
+
+* upload PDF ;
+* versions ;
+* consultation ;
+* annotation ;
+* épingles ;
+* rattachement tâche/observation/réserve/photo.
+
+S'inspirer de Fieldwire.
+
+Fieldwire permet notamment de gérer les versions de plans, annotations, photos/vidéos et tâches directement sur les plans.
+
+---
+
+# 32. COMPTE-RENDU DE CHANTIER
+
+Le CR doit être **généré à partir des données de l'application**.
+
+Ne pas créer un simple formulaire Word.
+
+Le CR doit récupérer automatiquement :
+
+* date ;
+* participants ;
+* avancement ;
+* planning ;
+* retards ;
+* observations ;
+* réserves ;
+* décisions ;
+* RFI en attente ;
+* VISA en attente ;
+* photos ;
+* actions à réaliser.
+
+Structure :
+
+```text
+1. Informations générales
+2. Présents / absents
+3. Avancement général
+4. Avancement par lot
+5. Planning
+6. Retards
+7. Points bloquants
+8. Observations
+9. Réserves
+10. Décisions
+11. Actions
+12. Documents/photos
+13. Prochaine réunion
+```
+
+Export :
+
+**PDF**
+
+---
+
+# 33. RAPPORT AUTOMATIQUE
+
+Créer un bouton :
+
+**Générer le CR**
+
+Puis générer automatiquement :
+
+```text
+CR N° XX
+Réunion du XX/XX/XXXX
+
+Avancement : 63 %
+
+⚠ 4 lots en retard
+⚠ 2 tâches critiques
+⚠ 3 RFI en attente
+⚠ 7 réserves ouvertes
+
+Actions :
+...
+```
+
+PlanRadar et Fieldwire sont de bonnes références sur cette logique de rapports personnalisés et de centralisation des données terrain.
+
+---
+
+# 34. MODULE MARCHÉS
+
+Le socle actuel possède déjà :
+
+* marchés ;
+* avenants ;
+* situations.
+
+Conserver et compléter.
+
+Marché :
+
+```text
+Entreprise
+Lot
+Montant initial HT
+Montant initial TTC
+Date
+Référence
+```
+
+---
+
+# 35. AVENANTS / CHANGE ORDERS
+
+Chaque avenant :
+
+```text
+Description
+Motif
+Montant demandé
+Montant négocié
+Montant approuvé
+Statut
+```
+
+Statuts :
+
+```text
+Brouillon
+Soumis
+Approuvé
+Refusé
+```
+
+---
+
+# 36. SITUATIONS
+
+Créer :
+
+```text
+Situation N°
+Période
+Montant période
+Cumul
+Montant payé
+Statut
+```
+
+Statuts :
+
+```text
+Brouillon
+Émise
+Validée
+Payée
+Rejetée
+```
+
+---
+
+# 37. TABLEAU DE BORD OPÉRATION
+
+Dashboard principal :
+
+```text
+┌─────────────────────────────────────┐
+│ OPÉRATION GAMBETTA                  │
+├────────────┬────────────┬───────────┤
+│ Avancement │ Budget     │ Planning  │
+│    63 %    │ 1,24 M€    │ +12 jours│
+├────────────┴────────────┴───────────┤
+│ LOTS                                 │
+│ 05 ██████████ 82 %                  │
+│ 06 ███████    64 %                  │
+│ 07 █████      51 %                  │
+│ 08 ███        32 %                  │
+├──────────────────────────────────────┤
+│ ALERTES                              │
+│ ⚠ 3 tâches critiques                │
+│ ⚠ 5 observations en retard          │
+│ ⚠ 2 RFI hors délai                  │
+│ ⚠ 1 lot en dérive                   │
+└──────────────────────────────────────┘
+```
+
+---
+
+# 38. INDICATEURS
+
+Afficher :
+
+### Planning
+
+* avancement théorique ;
+* avancement réel ;
+* écart ;
+* date fin contractuelle ;
+* date fin prévisionnelle ;
+* retard global ;
+* nombre de tâches critiques ;
+* marge disponible.
+
+### Terrain
+
+* observations ouvertes ;
+* réserves ouvertes ;
+* réserves en retard ;
+* visites réalisées.
+
+### Administratif
+
+* RFI ouvertes ;
+* RFI en retard ;
+* VISA en attente.
+
+### Financier
+
+* montant marché ;
+* avenants ;
+* engagé ;
+* situations ;
+* payé ;
+* reste à payer.
+
+---
+
+# 39. ALERTES
+
+Créer un moteur d'alertes.
+
+Exemples :
+
+```text
+⚠ Tâche dépassée
+⚠ Tâche critique en retard
+⚠ RFI hors délai
+⚠ VISA non traité
+⚠ Réserve hors délai
+⚠ Livraison en retard
+⚠ Avancement réel inférieur au planning
+⚠ Dépassement budgétaire
+```
+
+---
+
+# 40. VUE "À FAIRE AUJOURD'HUI"
+
+Créer une vue opérationnelle :
+
+```text
+AUJOURD'HUI
+
+5 tâches à faire
+3 tâches en retard
+2 RFI à relancer
+4 réserves à vérifier
+1 VISA à valider
+```
+
+---
+
+# 41. VUE "RISQUES CHANTIER"
+
+Créer un écran dédié :
+
+```text
+RISQUE
+Impact
+Probabilité
+Responsable
+Échéance
+Action
+```
+
+Niveaux :
+
+```text
+Faible
+Moyen
+Fort
+Critique
+```
+
+---
+
+# 42. JOURNAL D'ACTIVITÉ
+
+Tout événement important doit être historisé :
+
+```text
+09/09 09:12 — Hamed
+Modification planning Lot 07
+
+09/09 09:18 — Entreprise X
+Observation clôturée
+
+09/09 10:02 — Hamed
+RFI créée
+
+09/09 10:30 — Hamed
+Planning V3 créée
+```
+
+Le Construction Tracker étudié fournit justement une logique de journal d'activité et de realtime Supabase qui constitue une bonne référence.
+
+---
+
+# 43. RÔLES
+
+Prévoir :
+
+```text
+Super Admin
+Administrateur opération
+MOA
+AMO
+MOE
+Conducteur travaux
+Entreprise
+Sous-traitant
+Consultation
+```
+
+Les permissions doivent être gérées par opération.
+
+---
+
+# 44. MOBILE / PWA
+
+Le chantier doit pouvoir être utilisé depuis :
+
+* smartphone ;
+* tablette ;
+* ordinateur.
+
+Le socle actuel est déjà mobile-first/PWA.
+
+Conserver cette orientation.
+
+---
+
+# 45. MODE HORS-LIGNE
+
+Important pour les visites.
+
+Permettre :
+
+* consultation des informations déjà synchronisées ;
+* création d'observations ;
+* photos ;
+* commentaires ;
+* avancement.
+
+Puis synchronisation lorsque la connexion revient.
+
+Les outils modernes comme Procore et Fieldwire mettent fortement l'accent sur le travail terrain/offline.
+
+---
+
+# 46. PHOTOS
+
+Une photo doit pouvoir être attachée à :
+
+* visite ;
+* observation ;
+* réserve ;
+* tâche ;
+* logement ;
+* lot ;
+* plan.
+
+Stockage :
+
+**Supabase Storage**
+
+Jamais dans Git.
+
+---
+
+# 47. IA — PHASE FUTURE
+
+Ne pas bloquer le développement actuel sur l'IA.
+
+Préparer néanmoins l'architecture.
+
+## IA planning
+
+Entrée :
+
+```text
+"Réhabilitation de 80 logements,
+lots 05 à 08,
+démarrage 1er octobre"
+```
+
+Sortie :
+
+```text
+WBS
+Tâches
+Durées
+Dépendances
+Lots
+Jalons
+Planning initial
+```
+
+DingPlan dispose déjà d'un AI Composer capable de générer des schedules à partir d'instructions.
+
+## IA CR
+
+À partir des données du chantier :
+
+> générer le projet de CR.
+
+## IA analyse retard
+
+Exemple :
+
+> "Pourquoi le chantier est-il en retard ?"
+
+Réponse :
+
+```text
+Le retard provient principalement :
+1. Lot 07 : livraison pompe +8 jours
+2. Lot 05 : 4 logements non accessibles
+3. Lot 06 : RFI non résolue
+
+Impact prévisionnel : +6 jours.
+```
+
+---
+
+# 48. IA VISION — PHASE TRÈS FUTURE
+
+S'inspirer de :
+
+https://github.com/Devision789/AI_ConstructionSiteMonitoring
+
+Concepts :
+
+* détection d'anomalies ;
+* sécurité ;
+* analyse d'image ;
+* détection de non-conformités.
+
+Mais **ne pas développer dans le MVP**.
+
+---
+
+# 49. FONCTIONNALITÉS À PRENDRE DES SOLUTIONS DU MARCHÉ
+
+## Procore
+
+Références :
+
+https://www.procore.com/project-management
+
+À inspirer :
+
+* RFI ;
+* submittals ;
+* planning connecté ;
+* documents ;
+* change orders ;
+* journal ;
+* budget ;
+* connexion planning/terrain.
+
+Procore relie notamment planning, RFI, inspections et analytics.
+
+---
+
+## Fieldwire
+
+Références :
+
+https://www.fieldwire.com/fr/
+
+À inspirer :
+
+* plans ;
+* tâches ;
+* réserves ;
+* photos ;
+* formulaires ;
+* rapports ;
+* planning Gantt ;
+* Kanban ;
+* mobile/offline.
+
+Fieldwire propose actuellement plusieurs vues de planification : Kanban, Gantt et calendrier.
+
+---
+
+## PlanRadar
+
+Référence :
+
+https://www.planradar.com/fr/
+
+À inspirer :
+
+* centralisation ;
+* plans ;
+* documents ;
+* tâches ;
+* rapports ;
+* suivi des versions ;
+* traçabilité.
+
+PlanRadar positionne explicitement sa plateforme autour de la connexion entre planning, données et rapports.
+
+---
+
+## DingPlan
+
+Référence :
+
+https://github.com/realworldbuilder/dingplan
+
+À inspirer prioritairement :
+
+* moteur Gantt ;
+* dépendances ;
+* swimlanes ;
+* jalons ;
+* WBS ;
+* ressources ;
+* progression ;
+* CPM ;
+* baseline ;
+* export PDF ;
+* import/export XER.
+
+Le projet indique également 16 modèles WBS et un AI Composer.
+
+---
+
+## Construction Tracker
+
+Référence :
+
+https://github.com/jasin/construction-tracker
+
+À inspirer :
+
+* RFI ;
+* submittals ;
+* change orders ;
+* documents ;
+* rôles ;
+* activity log ;
+* realtime Supabase.
+
+---
+
+# 50. PRIORISATION
+
+## PHASE 0 — AUDIT
+
+Avant de coder :
+
+* analyser `develop` ;
+* analyser toutes les branches ;
+* analyser Supabase ;
+* analyser migrations ;
+* analyser tests ;
+* analyser dette technique ;
+* produire une architecture cible.
+
+**Ne rien casser.**
+
+---
+
+# 51. PHASE 1 — SOCLE EXISTANT
+
+Stabiliser :
+
+* authentification ;
+* opérations ;
+* bâtiments ;
+* logements ;
+* lots ;
+* entreprises ;
+* DPGF ;
+* observations ;
+* visites ;
+* avancement.
+
+Corriger les éventuels problèmes avant d'ajouter de nouvelles briques.
+
+---
+
+# 52. PHASE 2 — NOUVEAU MOTEUR GANTT
+
+Priorité maximale.
+
+Développer :
+
+1. Gantt ;
+2. tâches ;
+3. WBS ;
+4. drag/drop ;
+5. resize ;
+6. dépendances ;
+7. jalons ;
+8. calendrier ;
+9. progression ;
+10. filtres ;
+11. vue lots ;
+12. vue logements.
+
+---
+
+# 53. PHASE 3 — CPM / BASELINE
+
+Développer :
+
+1. baseline ;
+2. versions planning ;
+3. comparaison ;
+4. CPM ;
+5. chemin critique ;
+6. float ;
+7. auto-scheduling ;
+8. alertes retard.
+
+---
+
+# 54. PHASE 4 — TERRAIN
+
+Développer :
+
+1. visites ;
+2. observations ;
+3. réserves ;
+4. photos ;
+5. localisation ;
+6. tâches terrain ;
+7. synchronisation planning.
+
+---
+
+# 55. PHASE 5 — DOCUMENTATION / ADMINISTRATIF
+
+Développer :
+
+1. documents ;
+2. versions ;
+3. RFI ;
+4. VISA ;
+5. réunions ;
+6. décisions ;
+7. journal.
+
+---
+
+# 56. PHASE 6 — FINANCES
+
+Développer :
+
+1. marchés ;
+2. avenants ;
+3. situations ;
+4. engagements ;
+5. paiements ;
+6. écarts budget/réel.
+
+---
+
+# 57. PHASE 7 — CR AUTOMATIQUE
+
+Développer :
+
+1. modèles CR ;
+2. génération automatique ;
+3. photos ;
+4. planning ;
+5. avancement ;
+6. actions ;
+7. export PDF.
+
+---
+
+# 58. PHASE 8 — IA
+
+Développer ensuite :
+
+1. génération planning ;
+2. analyse retards ;
+3. génération CR ;
+4. résumé opération ;
+5. détection risques.
+
+---
+
+# 59. RÈGLES DE DÉVELOPPEMENT CLAUDE CODE
+
+Claude Code doit impérativement :
+
+### Avant toute modification
+
+* inspecter le repository ;
+* inspecter les branches ;
+* inspecter les migrations Supabase ;
+* inspecter les types ;
+* inspecter les composants existants ;
+* inspecter les tests.
+
+### Ne jamais
+
+* supprimer une fonctionnalité existante sans justification ;
+* recréer une table déjà existante ;
+* dupliquer les modèles ;
+* introduire un second système de planning parallèle ;
+* mettre des données métier en dur ;
+* casser les RLS ;
+* contourner Supabase ;
+* stocker des fichiers dans Git.
+
+### Toujours
+
+* réutiliser les fonctions existantes ;
+* écrire des migrations versionnées ;
+* ajouter les tests ;
+* conserver les données existantes ;
+* documenter les changements ;
+* vérifier TypeScript ;
+* vérifier lint ;
+* exécuter les tests ;
+* vérifier le build.
+
+---
+
+# 60. ARCHITECTURE DE DONNÉES CIBLE
+
+Tables principales :
+
+```text
+operations
+operation_members
+operation_units
+companies
+lots
+
+tasks
+task_imports
+
+schedule_items
+schedule_dependencies
+schedule_baselines
+schedule_versions
+schedule_calendars
+
+visits
+observations
+observation_events
+observation_history
+reserves
+
+documents
+document_versions
+
+rfis
+rfi_events
+
+submittals
+submittal_events
+
+meetings
+meeting_actions
+decisions
+
+markets
+market_amendments
+market_situations
+
+photos
+attachments
+
+activity_log
+notifications
+```
+
+Ne créer une nouvelle table que si le modèle relationnel existant ne permet pas proprement de répondre au besoin.
+
+---
+
+# 61. OBJET CENTRAL : SCHEDULE ITEM
+
+Le `schedule_item` doit devenir l'objet central du planning.
+
+Il doit pouvoir pointer vers :
+
+```text
+operation
+lot
+task DPGF
+unit/logement
+company
+parent schedule item
+```
+
+Et être relié à :
+
+```text
+observations
+RFI
+VISA
+documents
+photos
+réserves
+marché
+```
+
+---
+
+# 62. PRINCIPE FONDAMENTAL
+
+Une information saisie une fois doit être réutilisée partout.
+
+Exemple :
+
+Une entreprise est saisie une fois.
+
+Elle apparaît ensuite automatiquement dans :
+
+* lot ;
+* planning ;
+* CR ;
+* RFI ;
+* VISA ;
+* réserves ;
+* marché ;
+* dashboard.
+
+Même principe pour :
+
+* logement ;
+* lot ;
+* tâche ;
+* document ;
+* observation.
+
+---
+
+# 63. CRITÈRES D'ACCEPTATION DU GANTT
+
+Le Gantt sera considéré comme fonctionnel uniquement si :
+
+### Création
+
+* création tâche ;
+* modification ;
+* suppression ;
+* duplication.
+
+### Manipulation
+
+* drag ;
+* resize ;
+* multi-sélection ;
+* zoom ;
+* scroll.
+
+### Dépendances
+
+* FS ;
+* SS ;
+* FF ;
+* SF ;
+* lag.
+
+### Calcul
+
+* jours ouvrés ;
+* durée ;
+* fin automatique ;
+* CPM ;
+* float ;
+* chemin critique.
+
+### Versions
+
+* baseline ;
+* nouvelle version ;
+* comparaison.
+
+### Données
+
+* lot ;
+* entreprise ;
+* logement ;
+* tâche DPGF ;
+* avancement.
+
+### Reporting
+
+* PDF ;
+* lookahead ;
+* dashboard.
+
+---
+
+# 64. CRITÈRES D'ACCEPTATION GLOBAUX
+
+Une opération doit pouvoir être suivie de bout en bout :
+
+```text
+Création opération
+       ↓
+Import DPGF
+       ↓
+Création lots
+       ↓
+Entreprises
+       ↓
+Création planning
+       ↓
+Gantt
+       ↓
+Chantier
+       ↓
+Visites
+       ↓
+Observations
+       ↓
+Avancement
+       ↓
+Retards
+       ↓
+RFI / VISA
+       ↓
+CR automatique
+       ↓
+Réserves
+       ↓
+Réception
+       ↓
+Clôture
+```
+
+---
+
+# 65. PHILOSOPHIE PRODUIT
+
+L'application ne doit pas devenir une copie de Procore.
+
+Elle doit être :
+
+**plus simple, plus rapide et plus adaptée à un responsable d'opérations/MOA en réhabilitation.**
+
+Le cœur du produit est :
+
+> **Planning + Terrain + Avancement + Documents + Budget**
+
+avec des liens forts entre ces cinq dimensions.
+
+---
+
+# 66. ORDRE DE DÉVELOPPEMENT IMMÉDIAT
+
+Claude Code doit commencer par :
+
+### Étape 1
+
+Audit complet de `develop`.
+
+### Étape 2
+
+Établir :
+
+`docs/ARCHITECTURE.md`
+
+### Étape 3
+
+Établir :
+
+`docs/DATA_MODEL.md`
+
+### Étape 4
+
+Établir :
+
+`docs/PLANNING_ENGINE.md`
+
+### Étape 5
+
+Stabiliser les migrations Supabase.
+
+### Étape 6
+
+Refondre `SchedulePanel` en véritable module Gantt.
+
+### Étape 7
+
+Implémenter les dépendances.
+
+### Étape 8
+
+Implémenter calendrier ouvré.
+
+### Étape 9
+
+Implémenter baseline.
+
+### Étape 10
+
+Implémenter CPM.
+
+### Étape 11
+
+Connecter le planning aux observations/visites.
+
+### Étape 12
+
+Créer le dashboard de pilotage.
+
+---
+
+# 67. RÉFÉRENCES
+
+## Repository principal
+
+https://github.com/Hamedchedly/Suivi-Chantier
+
+## Gantt / Planning
+
+https://github.com/realworldbuilder/dingplan
+
+## Construction Tracker
+
+https://github.com/jasin/construction-tracker
+
+## AI Construction Monitoring
+
+https://github.com/Devision789/AI_ConstructionSiteMonitoring
+
+## E-chantier
+
+https://github.com/nick-ko/E-chantier
+
+## Procore
+
+https://www.procore.com/project-management
+
+## Fieldwire
+
+https://www.fieldwire.com/fr/
+
+## PlanRadar
+
+https://www.planradar.com/fr/
+
+---
+
+# 68. CONSIGNE FINALE À CLAUDE CODE
+
+Ne pas considérer ce document comme une demande de tout développer en une seule passe.
+
+Procéder par phases.
+
+Pour chaque phase :
+
+1. analyser l'existant ;
+2. proposer le plan technique ;
+3. implémenter ;
+4. tester ;
+5. corriger ;
+6. vérifier les migrations ;
+7. vérifier les RLS ;
+8. vérifier le build ;
+9. documenter ;
+10. seulement ensuite passer à la phase suivante.
+
+**Priorité absolue : obtenir un moteur Gantt robuste avant de multiplier les modules.**
+
+Le planning doit être conçu dès le départ comme le moteur temporel de l'application, et non comme une simple page d'affichage.
+
+---
+
+# FIN DU CAHIER DES CHARGES
