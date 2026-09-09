@@ -1,257 +1,243 @@
-import { useMemo } from 'react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { TrendingUp, AlertCircle, CheckCircle, Clock } from 'lucide-react'
-import { Card, KPIGrid, ProgressBar, Chip } from '../common/Card'
-import type { Operation, Lot } from '../../lib/types'
+import { TrendingUp, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react'
 
-interface DashboardProps {
-  operation?: Operation | null
-  lots?: Lot[]
-}
+export function Dashboard() {
+  // Mock data
+  const operation = {
+    name: 'Gambetta — Réhabilitation',
+    reference: 'GAM-2026-001',
+  }
 
-export function Dashboard({ operation = null, lots = [] }: DashboardProps) {
-  const stats = useMemo(() => {
-    if (!lots || !lots.length) {
-      return {
-        progress: 0,
-        onTimeCount: 0,
-        lateCount: 0,
-        blockingCount: 0,
-        lotProgress: [],
-        timeline: [],
-      }
-    }
+  const kpis = [
+    { label: 'Avancement Global', value: '63%', trend: '+8%', color: 'success' },
+    { label: 'Lots À Jour', value: '3', trend: null, color: 'success' },
+    { label: 'Lots En Retard', value: '1', trend: null, color: 'warning' },
+    { label: 'Points Bloquants', value: '0', trend: null, color: 'info' },
+  ]
 
-    // Calcul des stats (données mockées pour le prototype)
-    const progress = Math.round(lots.reduce((sum, lot) => sum + (lot.amount_contract_ht || 0), 0) / lots.length)
-    const onTimeCount = lots.filter(l => l.lot_status === 'actif').length
-    const lateCount = lots.filter(l => l.lot_status === 'suspendu').length
-    const blockingCount = 0
+  const lots = [
+    { name: 'LOT 01 — Gros œuvre', progress: 75, status: 'À jour' },
+    { name: 'LOT 02 — Façades', progress: 63, status: 'À jour' },
+    { name: 'LOT 03 — Fluides', progress: 45, status: 'Retard' },
+    { name: 'LOT 04 — Finitions', progress: 20, status: 'À jour' },
+  ]
 
-    // Données pour graphiques
-    const lotProgress = lots.map((lot, i) => ({
-      name: lot.code || `LOT ${i + 1}`,
-      progress: Math.round(Math.random() * 100),
-      planned: 70,
-    }))
+  const timelineData = [
+    { week: 'S36', real: 20, planned: 25 },
+    { week: 'S37', real: 45, planned: 50 },
+    { week: 'S38', real: 60, planned: 70 },
+    { week: 'S39', real: 75, planned: 85 },
+    { week: 'S40', real: 85, planned: 95 },
+  ]
 
-    const timeline = [
-      { week: 'S36', actual: 20, planned: 25 },
-      { week: 'S37', actual: 45, planned: 50 },
-      { week: 'S38', actual: 60, planned: 70 },
-      { week: 'S39', actual: 75, planned: 85 },
-      { week: 'S40', actual: 85, planned: 95 },
-    ]
-
-    return {
-      progress,
-      onTimeCount,
-      lateCount,
-      blockingCount,
-      lotProgress,
-      timeline,
-    }
-  }, [lots])
-
-  const COLORS = ['#15803d', '#185FA5', '#b91c1c', '#6d28d9']
-
-  const statusData = [
-    { name: 'À jour', value: stats.onTimeCount, color: '#15803d' },
-    { name: 'En retard', value: stats.lateCount, color: '#b91c1c' },
-    { name: 'Suspendu', value: 0, color: '#c2410c' },
+  const alerts = [
+    { type: 'delay', text: '2 lots en retard', icon: AlertCircle },
+    { type: 'success', text: 'Inspection finalisée', icon: CheckCircle },
+    { type: 'warning', text: 'Visite prévue demain', icon: Clock },
   ]
 
   return (
-    <div className="space-y-6 pb-20 md:pb-0">
+    <div className="space-y-6 pb-20 md:pb-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#0b3b60] mb-2">
-          {operation?.name || 'Tableau de Bord'}
-        </h1>
-        {operation?.reference_interne && (
-          <p className="text-[#5c6f80]">Ref. {operation.reference_interne}</p>
-        )}
+      <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 mb-6">
+        <h2 className="text-2xl font-bold text-[#0b3b60] mb-1">{operation.name}</h2>
+        <p className="text-[#5c6f80] text-sm">Ref. {operation.reference}</p>
       </div>
 
       {/* KPIs */}
-      <KPIGrid
-        items={[
-          {
-            label: 'Avancement Global',
-            value: `${stats.progress}%`,
-            variant: 'success',
-            trend: 8,
-          },
-          {
-            label: 'Lots À Jour',
-            value: stats.onTimeCount,
-            variant: 'success',
-          },
-          {
-            label: 'Lots En Retard',
-            value: stats.lateCount,
-            variant: 'warning',
-          },
-          {
-            label: 'Points Bloquants',
-            value: stats.blockingCount,
-            variant: 'danger',
-          },
-        ]}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((kpi) => (
+          <div
+            key={kpi.label}
+            className="bg-white rounded-lg border border-[#e3e9ee] p-5 shadow-sm"
+          >
+            <p className="text-xs uppercase font-semibold text-[#5c6f80] mb-2">
+              {kpi.label}
+            </p>
+            <div className="flex items-baseline justify-between">
+              <p className="text-3xl font-bold text-[#0b3b60]">{kpi.value}</p>
+              {kpi.trend && (
+                <span className="text-xs font-semibold text-[#15803d]">{kpi.trend}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* Timeline Chart */}
-      <Card title="Avancement Temporel (S36-S40)">
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={stats.timeline}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e3e9ee" />
-              <XAxis dataKey="week" stroke="#5c6f80" />
-              <YAxis stroke="#5c6f80" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e3e9ee',
-                  borderRadius: '8px',
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="actual"
-                stroke="#185FA5"
-                strokeWidth={3}
-                name="Réel"
-                dot={{ r: 5 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="planned"
-                stroke="#15803d"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                name="Prévu"
-                dot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
-
-      {/* Lot Progress */}
-      <Card title="Avancement par Lot">
+      {/* Timeline */}
+      <div className="bg-white rounded-lg border border-[#e3e9ee] p-6">
+        <h3 className="font-bold text-[#0b3b60] mb-4">Avancement Temporel (S36-S40)</h3>
         <div className="space-y-4">
-          {stats.lotProgress.map((lot) => (
-            <div key={lot.name} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-[#16222e]">{lot.name}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-[#185FA5]">{lot.progress}%</span>
-                  <Chip
-                    label={lot.progress >= lot.planned ? 'À jour' : 'Retard'}
-                    variant={lot.progress >= lot.planned ? 'success' : 'warning'}
-                    size="sm"
+          {timelineData.map((week) => {
+            const maxVal = 100
+            const realPct = (week.real / maxVal) * 100
+            const plannedPct = (week.planned / maxVal) * 100
+            return (
+              <div key={week.week}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-medium text-[#16222e] text-sm">{week.week}</span>
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-[#185FA5]">Réel: {week.real}%</span>
+                    <span className="text-[#15803d]">Prévu: {week.planned}%</span>
+                  </div>
+                </div>
+                <div className="relative h-6 bg-[#e6edf3] rounded-full overflow-hidden">
+                  <div
+                    className="absolute h-full bg-gradient-to-r from-[#0f5a90] to-[#1f8bd2]"
+                    style={{ width: `${realPct}%` }}
+                  />
+                  <div
+                    className="absolute h-1 top-1/2 -translate-y-1/2 border-l-2 border-[#15803d]"
+                    style={{ left: `${plannedPct}%` }}
                   />
                 </div>
               </div>
-              <ProgressBar
-                value={lot.progress}
-                variant={lot.progress >= lot.planned ? 'success' : 'warning'}
-              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Lot Progress */}
+      <div className="bg-white rounded-lg border border-[#e3e9ee] p-6">
+        <h3 className="font-bold text-[#0b3b60] mb-4">Avancement par Lot</h3>
+        <div className="space-y-4">
+          {lots.map((lot) => (
+            <div key={lot.name} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-[#16222e] text-sm">{lot.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-[#185FA5]">{lot.progress}%</span>
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      lot.status === 'À jour'
+                        ? 'bg-[#e9f7ee] text-[#15803d]'
+                        : 'bg-[#fdf1e0] text-[#b45309]'
+                    }`}
+                  >
+                    {lot.status}
+                  </span>
+                </div>
+              </div>
+              <div className="h-2 bg-[#e6edf3] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    lot.status === 'À jour'
+                      ? 'bg-gradient-to-r from-[#15803d] to-[#22c55e]'
+                      : 'bg-gradient-to-r from-[#b45309] to-[#f59e0b]'
+                  }`}
+                  style={{ width: `${lot.progress}%` }}
+                />
+              </div>
             </div>
           ))}
         </div>
-      </Card>
+      </div>
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status Pie Chart */}
-        <Card title="Distribution des Statuts">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Bar Chart */}
-        <Card title="Comparaison Planifié vs Réel">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.lotProgress}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e3e9ee" />
-                <XAxis dataKey="name" stroke="#5c6f80" />
-                <YAxis stroke="#5c6f80" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #e3e9ee',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="progress" fill="#185FA5" name="Réel" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="planned" fill="#15803d" name="Prévu" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-
-      {/* Alerts Section */}
-      <Card title="Alertes & Actions">
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-[#fdecec] border border-[#fca5a5] rounded-lg">
-            <AlertCircle className="text-[#b91c1c] flex-shrink-0 mt-0.5" size={20} />
+        {/* Status Distribution */}
+        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6">
+          <h3 className="font-bold text-[#0b3b60] mb-4">Distribution des Statuts</h3>
+          <div className="space-y-3">
             <div>
-              <p className="font-medium text-[#b91c1c]">2 lots en retard</p>
-              <p className="text-sm text-[#5c6f80]">LOT 06 et LOT 08 dépassent leur planning de 3-5 jours</p>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-[#16222e]">À jour</span>
+                <span className="text-sm font-bold text-[#15803d]">3 lots</span>
+              </div>
+              <div className="h-3 bg-[#e6edf3] rounded-full overflow-hidden">
+                <div className="h-full bg-[#15803d]" style={{ width: '75%' }} />
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-start gap-3 p-3 bg-[#e9f7ee] border border-[#86efac] rounded-lg">
-            <CheckCircle className="text-[#15803d] flex-shrink-0 mt-0.5" size={20} />
             <div>
-              <p className="font-medium text-[#15803d]">LOT 05 terminé</p>
-              <p className="text-sm text-[#5c6f80]">Menuiseries intérieures complétées le 08/09</p>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-[#16222e]">En retard</span>
+                <span className="text-sm font-bold text-[#b91c1c]">1 lot</span>
+              </div>
+              <div className="h-3 bg-[#e6edf3] rounded-full overflow-hidden">
+                <div className="h-full bg-[#b91c1c]" style={{ width: '25%' }} />
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-start gap-3 p-3 bg-[#fff7ed] border border-[#fdba74] rounded-lg">
-            <Clock className="text-[#c2410c] flex-shrink-0 mt-0.5" size={20} />
             <div>
-              <p className="font-medium text-[#c2410c]">Visite prévue demain</p>
-              <p className="text-sm text-[#5c6f80]">10h00 - Débriefing retards LOT 06</p>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm text-[#16222e]">Suspendu</span>
+                <span className="text-sm font-bold text-[#c2410c]">0 lot</span>
+              </div>
+              <div className="h-3 bg-[#e6edf3] rounded-full overflow-hidden">
+                <div className="h-full bg-[#c2410c]" style={{ width: '0%' }} />
+              </div>
             </div>
           </div>
         </div>
-      </Card>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button className="p-4 bg-[#185FA5] text-white rounded-lg font-medium hover:bg-[#0b3b60] transition-colors">
+        {/* Comparison */}
+        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6">
+          <h3 className="font-bold text-[#0b3b60] mb-4">Comparaison Planifié vs Réel</h3>
+          <div className="space-y-2">
+            {lots.map((lot, i) => (
+              <div key={lot.name} className="space-y-1">
+                <span className="text-xs font-medium text-[#5c6f80]">{lot.name}</span>
+                <div className="flex gap-2 h-4">
+                  <div
+                    className="bg-[#185FA5] rounded flex-shrink-0"
+                    style={{ width: `${lot.progress}%` }}
+                    title={`Réel: ${lot.progress}%`}
+                  />
+                  <div
+                    className="bg-[#15803d] rounded flex-shrink-0"
+                    style={{ width: `${70}%` }}
+                    title="Prévu: 70%"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t border-[#e3e9ee] flex gap-4 text-xs">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-[#185FA5] rounded" />
+              <span className="text-[#5c6f80]">Réel</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-[#15803d] rounded" />
+              <span className="text-[#5c6f80]">Prévu</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      <div className="bg-white rounded-lg border border-[#e3e9ee] p-6">
+        <h3 className="font-bold text-[#0b3b60] mb-4">Alertes & Actions</h3>
+        <div className="space-y-3">
+          {alerts.map((alert, i) => {
+            const Icon = alert.icon
+            const bgColor = {
+              delay: 'bg-[#fdecec]',
+              success: 'bg-[#e9f7ee]',
+              warning: 'bg-[#fdf1e0]',
+            }[alert.type]
+            const textColor = {
+              delay: 'text-[#b91c1c]',
+              success: 'text-[#15803d]',
+              warning: 'text-[#b45309]',
+            }[alert.type]
+            return (
+              <div key={i} className={`${bgColor} ${textColor} rounded-lg p-3 flex items-center gap-3`}>
+                <Icon size={18} className="flex-shrink-0" />
+                <span className="text-sm font-medium">{alert.text}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <button className="bg-[#185FA5] text-white font-semibold py-3 px-4 rounded-lg hover:bg-[#0f5a90] transition">
           Nouvelle Visite
         </button>
-        <button className="p-4 bg-white text-[#185FA5] border border-[#185FA5] rounded-lg font-medium hover:bg-[#e6f1fb] transition-colors">
+        <button className="bg-[#185FA5] text-white font-semibold py-3 px-4 rounded-lg hover:bg-[#0f5a90] transition">
           Voir Gantt
         </button>
-        <button className="p-4 bg-white text-[#185FA5] border border-[#185FA5] rounded-lg font-medium hover:bg-[#e6f1fb] transition-colors">
+        <button className="bg-[#185FA5] text-white font-semibold py-3 px-4 rounded-lg hover:bg-[#0f5a90] transition">
           Générer CR
         </button>
       </div>
