@@ -180,14 +180,7 @@ export default function App() {
             onOpenObservation={openObservation}
           />
         ) : tab === 'dashboard' ? (
-          <Dashboard
-            operation={currentOperation}
-            units={units}
-            lots={lots}
-            companies={companies}
-            onStartVisit={() => setTab('visit')}
-            onOpenObservation={openObservation}
-          />
+          <NewDashboard />
         ) : tab === 'visit' ? (
           <VisitForm
             operationId={currentOperation.id}

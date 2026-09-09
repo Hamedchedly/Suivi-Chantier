@@ -5,13 +5,13 @@ import { Card, KPIGrid, ProgressBar, Chip } from '../common/Card'
 import type { Operation, Lot } from '../../lib/types'
 
 interface DashboardProps {
-  operation: Operation | null
-  lots: Lot[]
+  operation?: Operation | null
+  lots?: Lot[]
 }
 
-export function Dashboard({ operation, lots }: DashboardProps) {
+export function Dashboard({ operation = null, lots = [] }: DashboardProps) {
   const stats = useMemo(() => {
-    if (!lots.length) {
+    if (!lots || !lots.length) {
       return {
         progress: 0,
         onTimeCount: 0,
