@@ -1,13 +1,70 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 
 interface GanttTableProps {
   tasks: GanttTask[]
   viewState: GanttViewState
   onToggleExpanded: (taskId: string) => void
+  onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded }: GanttTableProps) {
+interface DragState {
+  taskId?: string
+  startX?: number
+  startDate?: Date
+  isDragging?: boolean
+  mode?: 'move' | 'resize-start' | 'resize-end'
+}
+
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate }: GanttTableProps) {
+  const [dragState, setDragState] = useState<DragState>({})
+  const tableRef = useRef<HTMLDivElement>(null)
+
+  const dayWidthPx = viewState.view === 'week' ? 24 : 12
+  const msPerDay = 24 * 60 * 60 * 1000
+
+  const handleBarMouseDown = (taskId: string, e: React.MouseEvent, mode: 'move' | 'resize-start' | 'resize-end') => {
+    e.preventDefault()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setDragState({
+      taskId,
+      startX: e.clientX,
+      isDragging: true,
+      mode,
+    })
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!dragState.isDragging || !dragState.taskId || !dragState.startX) return
+
+    const delta = e.clientX - dragState.startX
+    const daysShift = Math.round(delta / dayWidthPx)
+
+    // Log the drag for now (MVP)
+    if (Math.abs(daysShift) > 0) {
+      console.log(`Dragging task ${dragState.taskId}: ${daysShift} days, mode: ${dragState.mode}`)
+    }
+  }
+
+  const handleMouseUp = () => {
+    if (dragState.isDragging && dragState.taskId && dragState.startX) {
+      console.log(`Drag ended for task ${dragState.taskId}`)
+    }
+    setDragState({})
+  }
+
+  useEffect(() => {
+    if (dragState.isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [dragState])
+
   const getStatusColor = (status: GanttTask['status'], isCritical: boolean) => {
     if (status === 'completed') return '#15803d' // green
     if (status === 'in-progress') return '#185fa5' // blue
@@ -40,7 +97,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded }: Gantt
   }
 
   const daysInRange = Math.ceil((viewState.endDate.getTime() - viewState.startDate.getTime()) / (24 * 60 * 60 * 1000))
-  const dayWidth = viewState.view === 'week' ? 24 : 12
 
   const formatDateRange = () => {
     return `${viewState.startDate.toLocaleDateString('fr')} - ${viewState.endDate.toLocaleDateString('fr')}`
@@ -57,7 +113,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded }: Gantt
     const taskStart = Math.max(0, Math.floor((task.planned_start.getTime() - viewState.startDate.getTime()) / (24 * 60 * 60 * 1000)))
     const taskEnd = Math.min(daysInRange, Math.ceil((task.planned_end.getTime() - viewState.startDate.getTime()) / (24 * 60 * 60 * 1000)))
     const taskWidth = Math.max(1, taskEnd - taskStart)
-    const taskLeft = taskStart * dayWidth
+    const taskLeft = taskStart * dayWidthPx
 
     result.push(
       <tr key={task.id} className={`gantt-row ${task.is_critical ? 'critical' : ''} ${task.is_milestone ? 'milestone' : ''}`}>
@@ -89,15 +145,48 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded }: Gantt
         </td>
         <td className="gantt-timeline-cell">
           <div className="gantt-timeline-container">
+            {/* Left resize handle */}
             <div
+              onMouseDown={(e) => handleBarMouseDown(task.id, e, 'resize-start')}
+              style={{
+                position: 'absolute',
+                left: `${taskLeft - 4}px`,
+                top: '4px',
+                width: '8px',
+                height: '20px',
+                cursor: 'ew-resize',
+                background: 'rgba(0,0,0,0.1)',
+              }}
+              title="Redimensionner le début"
+            />
+
+            {/* Main bar (draggable) */}
+            <div
+              onMouseDown={(e) => handleBarMouseDown(task.id, e, 'move')}
               className="gantt-bar"
               style={{
                 left: `${taskLeft}px`,
-                width: `${taskWidth * dayWidth}px`,
+                width: `${taskWidth * dayWidthPx}px`,
                 backgroundColor: getStatusColor(task.status, task.is_critical),
                 opacity: task.is_milestone ? 0.3 : 1,
+                cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
               }}
               title={`${task.title} • ${task.progress}%`}
+            />
+
+            {/* Right resize handle */}
+            <div
+              onMouseDown={(e) => handleBarMouseDown(task.id, e, 'resize-end')}
+              style={{
+                position: 'absolute',
+                left: `${taskLeft + taskWidth * dayWidthPx - 4}px`,
+                top: '4px',
+                width: '8px',
+                height: '20px',
+                cursor: 'ew-resize',
+                background: 'rgba(0,0,0,0.1)',
+              }}
+              title="Redimensionner la fin"
             />
           </div>
         </td>
@@ -114,13 +203,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded }: Gantt
   }
 
   return (
-    <div className="gantt-table-wrapper">
-      <table className="gantt-tbl">
+    <div className="gantt-table-wrapper" ref={tableRef}>
+      <table className="gantt-tbl" style={{ userSelect: dragState.isDragging ? 'none' : 'auto' }}>
         <thead>
           <tr>
             <th className="gantt-task-header">Tâche</th>
             <th className="gantt-progress-header">%</th>
-            <th className="gantt-timeline-header" style={{ width: `${daysInRange * dayWidth}px` }}>
+            <th className="gantt-timeline-header" style={{ width: `${daysInRange * dayWidthPx}px` }}>
               Timeline • {formatDateRange()}
             </th>
           </tr>

@@ -42,6 +42,11 @@ export function Gantt() {
 
   const currentWeek = Math.ceil((startDate.getTime() - new Date(startDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))
 
+  const handleTaskUpdate = (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => {
+    // For now, just log the update. In production, this would update state and call backend
+    console.log(`Task ${taskId} updated:`, updates)
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {/* Header */}
@@ -50,7 +55,7 @@ export function Gantt() {
           Planning
         </h1>
         <div style={{ fontSize: '12px', color: '#5c6f80' }}>
-          S{currentWeek} • Vue {view === 'week' ? 'semaine' : 'mois'}
+          S{currentWeek} • Vue {view === 'week' ? 'semaine' : 'mois'} • Déplacez les barres pour modifier les dates
         </div>
       </div>
 
@@ -114,6 +119,7 @@ export function Gantt() {
             }
             setExpandedTasks(newExpanded)
           }}
+          onTaskUpdate={handleTaskUpdate}
         />
       </div>
     </div>
