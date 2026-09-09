@@ -1,4 +1,9 @@
 import { Play } from 'lucide-react'
+import type { Page } from '../../App'
+
+interface HomeProps {
+  onNavigate: (page: Page) => void
+}
 
 const MOCK_DATA = {
   project: { name: 'Gambetta — Réhabilitation', addr: '111 Rue Gambetta, 51100 Reims' },
@@ -15,24 +20,14 @@ const MOCK_DATA = {
   ],
 }
 
-export function Home() {
+export function Home({ onNavigate }: HomeProps) {
   const avgProgress = Math.round(MOCK_DATA.lots.reduce((a, l) => a + l.progress, 0) / MOCK_DATA.lots.length)
   const maxDelay = 4
   const lateCount = MOCK_DATA.lots.filter(l => l.status === 'late').length
   const maxCompanyRate = Math.max(...MOCK_DATA.companies.map(c => c.rate))
 
   return (
-    <div style={{ padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#0b3b60', marginBottom: '4px' }}>
-          {MOCK_DATA.project.name}
-        </h1>
-        <p style={{ fontSize: '14px', color: '#5c6f80' }}>
-          Ref. GAM-2026-001 • {MOCK_DATA.project.addr}
-        </p>
-      </div>
-
+    <div style={{ padding: '16px 12px', paddingBottom: '16px' }}>
       {/* KPIs Grid */}
       <div className="kpi-grid">
         <KPICard label="Avancement" value={`${avgProgress}%`} variant="ok" />
@@ -42,7 +37,7 @@ export function Home() {
       </div>
 
       {/* Action Button */}
-      <button className="btn-primary">
+      <button className="btn-primary" onClick={() => onNavigate('cr')}>
         <Play size={16} />
         Nouvelle visite de chantier
       </button>

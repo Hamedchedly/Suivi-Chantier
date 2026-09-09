@@ -32,12 +32,7 @@ export function Config() {
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f3f6f9' }}>
-      {/* Header */}
-      <div style={{ padding: '12px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#0b3b60' }}>Configuration</h1>
-      </div>
-
+    <div style={{ display: 'flex', flexDirection: 'column', background: '#f3f6f9' }}>
       {/* Tabs */}
       <div
         style={{

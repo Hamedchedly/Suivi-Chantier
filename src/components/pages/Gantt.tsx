@@ -12,24 +12,35 @@ const LOTS = [
   { id: 'L08', name: 'LOT 08' },
 ]
 
+const updateTaskInList = (
+  list: GanttTask[],
+  taskId: string,
+  updates: Partial<GanttTask>,
+): GanttTask[] =>
+  list.map(t => {
+    if (t.id === taskId) return { ...t, ...updates }
+    if (t.children?.length) return { ...t, children: updateTaskInList(t.children, taskId, updates) }
+    return t
+  })
+
 export function Gantt() {
   const [view, setView] = useState<'week' | 'month'>('week')
   const [selectedLot, setSelectedLot] = useState<string | null>(null)
   const [depsVisible, setDepsVisible] = useState(true)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(GANTT_TASKS)
 
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - 21)
   startDate.setHours(0, 0, 0, 0)
 
   const endDate = new Date()
-  endDate.setDate(endDate.getDate() + 42)
+  endDate.setDate(endDate.getDate() + 63)
 
-  // Filter tasks by lot
   const filteredTasks = useMemo(() => {
-    if (!selectedLot) return GANTT_TASKS
-    return GANTT_TASKS.filter(t => t.lot_id === selectedLot)
-  }, [selectedLot])
+    if (!selectedLot) return ganttTasks
+    return ganttTasks.filter(t => t.lot_id === selectedLot)
+  }, [selectedLot, ganttTasks])
 
   const viewState: GanttViewState = {
     view,
@@ -40,31 +51,17 @@ export function Gantt() {
     expandedTasks,
   }
 
-  const currentWeek = Math.ceil((startDate.getTime() - new Date(startDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))
-
   const handleTaskUpdate = (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => {
-    // For now, just log the update. In production, this would update state and call backend
-    console.log(`Task ${taskId} updated:`, updates)
+    setGanttTasks(prev => updateTaskInList(prev, taskId, updates))
   }
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#0b3b60', marginBottom: '4px' }}>
-          Planning
-        </h1>
-        <div style={{ fontSize: '12px', color: '#5c6f80' }}>
-          S{currentWeek} • Vue {view === 'week' ? 'semaine' : 'mois'} • Déplacez les barres pour modifier les dates
-        </div>
-      </div>
-
       {/* Toolbar */}
       <div className="g-toolbar">
         <button
           className={`gtb ${!selectedLot ? 'on' : ''}`}
           onClick={() => setSelectedLot(null)}
-          title="Tous les lots"
         >
           ⊞ Tous
         </button>
@@ -73,7 +70,6 @@ export function Gantt() {
             key={lot.id}
             className={`gtb ${selectedLot === lot.id ? 'on' : ''}`}
             onClick={() => setSelectedLot(lot.id)}
-            title={lot.name}
           >
             {lot.name}
           </button>
@@ -85,39 +81,23 @@ export function Gantt() {
           title="Afficher/masquer les liaisons"
         >
           {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-          <span style={{ fontSize: '10px', fontWeight: '600', marginLeft: '4px' }}>
-            Liaisons
-          </span>
+          <span style={{ fontSize: '10px', fontWeight: '600', marginLeft: '4px' }}>Liaisons</span>
         </button>
-        <button
-          className={`gtb ${view === 'week' ? 'on' : ''}`}
-          onClick={() => setView('week')}
-          title="Vue semaine"
-        >
-          S
-        </button>
-        <button
-          className={`gtb ${view === 'month' ? 'on' : ''}`}
-          onClick={() => setView('month')}
-          title="Vue mois"
-        >
-          M
-        </button>
+        <button className={`gtb ${view === 'week' ? 'on' : ''}`} onClick={() => setView('week')}>S</button>
+        <button className={`gtb ${view === 'month' ? 'on' : ''}`} onClick={() => setView('month')}>M</button>
       </div>
 
       {/* Gantt Table */}
-      <div style={{ marginTop: '12px', overflow: 'hidden', borderRadius: '6px', border: '1px solid #e3e9ee' }}>
+      <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e3e9ee' }}>
         <GanttTable
           tasks={filteredTasks}
           viewState={viewState}
           onToggleExpanded={(taskId: string) => {
-            const newExpanded = new Set(expandedTasks)
-            if (newExpanded.has(taskId)) {
-              newExpanded.delete(taskId)
-            } else {
-              newExpanded.add(taskId)
-            }
-            setExpandedTasks(newExpanded)
+            setExpandedTasks(prev => {
+              const next = new Set(prev)
+              next.has(taskId) ? next.delete(taskId) : next.add(taskId)
+              return next
+            })
           }}
           onTaskUpdate={handleTaskUpdate}
         />

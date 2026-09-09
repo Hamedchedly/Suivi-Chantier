@@ -84,6 +84,14 @@
   color: #5c6f80;
 }
 
+.gantt-date-header {
+  background: #f8fafc;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Table Rows */
 .gantt-row {
   border-bottom: 0.5px solid #e3e9ee;

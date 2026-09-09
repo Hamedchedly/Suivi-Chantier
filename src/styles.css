@@ -204,6 +204,12 @@ body { max-width: 100%; padding-bottom: 100px }
 .app-wrapper { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg) }
 .app-body { flex: 1 }
 
+/* Topbar */
+.topbar { position: sticky; top: 0; z-index: 20; background: linear-gradient(180deg, #0d3f68, #0b3b60); color: #fff; padding: 10px 16px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18) }
+.topbar .eyebrow { color: #9bc4df; font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; margin-bottom: 2px }
+.topbar h1 { color: #fff; font-size: 1.05rem; margin: 0; font-weight: 700; line-height: 1.25 }
+.topbar-sub { font-size: .78rem; color: #9bc4df; margin-top: 2px }
+
 /* Navigation */
 .bot-nav { position: sticky; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px) }
 .bnav { border: 0; background: none; padding: 10px 4px 12px; font-size: .62rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; width: 100% }

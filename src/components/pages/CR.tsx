@@ -152,11 +152,6 @@ export function CR() {
   // Default: list view
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      <div style={{ marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--navy)', marginBottom: '4px' }}>Comptes Rendus</h1>
-        <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Visites de chantier</div>
-      </div>
-
       <button
         onClick={() => setStep('presences')}
         style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: 'var(--navy)', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '20px' }}

@@ -42,16 +42,6 @@ export function Reports() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: '#0b3b60', marginBottom: '4px' }}>
-          Rapports de chantier
-        </h1>
-        <div style={{ fontSize: '12px', color: '#5c6f80' }}>
-          {MOCK_REPORTS.length} rapports enregistrés
-        </div>
-      </div>
-
       {/* Reports List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {MOCK_REPORTS.length === 0 ? (
