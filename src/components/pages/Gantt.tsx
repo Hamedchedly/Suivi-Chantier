@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { Eye, EyeOff, RotateCcw } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
+import { loadState, saveState } from '../../lib/storage'
 import GanttTable from '../gantt/GanttTable'
 import '../../styles/gantt.css'
+
+const GANTT_STORAGE_KEY = 'sc-gantt-v1'
 
 const LOTS = [
   { id: 'L05', name: 'LOT 05' },
@@ -28,7 +31,13 @@ export function Gantt() {
   const [selectedLot, setSelectedLot] = useState<string | null>(null)
   const [depsVisible, setDepsVisible] = useState(true)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
-  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(GANTT_TASKS)
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() =>
+    loadState<GanttTask[]>(GANTT_STORAGE_KEY, GANTT_TASKS),
+  )
+
+  useEffect(() => {
+    saveState(GANTT_STORAGE_KEY, ganttTasks)
+  }, [ganttTasks])
 
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - 21)
@@ -53,6 +62,10 @@ export function Gantt() {
 
   const handleTaskUpdate = (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => {
     setGanttTasks(prev => updateTaskInList(prev, taskId, updates))
+  }
+
+  const handleReset = () => {
+    setGanttTasks(GANTT_TASKS)
   }
 
   return (
@@ -85,6 +98,9 @@ export function Gantt() {
         </button>
         <button className={`gtb ${view === 'week' ? 'on' : ''}`} onClick={() => setView('week')}>S</button>
         <button className={`gtb ${view === 'month' ? 'on' : ''}`} onClick={() => setView('month')}>M</button>
+        <button className="gtb" onClick={handleReset} title="Réinitialiser les dates">
+          <RotateCcw size={14} />
+        </button>
       </div>
 
       {/* Gantt Table */}

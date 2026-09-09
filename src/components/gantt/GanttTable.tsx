@@ -78,6 +78,10 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
 
   const { months, weeks } = buildHeaders(viewState.startDate, daysInRange, dayWidthPx)
 
+  const todayOffset = Math.floor((Date.now() - viewState.startDate.getTime()) / msPerDay)
+  const todayVisible = todayOffset >= 0 && todayOffset < daysInRange
+  const todayLeftPx = todayOffset * dayWidthPx
+
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
     e.preventDefault()
     setDragState({
@@ -188,10 +192,16 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
         {/* Timeline column */}
         <td className="gantt-timeline-cell">
           <div className="gantt-timeline-container" style={{ width: daysInRange * dayWidthPx }}>
+            {/* Today marker */}
+            {todayVisible && (
+              <div
+                style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(185,28,28,.35)', zIndex: 1, pointerEvents: 'none' }}
+              />
+            )}
             {/* Left resize handle */}
             <div
               onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
-              style={{ position: 'absolute', left: taskLeftPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 2 }}
+              style={{ position: 'absolute', left: taskLeftPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 3 }}
             />
             {/* Bar */}
             <div
@@ -201,12 +211,17 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 left: taskLeftPx,
                 width: taskWidth * dayWidthPx,
                 backgroundColor: getStatusColor(task.status),
+                opacity: task.is_milestone ? 0.85 : 1,
                 cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
               }}
-              title={`${task.title} • ${task.progress}%`}
+              title={`${task.title} • ${task.progress}% • ${task.planned_start.toLocaleDateString('fr')} → ${task.planned_end.toLocaleDateString('fr')}`}
             >
+              {/* Remaining (uncompleted) portion shown lighter; completed stays solid */}
+              {task.progress < 100 && (
+                <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
+              )}
               {taskWidth * dayWidthPx > 30 && (
-                <span style={{ fontSize: 9, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '20px' }}>
+                <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '20px' }}>
                   {task.progress}%
                 </span>
               )}
@@ -214,7 +229,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             {/* Right resize handle */}
             <div
               onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
-              style={{ position: 'absolute', left: taskLeftPx + taskWidth * dayWidthPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 2 }}
+              style={{ position: 'absolute', left: taskLeftPx + taskWidth * dayWidthPx - 4, top: 3, width: 8, height: 22, cursor: 'ew-resize', zIndex: 3 }}
             />
           </div>
         </td>

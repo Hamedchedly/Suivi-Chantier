@@ -1,7 +1,17 @@
-import { useState } from 'react'
-import { Plus, Calendar, Users, MapPin, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Calendar, ChevronRight } from 'lucide-react'
+import { loadState, saveState } from '../../lib/storage'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
+
+interface Visit {
+  id: string
+  date: string
+  presences: string[]
+  zones: string[]
+  lots: number
+  status: 'brouillon' | 'envoyé'
+}
 
 interface VisitDraft {
   date: string
@@ -9,21 +19,51 @@ interface VisitDraft {
   zones: string[]
 }
 
-const RECENT_VISITS = [
-  { id: 'V003', date: '09/09/2026', lots: 4, status: 'brouillon' as const },
-  { id: 'V002', date: '04/09/2026', lots: 5, status: 'envoyé'   as const },
-  { id: 'V001', date: '28/08/2026', lots: 5, status: 'envoyé'   as const },
+const VISITS_STORAGE_KEY = 'sc-visits-v1'
+
+const DEFAULT_VISITS: Visit[] = [
+  { id: 'V003', date: '2026-09-09', presences: [], zones: [], lots: 4, status: 'brouillon' },
+  { id: 'V002', date: '2026-09-04', presences: [], zones: [], lots: 5, status: 'envoyé' },
+  { id: 'V001', date: '2026-08-28', presences: [], zones: [], lots: 5, status: 'envoyé' },
 ]
 
 const INTERVENANTS = ['Jean Dupont (MOE)', 'Marie Martin (MOA)', 'Paul Bernard (Entreprise)', 'Sophie Girard (OPC)']
 
+const emptyDraft = (): VisitDraft => ({
+  date: new Date().toISOString().split('T')[0],
+  presences: [],
+  zones: [],
+})
+
+function formatFr(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return d && m && y ? `${d}/${m}/${y}` : iso
+}
+
 export function CR() {
   const [step, setStep] = useState<CRStep>('list')
-  const [draft, setDraft] = useState<VisitDraft>({
-    date: new Date().toISOString().split('T')[0],
-    presences: [],
-    zones: [],
-  })
+  const [draft, setDraft] = useState<VisitDraft>(emptyDraft)
+  const [visits, setVisits] = useState<Visit[]>(() =>
+    loadState<Visit[]>(VISITS_STORAGE_KEY, DEFAULT_VISITS),
+  )
+
+  useEffect(() => {
+    saveState(VISITS_STORAGE_KEY, visits)
+  }, [visits])
+
+  const saveVisit = () => {
+    const newVisit: Visit = {
+      id: `V${Date.now()}`,
+      date: draft.date,
+      presences: draft.presences,
+      zones: draft.zones,
+      lots: 4,
+      status: 'brouillon',
+    }
+    setVisits(prev => [newVisit, ...prev])
+    setDraft(emptyDraft())
+    setStep('list')
+  }
 
   if (step === 'presences') {
     return (
@@ -140,7 +180,7 @@ export function CR() {
         ))}
 
         <button
-          onClick={() => setStep('list')}
+          onClick={saveVisit}
           style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'var(--ok)', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', marginTop: '8px' }}
         >
           Enregistrer le CR
@@ -165,7 +205,7 @@ export function CR() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {RECENT_VISITS.map(v => (
+        {visits.map(v => (
           <div
             key={v.id}
             style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
@@ -173,8 +213,10 @@ export function CR() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Calendar size={18} color="var(--muted)" />
               <div>
-                <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--navy)' }}>Visite du {v.date}</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{v.lots} lots inspectés</div>
+                <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--navy)' }}>Visite du {formatFr(v.date)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                  {v.lots} lots inspectés{v.presences.length > 0 ? ` • ${v.presences.length} présents` : ''}
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
