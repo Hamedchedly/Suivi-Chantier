@@ -13,7 +13,19 @@ export function OperationForm({ onSubmit, disabled }: Props) {
     if (!name.trim()) return
     setSaving(true)
     try {
-      await onSubmit({ name: name.trim(), address: address.trim() || null })
+      await onSubmit({
+        name: name.trim(),
+        address: address.trim() || null,
+        reference_interne: null,
+        moa: null,
+        moe: null,
+        amo: null,
+        start_date: null,
+        contractual_end_date: null,
+        budget_global: null,
+        operation_type: 'lots_separes',
+        status: 'active',
+      })
       setName('')
       setAddress('')
     } finally { setSaving(false) }
