@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Camera, Check, X, MapPin } from 'lucide-react'
-import { loadState, saveState } from '../../lib/storage'
 import { LOGEMENTS } from '../../data/zones'
 import {
   Reserve, ReservePriority, nextReserveNumber, filterReserves, countOpen,
 } from '../../lib/reserves'
-
-const RESERVES_KEY = 'sc-reserves-v1'
+import { getReserves, saveReserves } from '../../lib/repo'
 
 const LOTS = [
   { id: 'L05', name: 'LOT 05 - Menuiseries' },
@@ -17,12 +15,6 @@ const LOTS = [
 
 const lotName = (id: string) => LOTS.find(l => l.id === id)?.name ?? id
 const logementLabel = (id: string) => LOGEMENTS.find(l => l.id === id)?.label ?? id
-
-const DEFAULT_RESERVES: Reserve[] = [
-  { id: 'r1', number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'Joint de fenêtre séjour mal posé', priority: 'medium', status: 'open', createdAt: '2026-09-04' },
-  { id: 'r2', number: 'R-002', lotId: 'L07', logementId: 'B-201', description: 'Fuite au niveau du raccord CVC', priority: 'high', status: 'open', createdAt: '2026-09-08' },
-  { id: 'r3', number: 'R-003', lotId: 'L08', logementId: 'A-102', description: 'Retouche peinture couloir', priority: 'low', status: 'resolved', createdAt: '2026-08-28' },
-]
 
 const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {
   low: { label: 'Faible', bg: '#eef2f6', fg: '#5c6f80' },
@@ -56,7 +48,7 @@ function fileToThumbnail(file: File): Promise<string> {
 }
 
 export function Reserves() {
-  const [reserves, setReserves] = useState<Reserve[]>(() => loadState<Reserve[]>(RESERVES_KEY, DEFAULT_RESERVES))
+  const [reserves, setReserves] = useState<Reserve[]>(getReserves)
   const [showForm, setShowForm] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'resolved'>('all')
   const [filterLot, setFilterLot] = useState<string | null>(null)
@@ -70,7 +62,7 @@ export function Reserves() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    saveState(RESERVES_KEY, reserves)
+    saveReserves(reserves)
   }, [reserves])
 
   const visible = filterReserves(reserves, { status: filterStatus, lotId: filterLot })

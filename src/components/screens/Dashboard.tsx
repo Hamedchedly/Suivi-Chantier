@@ -24,15 +24,14 @@ export function Dashboard() {
     { name: 'Suspendu', value: 0, fill: '#c2410c' },
   ]
 
-  const customTooltip = ({ active, payload }: {
-    active?: boolean
-    payload?: { name?: string; value?: number; color?: string; payload?: { week?: string; name?: string } }[]
-  }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const customTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-3 border border-[#e3e9ee] rounded-lg shadow-lg">
-          <p className="text-sm font-medium text-[#16222e]">{payload[0].payload?.week || payload[0].payload?.name}</p>
-          {payload.map((entry, idx: number) => (
+          <p className="text-sm font-medium text-[#16222e]">{payload[0].payload.week || payload[0].payload.name}</p>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {payload.map((entry: any, idx: number) => (
             <p key={idx} className="text-sm" style={{ color: entry.color }}>
               {entry.name}: {entry.value}%
             </p>

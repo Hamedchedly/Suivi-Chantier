@@ -1,9 +1,6 @@
 import { Play, AlertTriangle, CalendarClock, MapPin } from 'lucide-react'
 import type { Page } from '../../App'
-import { GanttTask } from '../../types/gantt'
-import { GANTT_TASKS } from '../../data/ganttMockData'
-import { loadState } from '../../lib/storage'
-import { Reserve } from '../../lib/reserves'
+import { getGanttTasks, getReserves } from '../../lib/repo'
 import {
   overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
 } from '../../lib/schedule'
@@ -17,8 +14,8 @@ const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.l
 
 export function Home({ onNavigate }: HomeProps) {
   const today = new Date()
-  const tasks = loadState<GanttTask[]>('sc-gantt-v2', GANTT_TASKS)
-  const reserves = loadState<Reserve[]>('sc-reserves-v1', [])
+  const tasks = getGanttTasks()
+  const reserves = getReserves()
 
   const progress = overallProgress(tasks)
   const drift = maxDrift(tasks)

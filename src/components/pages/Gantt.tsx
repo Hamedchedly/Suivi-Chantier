@@ -3,14 +3,11 @@ import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
 import { ZONES } from '../../data/zones'
-import { loadState, saveState } from '../../lib/storage'
+import { getGanttTasks, saveGanttTasks } from '../../lib/repo'
 import { maxDrift, lateTasks } from '../../lib/schedule'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import '../../styles/gantt.css'
-
-// v2: data model gained zone_id / logement_id — invalidate v1 stored trees
-const GANTT_STORAGE_KEY = 'sc-gantt-v2'
 
 const LOTS = [
   { id: 'L05', name: 'LOT 05' },
@@ -55,12 +52,10 @@ export function Gantt() {
   const [depsVisible, setDepsVisible] = useState(true)
   const [highlightCritical, setHighlightCritical] = useState(false)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
-  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() =>
-    loadState<GanttTask[]>(GANTT_STORAGE_KEY, GANTT_TASKS),
-  )
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
 
   useEffect(() => {
-    saveState(GANTT_STORAGE_KEY, ganttTasks)
+    saveGanttTasks(ganttTasks)
   }, [ganttTasks])
 
   const startDate = new Date()

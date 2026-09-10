@@ -1,8 +1,6 @@
 import { ArrowLeft, Download } from 'lucide-react'
-import { GanttTask } from '../../types/gantt'
-import { GANTT_TASKS } from '../../data/ganttMockData'
-import { loadState } from '../../lib/storage'
-import { Reserve, countOpen } from '../../lib/reserves'
+import { getGanttTasks, getReserves } from '../../lib/repo'
+import { countOpen } from '../../lib/reserves'
 import { overallProgress, lotSummaries, lateTasks, maxDrift } from '../../lib/schedule'
 import { LOGEMENTS } from '../../data/zones'
 
@@ -23,8 +21,8 @@ const logementLabel = (id: string) => LOGEMENTS.find(l => l.id === id)?.label ??
 
 export function CRReport({ number, onBack }: CRReportProps) {
   const today = new Date()
-  const tasks = loadState<GanttTask[]>('sc-gantt-v2', GANTT_TASKS)
-  const reserves = loadState<Reserve[]>('sc-reserves-v1', [])
+  const tasks = getGanttTasks()
+  const reserves = getReserves()
   const openReserves = reserves.filter(r => r.status === 'open')
 
   const progress = overallProgress(tasks)

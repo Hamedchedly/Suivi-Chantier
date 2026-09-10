@@ -1,14 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Plus, Calendar, ChevronRight } from 'lucide-react'
-import { loadState, saveState } from '../../lib/storage'
-import { GanttTask } from '../../types/gantt'
-import { GANTT_TASKS } from '../../data/ganttMockData'
+import { Visit, getVisits, saveVisits, getLotProgress as readLotProgress, setLotProgress as writeLotProgress } from '../../lib/repo'
 import { Reserves } from './Reserves'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
 type CRSection = 'cr' | 'reserves'
 
-const GANTT_KEY = 'sc-gantt-v2'
 const CR_LOTS = [
   { id: 'L05', label: 'LOT 05 — Menuiseries int. / Isolation' },
   { id: 'L06', label: 'LOT 06 — Électricité / Contrôle accès' },
@@ -16,43 +13,11 @@ const CR_LOTS = [
   { id: 'L08', label: 'LOT 08 — Embellissements' },
 ]
 
-// Read current per-lot (parent) progress from the shared planning store.
-function readLotProgress(): Record<string, number> {
-  const tasks = loadState<GanttTask[]>(GANTT_KEY, GANTT_TASKS)
-  const out: Record<string, number> = {}
-  for (const t of tasks) out[t.lot_id] = t.progress
-  return out
-}
-
-// Write updated per-lot progress back to the planning store (parent tasks).
-function writeLotProgress(progress: Record<string, number>) {
-  const tasks = loadState<GanttTask[]>(GANTT_KEY, GANTT_TASKS)
-  const updated = tasks.map(t => (t.lot_id in progress ? { ...t, progress: progress[t.lot_id] } : t))
-  saveState(GANTT_KEY, updated)
-}
-
-interface Visit {
-  id: string
-  date: string
-  presences: string[]
-  zones: string[]
-  lots: number
-  status: 'brouillon' | 'envoyé'
-}
-
 interface VisitDraft {
   date: string
   presences: string[]
   zones: string[]
 }
-
-const VISITS_STORAGE_KEY = 'sc-visits-v1'
-
-const DEFAULT_VISITS: Visit[] = [
-  { id: 'V003', date: '2026-09-09', presences: [], zones: [], lots: 4, status: 'brouillon' },
-  { id: 'V002', date: '2026-09-04', presences: [], zones: [], lots: 5, status: 'envoyé' },
-  { id: 'V001', date: '2026-08-28', presences: [], zones: [], lots: 5, status: 'envoyé' },
-]
 
 const INTERVENANTS = ['Jean Dupont (MOE)', 'Marie Martin (MOA)', 'Paul Bernard (Entreprise)', 'Sophie Girard (OPC)']
 
@@ -72,12 +37,10 @@ export function CR() {
   const [step, setStep] = useState<CRStep>('list')
   const [draft, setDraft] = useState<VisitDraft>(emptyDraft)
   const [lotProgress, setLotProgress] = useState<Record<string, number>>(readLotProgress)
-  const [visits, setVisits] = useState<Visit[]>(() =>
-    loadState<Visit[]>(VISITS_STORAGE_KEY, DEFAULT_VISITS),
-  )
+  const [visits, setVisits] = useState<Visit[]>(getVisits)
 
   useEffect(() => {
-    saveState(VISITS_STORAGE_KEY, visits)
+    saveVisits(visits)
   }, [visits])
 
   const saveVisit = () => {

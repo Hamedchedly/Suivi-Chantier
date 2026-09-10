@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Download, Upload } from 'lucide-react'
-import { loadState, saveState } from '../../lib/storage'
+import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
 
 type ConfigTab = 'project' | 'lots' | 'email' | 'export' | 'backup'
 
@@ -12,15 +12,6 @@ interface ProjectConfig {
   amo: string
 }
 
-interface LotContact {
-  id: string
-  name: string
-  company: string
-  contactName: string
-  email: string
-  phone: string
-}
-
 const MOCK_PROJECT: ProjectConfig = {
   name: 'Gambetta — Réhabilitation',
   address: '111 Rue Gambetta, 51100 Reims',
@@ -29,22 +20,13 @@ const MOCK_PROJECT: ProjectConfig = {
   amo: 'Consultant Projet XYZ',
 }
 
-const LOTS_STORAGE_KEY = 'sc-lots-config-v1'
-
-const DEFAULT_LOTS: LotContact[] = [
-  { id: 'L05', name: 'LOT 05 - Menuiseries int. / Isolation', company: 'SMP Aménagement', contactName: 'Jean Dupont', email: 'j.dupont@smp.fr', phone: '06 12 34 56 78' },
-  { id: 'L06', name: 'LOT 06 - Électricité / Contrôle accès', company: 'Soveclim Services', contactName: 'Marie Martin', email: 'm.martin@soveclim.fr', phone: '06 23 45 67 89' },
-  { id: 'L07', name: 'LOT 07 - CVC', company: 'Soveclim Services', contactName: 'Pierre Lécuyer', email: 'p.lecuyer@soveclim.fr', phone: '06 34 56 78 90' },
-  { id: 'L08', name: 'LOT 08 - Embellissements', company: 'Soretherm', contactName: 'Anne Legrand', email: 'a.legrand@soretherm.fr', phone: '06 45 67 89 01' },
-]
-
 export function Config() {
   const [activeTab, setActiveTab] = useState<ConfigTab>('project')
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>(MOCK_PROJECT)
-  const [lots, setLots] = useState<LotContact[]>(() => loadState<LotContact[]>(LOTS_STORAGE_KEY, DEFAULT_LOTS))
+  const [lots, setLots] = useState<LotContact[]>(getLotsConfig)
 
   useEffect(() => {
-    saveState(LOTS_STORAGE_KEY, lots)
+    saveLotsConfig(lots)
   }, [lots])
 
   const updateLot = (id: string, field: keyof LotContact, value: string) => {
