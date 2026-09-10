@@ -221,6 +221,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
+    const dimmed = !!viewState.highlightCritical && !task.is_critical
 
     const bar = geom(task.planned_start, task.planned_end)
     const base = task.baseline_start && task.baseline_end
@@ -267,44 +268,60 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               <div style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(185,28,28,.35)', zIndex: 1, pointerEvents: 'none' }} />
             )}
 
-            {/* Baseline (contractual) hatched bar */}
-            {base && !task.is_milestone && (
-              <div className="gantt-baseline" style={{ left: base.leftPx, width: base.widthPx }} />
+            {task.is_milestone ? (
+              /* Milestone diamond */
+              <div
+                onMouseDown={e => handleBarMouseDown(task, e, 'move')}
+                title={tooltip}
+                style={{
+                  position: 'absolute', left: bar.leftPx - 7, top: 7, width: 14, height: 14,
+                  background: task.progress >= 100 ? '#15803d' : '#0b3b60',
+                  transform: 'rotate(45deg)', borderRadius: 2, zIndex: 3,
+                  border: '1.5px solid #fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)',
+                  cursor: 'grab', opacity: dimmed ? 0.3 : 1,
+                }}
+              />
+            ) : (
+              <div style={{ opacity: dimmed ? 0.28 : 1 }}>
+                {/* Baseline (contractual) hatched bar */}
+                {base && <div className="gantt-baseline" style={{ left: base.leftPx, width: base.widthPx }} />}
+
+                {/* Left resize handle */}
+                <div
+                  onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
+                  style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                />
+
+                {/* Actual/planned bar */}
+                <div
+                  className="gantt-bar"
+                  onMouseDown={e => handleBarMouseDown(task, e, 'move')}
+                  style={{
+                    left: bar.leftPx,
+                    width: bar.widthPx,
+                    backgroundColor: getStatusColor(task.status),
+                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #b91c1c' : undefined,
+                    cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
+                  }}
+                  title={tooltip}
+                >
+                  {task.progress < 100 && (
+                    <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
+                  )}
+                  {bar.widthPx > 30 && (
+                    <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '14px' }}>
+                      {task.progress}%
+                    </span>
+                  )}
+                </div>
+
+                {/* Right resize handle */}
+                <div
+                  onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
+                  style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                />
+              </div>
             )}
-
-            {/* Left resize handle */}
-            <div
-              onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
-              style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
-            />
-
-            {/* Actual/planned bar */}
-            <div
-              className="gantt-bar"
-              onMouseDown={e => handleBarMouseDown(task, e, 'move')}
-              style={{
-                left: bar.leftPx,
-                width: bar.widthPx,
-                backgroundColor: getStatusColor(task.status),
-                cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
-              }}
-              title={tooltip}
-            >
-              {task.progress < 100 && !task.is_milestone && (
-                <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
-              )}
-              {bar.widthPx > 30 && !task.is_milestone && (
-                <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '14px' }}>
-                  {task.progress}%
-                </span>
-              )}
-            </div>
-
-            {/* Right resize handle */}
-            <div
-              onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
-              style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
-            />
           </div>
         </td>
       </tr>

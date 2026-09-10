@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, RotateCcw } from 'lucide-react'
+import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
 import { ZONES } from '../../data/zones'
 import { loadState, saveState } from '../../lib/storage'
+import { maxDrift, lateTasks } from '../../lib/schedule'
 import GanttTable from '../gantt/GanttTable'
 import '../../styles/gantt.css'
 
@@ -52,6 +53,7 @@ export function Gantt() {
   const [selectedLot, setSelectedLot] = useState<string | null>(null)
   const [selectedZone, setSelectedZone] = useState<string | null>(null)
   const [depsVisible, setDepsVisible] = useState(true)
+  const [highlightCritical, setHighlightCritical] = useState(false)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(() =>
     loadState<GanttTask[]>(GANTT_STORAGE_KEY, GANTT_TASKS),
@@ -80,8 +82,12 @@ export function Gantt() {
     selectedLotId: selectedLot,
     selectedZoneId: selectedZone,
     depsVisible,
+    highlightCritical,
     expandedTasks,
   }
+
+  const drift = useMemo(() => maxDrift(ganttTasks), [ganttTasks])
+  const lateCount = useMemo(() => lateTasks(ganttTasks, new Date()).length, [ganttTasks])
 
   const handleTaskUpdate = (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => {
     setGanttTasks(prev => updateTaskInList(prev, taskId, updates))
@@ -93,6 +99,23 @@ export function Gantt() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {/* Drift / late banner */}
+      {(drift > 0 || lateCount > 0) && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+          {drift > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bad-bg)', color: 'var(--bad)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>
+              <AlertTriangle size={14} />
+              Dérive max : +{drift} j vs contractuel
+            </div>
+          )}
+          {lateCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--warn-bg)', color: 'var(--warn)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>
+              {lateCount} tâche{lateCount > 1 ? 's' : ''} en retard
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Toolbar — row 1: lot filters */}
       <div className="g-toolbar">
         <button
@@ -130,6 +153,14 @@ export function Gantt() {
           ))}
         </select>
         <div style={{ flex: 1 }} />
+        <button
+          className={`gtb ${highlightCritical ? 'on' : ''}`}
+          onClick={() => setHighlightCritical(!highlightCritical)}
+          title="Mettre en évidence le chemin critique"
+        >
+          <Zap size={14} />
+          <span style={{ fontSize: '10px', fontWeight: '600', marginLeft: '4px' }}>Critique</span>
+        </button>
         <button
           className={`gtb ${depsVisible ? 'on' : ''}`}
           onClick={() => setDepsVisible(!depsVisible)}

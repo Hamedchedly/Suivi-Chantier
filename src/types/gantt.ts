@@ -44,5 +44,6 @@ export interface GanttViewState {
   selectedLotId?: string | null // filter by lot
   selectedZoneId?: string | null // filter by logement
   depsVisible: boolean
+  highlightCritical?: boolean // dim non-critical tasks
   expandedTasks: Set<string>
 }
