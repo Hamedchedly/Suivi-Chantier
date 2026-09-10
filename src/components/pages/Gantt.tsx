@@ -8,6 +8,7 @@ import {
 } from '../../lib/repo'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
+import { makeCalendar } from '../../lib/calendar'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -86,6 +87,7 @@ export function Gantt() {
   const [detailTask, setDetailTask] = useState<GanttTask | null>(null)
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const holidays = useMemo(() => getHolidays(), [])
+  const calendar = useMemo(() => makeCalendar(holidays), [holidays])
 
   useEffect(() => { saveGanttTasks(ganttTasks) }, [ganttTasks])
   useEffect(() => { saveGanttPrefs({ zoom, group, autoSchedule: autoPlan }) }, [zoom, group, autoPlan])
@@ -129,7 +131,7 @@ export function Gantt() {
       const moved = updateTaskInList(prev, id, updates)
       if (!autoPlan) return moved
       // Propage la contrainte fin -> début aux successeurs.
-      const { tasks: replanned, shifted } = autoSchedule(moved)
+      const { tasks: replanned, shifted } = autoSchedule(moved, calendar)
       if (shifted.length) {
         logActivity('planning', `Auto-planification : ${shifted.length} tâche${shifted.length > 1 ? 's' : ''} décalée${shifted.length > 1 ? 's' : ''} suite au déplacement`)
       }

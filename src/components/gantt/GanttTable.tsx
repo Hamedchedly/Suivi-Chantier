@@ -119,6 +119,14 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const curWeekLeftPx = Math.max(0, curWeekStartDay) * dayWidthPx
   const curWeekWidthPx = (Math.min(daysInRange, curWeekStartDay + 7) - Math.max(0, curWeekStartDay)) * dayWidthPx
 
+  // Grille de fond : week-ends grisés (jours 5-6 de chaque semaine, la timeline
+  // étant calée sur le lundi) + séparateur de semaine.
+  const weekPx = 7 * dayWidthPx
+  const gridBackground = [
+    `repeating-linear-gradient(to right, transparent 0, transparent ${5 * dayWidthPx}px, rgba(91,113,131,.07) ${5 * dayWidthPx}px, rgba(91,113,131,.07) ${weekPx}px)`,
+    `repeating-linear-gradient(to right, #e9eff4 0, #e9eff4 1px, transparent 1px, transparent ${weekPx}px)`,
+  ].join(', ')
+
   // Holiday / non-working bands (hatched grey columns)
   const holidayBands = (viewState.holidays ?? [])
     .map(h => {
@@ -276,7 +284,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
         <td className="gantt-timeline-cell">
           <div
             className="gantt-timeline-container"
-            style={{ width: daysInRange * dayWidthPx }}
+            style={{ width: daysInRange * dayWidthPx, background: gridBackground }}
             ref={el => {
               if (el) containerRefs.current.set(task.id, el)
               else containerRefs.current.delete(task.id)

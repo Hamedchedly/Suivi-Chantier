@@ -3,6 +3,7 @@
 // marge totale, chemin critique, et auto-planification (propagation des contraintes).
 
 import { GanttTask } from '../types/gantt'
+import { WorkCalendar, nextWorkingDay } from './calendar'
 
 const DAY = 86400000
 
@@ -142,8 +143,11 @@ export function computeCpm(tasks: GanttTask[]): CpmResult {
  * Auto-planification : décale vers l'avant les successeurs qui violeraient
  * la contrainte fin → début. Ne ramène jamais une tâche en arrière (la marge
  * reste permise). Recalcule l'emprise des parents.
+ *
+ * Avec un calendrier, le début imposé est repoussé au prochain jour ouvré
+ * (week-ends et congés sautés).
  */
-export function autoSchedule(tasks: GanttTask[]): { tasks: GanttTask[]; shifted: string[] } {
+export function autoSchedule(tasks: GanttTask[], cal?: WorkCalendar): { tasks: GanttTask[]; shifted: string[] } {
   const g = buildGraph(tasks)
   if (g.hasCycle) return { tasks, shifted: [] }
 
@@ -155,8 +159,9 @@ export function autoSchedule(tasks: GanttTask[]): { tasks: GanttTask[]; shifted:
     const p = g.preds.get(id)!
     if (!p.length) continue
     const cur = dates.get(id)!
-    const required = Math.max(...p.map(x => toDay(dates.get(x)!.end)))
-    const delta = required - toDay(cur.start)
+    const predEnd = new Date(Math.max(...p.map(x => dates.get(x)!.end.getTime())))
+    const required = cal ? nextWorkingDay(predEnd, cal) : predEnd
+    const delta = toDay(required) - toDay(cur.start)
     if (delta > 0) {
       dates.set(id, { start: addDays(cur.start, delta), end: addDays(cur.end, delta) })
       shifted.push(id)
