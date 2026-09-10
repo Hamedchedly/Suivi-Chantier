@@ -6,7 +6,7 @@ import {
   projectFinance, marcheFinance, euros,
 } from '../../lib/finance'
 import {
-  getMarches, getAvenants, saveAvenants, getSituations, saveSituations,
+  getMarches, getAvenants, saveAvenants, getSituations, saveSituations, logActivity,
 } from '../../lib/repo'
 import { DpgfView } from './DpgfView'
 
@@ -37,9 +37,18 @@ export function Finances() {
   ]
 
   const approveAvenant = (id: string) =>
-    setAvenants(prev => prev.map(a => (a.id === id ? { ...a, status: 'approved' } : a)))
+    setAvenants(prev => prev.map(a => {
+      if (a.id !== id) return a
+      logActivity('finance', `Avenant validé — ${a.label} (${a.amountHT >= 0 ? '+' : ''}${euros(a.amountHT)})`)
+      return { ...a, status: 'approved' }
+    }))
   const toggleSituation = (id: string) =>
-    setSituations(prev => prev.map(s => (s.id === id ? { ...s, status: s.status === 'paid' ? 'pending' : 'paid' } : s)))
+    setSituations(prev => prev.map(s => {
+      if (s.id !== id) return s
+      const status = s.status === 'paid' ? 'pending' as const : 'paid' as const
+      logActivity('finance', `Situation N°${s.number} ${status === 'paid' ? 'marquée payée' : 'remise en attente'}`)
+      return { ...s, status }
+    }))
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>

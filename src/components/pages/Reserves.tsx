@@ -4,7 +4,7 @@ import { LOGEMENTS } from '../../data/zones'
 import {
   Reserve, ReservePriority, nextReserveNumber, filterReserves, countOpen,
 } from '../../lib/reserves'
-import { getReserves, saveReserves } from '../../lib/repo'
+import { getReserves, saveReserves, logActivity } from '../../lib/repo'
 
 const LOTS = [
   { id: 'L05', name: 'LOT 05 - Menuiseries' },
@@ -81,11 +81,17 @@ export function Reserves() {
       createdAt: new Date().toISOString().split('T')[0],
     }
     setReserves(prev => [nr, ...prev])
+    logActivity('reserve', `Réserve ${nr.number} créée — ${nr.description}`)
     setDDesc(''); setDPhoto(undefined); setShowForm(false)
   }
 
   const toggleStatus = (id: string) => {
-    setReserves(prev => prev.map(r => (r.id === id ? { ...r, status: r.status === 'open' ? 'resolved' : 'open' } : r)))
+    setReserves(prev => prev.map(r => {
+      if (r.id !== id) return r
+      const status = r.status === 'open' ? 'resolved' as const : 'open' as const
+      logActivity('resolve', `Réserve ${r.number} ${status === 'resolved' ? 'levée' : 'rouverte'}`)
+      return { ...r, status }
+    }))
   }
 
   const onPickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {

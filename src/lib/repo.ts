@@ -25,6 +25,7 @@ import { DEFAULT_RFIS, DEFAULT_VISAS, DEFAULT_DOCS } from '../data/adminMock'
 import { AlertActions } from './alerts'
 import { DpgfLine } from './dpgf'
 import { DEFAULT_DPGF } from '../data/dpgfMock'
+import { ActivityEvent, ActivityType, pushEvent } from './activity'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -43,7 +44,16 @@ const KEYS = {
   holidays: 'sc-holidays-v1',
   dpgf: 'sc-dpgf-v1',
   ganttPrefs: 'sc-gantt-prefs-v1',
+  activity: 'sc-activity-v1',
 } as const
+
+const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
+const _agoH = (h: number) => new Date(_tA.getTime() - h * 3600000).toISOString()
+const DEFAULT_ACTIVITY: ActivityEvent[] = [
+  { id: 's1', at: _agoH(3), type: 'reserve', message: 'Réserve R-002 créée — fuite raccord CVC (Logt B-201)' },
+  { id: 's2', at: _agoH(26), type: 'finance', message: 'Avenant validé — Modification réseau CVC RDC (+15 000 €)' },
+  { id: 's3', at: _agoH(50), type: 'visit', message: 'Visite du 04/09/2026 enregistrée' },
+]
 
 export type GanttGroup = 'lot' | 'zone' | 'chrono'
 export interface GanttPrefs {
@@ -240,4 +250,17 @@ export function getGanttPrefs(): GanttPrefs {
 }
 export function saveGanttPrefs(p: GanttPrefs): void {
   saveState(KEYS.ganttPrefs, p)
+}
+
+// ── Journal d'activité ──────────────────────────────────────────────────────
+
+export function getActivity(): ActivityEvent[] {
+  return loadState<ActivityEvent[]>(KEYS.activity, DEFAULT_ACTIVITY)
+}
+export function saveActivity(events: ActivityEvent[]): void {
+  saveState(KEYS.activity, events)
+}
+/** Append an event to the journal (read-modify-write). */
+export function logActivity(type: ActivityType, message: string): void {
+  saveActivity(pushEvent(getActivity(), type, message))
 }

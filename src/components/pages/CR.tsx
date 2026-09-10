@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Calendar, ChevronRight } from 'lucide-react'
-import { Visit, getVisits, saveVisits, getLotProgress as readLotProgress, setLotProgress as writeLotProgress } from '../../lib/repo'
+import { Visit, getVisits, saveVisits, getLotProgress as readLotProgress, setLotProgress as writeLotProgress, logActivity } from '../../lib/repo'
 import { Reserves } from './Reserves'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
@@ -54,6 +54,7 @@ export function CR() {
     }
     setVisits(prev => [newVisit, ...prev])
     writeLotProgress(lotProgress) // push field-measured progress back to the planning
+    logActivity('visit', `Visite du ${formatFr(draft.date)} enregistrée`)
     setDraft(emptyDraft())
     setStep('list')
   }

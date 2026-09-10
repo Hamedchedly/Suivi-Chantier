@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { AlertTriangle, Check, Flag, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react'
-import { getGanttTasks, getReserves, getAlertActions, saveAlertActions } from '../../lib/repo'
+import { getGanttTasks, getReserves, getAlertActions, saveAlertActions, logActivity } from '../../lib/repo'
 import { buildAlerts, activeAlerts, Alert, AlertLevel, AlertActions } from '../../lib/alerts'
+import { Journal } from './Journal'
 
 const LEVEL_META: Record<AlertLevel, { label: string; color: string; bg: string }> = {
   critique: { label: 'Critique', color: '#dc2626', bg: '#fdecec' },
@@ -12,6 +13,7 @@ const LEVEL_META: Record<AlertLevel, { label: string; color: string; bg: string 
 export function Alertes() {
   const [actions, setActions] = useState<AlertActions>(getAlertActions)
   const [showResolved, setShowResolved] = useState(false)
+  const [tab, setTab] = useState<'vigilance' | 'journal'>('vigilance')
 
   const tasks = getGanttTasks()
   const reserves = getReserves()
@@ -30,8 +32,28 @@ export function Alertes() {
   const flaggedCount = active.filter(a => a.flagged).length
   const byLevel = (lvl: AlertLevel) => active.filter(a => a.level === lvl)
 
+  const segmented = (
+    <div style={{ display: 'flex', gap: '4px', marginBottom: '14px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+      {(['vigilance', 'journal'] as const).map(t => (
+        <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: tab === t ? '#fff' : 'transparent', color: tab === t ? '#02457A' : '#5b7183', boxShadow: tab === t ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}>
+          {t === 'vigilance' ? 'Vigilance' : "Journal d'activité"}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (tab === 'journal') {
+    return (
+      <div style={{ padding: '14px 12px', paddingBottom: '24px' }}>
+        {segmented}
+        <Journal />
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: '14px 12px', paddingBottom: '24px' }}>
+      {segmented}
       {/* Summary */}
       <div className="card" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: active.length ? 'var(--bad-bg)' : 'var(--ok-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -64,7 +86,15 @@ export function Alertes() {
               <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {items.map(a => <AlertCard key={a.id} alert={a} meta={LEVEL_META[a.level]} onResolve={() => update(a.id, { resolved: true })} onFlag={() => update(a.id, { flagged: !a.flagged })} />)}
+              {items.map(a => (
+                <AlertCard
+                  key={a.id}
+                  alert={a}
+                  meta={LEVEL_META[a.level]}
+                  onResolve={() => { update(a.id, { resolved: true }); logActivity('alert', `Point résolu : ${a.title}`) }}
+                  onFlag={() => { const willFlag = !a.flagged; update(a.id, { flagged: willFlag }); logActivity('alert', `${willFlag ? 'Épinglé réunion' : 'Désépinglé'} : ${a.title}`) }}
+                />
+              ))}
             </div>
           </div>
         )
