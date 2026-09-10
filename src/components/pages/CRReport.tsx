@@ -44,13 +44,13 @@ export function CRReport({ number, onBack }: CRReportProps) {
 
       {/* Printable report */}
       <div className="cr-print" style={{ padding: '20px', maxWidth: '780px', margin: '0 auto', background: '#fff', color: '#16222e' }}>
-        <div style={{ borderBottom: '2px solid #0b3b60', paddingBottom: '12px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#185fa5', fontWeight: 700 }}>Compte-rendu de chantier</div>
-          <h1 style={{ margin: '4px 0', fontSize: '22px', color: '#0b3b60' }}>CR N°{number} — {PROJECT.name}</h1>
-          <div style={{ fontSize: '12px', color: '#5c6f80' }}>
+        <div style={{ borderBottom: '2px solid #02457A', paddingBottom: '12px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#018ABE', fontWeight: 700 }}>Compte-rendu de chantier</div>
+          <h1 style={{ margin: '4px 0', fontSize: '22px', color: '#02457A' }}>CR N°{number} — {PROJECT.name}</h1>
+          <div style={{ fontSize: '12px', color: '#5b7183' }}>
             Réf. {PROJECT.ref} • {PROJECT.address} • {today.toLocaleDateString('fr')}
           </div>
-          <div style={{ fontSize: '12px', color: '#5c6f80', marginTop: '2px' }}>
+          <div style={{ fontSize: '12px', color: '#5b7183', marginTop: '2px' }}>
             MOA : {PROJECT.moa} — MOE : {PROJECT.moe}
           </div>
         </div>
@@ -81,7 +81,7 @@ export function CRReport({ number, onBack }: CRReportProps) {
                 <tr key={l.lotId}>
                   <td style={tdStyle}>{l.title.replace(/^LOT \d+ - /, '')}</td>
                   <td style={tdStyle}>{l.progress}%</td>
-                  <td style={{ ...tdStyle, color: l.drift > 0 ? '#b91c1c' : '#15803d' }}>{l.drift > 0 ? `+${l.drift} j` : 'à jour'}</td>
+                  <td style={{ ...tdStyle, color: l.drift > 0 ? '#dc2626' : '#15803d' }}>{l.drift > 0 ? `+${l.drift} j` : 'à jour'}</td>
                   <td style={tdStyle}>{l.late ? '⚠ Retard' : '✓ OK'}</td>
                 </tr>
               ))}
@@ -138,7 +138,7 @@ export function CRReport({ number, onBack }: CRReportProps) {
           </p>
         </Section>
 
-        <div style={{ marginTop: '24px', paddingTop: '10px', borderTop: '1px solid #e3e9ee', fontSize: '10px', color: '#9bb0c2', textAlign: 'center' }}>
+        <div style={{ marginTop: '24px', paddingTop: '10px', borderTop: '1px solid #e4ecf2', fontSize: '10px', color: '#9bb0c2', textAlign: 'center' }}>
           Document généré automatiquement par Suivi-Chantier — {today.toLocaleDateString('fr')}
         </div>
       </div>
@@ -149,7 +149,7 @@ export function CRReport({ number, onBack }: CRReportProps) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: '18px' }}>
-      <h2 style={{ fontSize: '14px', color: '#0b3b60', borderBottom: '1px solid #e3e9ee', paddingBottom: '4px', marginBottom: '8px' }}>{title}</h2>
+      <h2 style={{ fontSize: '14px', color: '#02457A', borderBottom: '1px solid #e4ecf2', paddingBottom: '4px', marginBottom: '8px' }}>{title}</h2>
       {children}
     </div>
   )
@@ -158,13 +158,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Kpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div>
-      <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#5c6f80', fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: '22px', fontWeight: 700, color: accent ? '#b91c1c' : '#0b3b60' }}>{value}</div>
+      <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#5b7183', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: '22px', fontWeight: 700, color: accent ? '#dc2626' : '#02457A' }}>{value}</div>
     </div>
   )
 }
 
 const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '12px' }
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '6px 8px', background: '#f8fafc', borderBottom: '1px solid #e3e9ee', color: '#0b3b60', fontSize: '11px' }
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '6px 8px', background: '#f8fafc', borderBottom: '1px solid #e4ecf2', color: '#02457A', fontSize: '11px' }
 const tdStyle: React.CSSProperties = { padding: '6px 8px', borderBottom: '1px solid #eef2f6' }
-const pStyle: React.CSSProperties = { fontSize: '12px', color: '#5c6f80', margin: 0 }
+const pStyle: React.CSSProperties = { fontSize: '12px', color: '#5b7183', margin: 0 }

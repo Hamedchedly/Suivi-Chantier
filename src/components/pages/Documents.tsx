@@ -18,8 +18,8 @@ const lotName = (id: string) => LOTS.find(l => l.id === id)?.name ?? id
 const VISA_META: Record<VisaStatus, { label: string; bg: string; fg: string }> = {
   pending: { label: 'En attente', bg: '#fef3c7', fg: '#b45309' },
   approved: { label: 'Visé', bg: '#dcfce7', fg: '#15803d' },
-  approved_reserves: { label: 'Visé avec réserves', bg: '#e7f0fb', fg: '#185fa5' },
-  rejected: { label: 'Refusé', bg: '#fdecec', fg: '#b91c1c' },
+  approved_reserves: { label: 'Visé avec réserves', bg: '#e7f0fb', fg: '#018ABE' },
+  rejected: { label: 'Refusé', bg: '#fdecec', fg: '#dc2626' },
 }
 
 export function Documents() {

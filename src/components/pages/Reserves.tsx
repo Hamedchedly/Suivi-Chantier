@@ -17,9 +17,9 @@ const lotName = (id: string) => LOTS.find(l => l.id === id)?.name ?? id
 const logementLabel = (id: string) => LOGEMENTS.find(l => l.id === id)?.label ?? id
 
 const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {
-  low: { label: 'Faible', bg: '#eef2f6', fg: '#5c6f80' },
+  low: { label: 'Faible', bg: '#eef2f6', fg: '#5b7183' },
   medium: { label: 'Moyenne', bg: '#fef3c7', fg: '#b45309' },
-  high: { label: 'Haute', bg: '#fdecec', fg: '#b91c1c' },
+  high: { label: 'Haute', bg: '#fdecec', fg: '#dc2626' },
 }
 
 // Downscale an image file to a small JPEG data URL (max 800px, quality 0.7).

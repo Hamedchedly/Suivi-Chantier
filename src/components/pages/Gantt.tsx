@@ -98,13 +98,13 @@ export function Gantt() {
       <div style={{ display: 'flex', gap: '4px', marginBottom: '10px', background: '#eef2f6', padding: '3px', borderRadius: '8px', width: 'fit-content' }}>
         <button
           onClick={() => setMode('gantt')}
-          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'gantt' ? '#fff' : 'transparent', color: mode === 'gantt' ? '#0b3b60' : '#5c6f80', boxShadow: mode === 'gantt' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'gantt' ? '#fff' : 'transparent', color: mode === 'gantt' ? '#02457A' : '#5b7183', boxShadow: mode === 'gantt' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
         >
           Gantt
         </button>
         <button
           onClick={() => setMode('matrix')}
-          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'matrix' ? '#fff' : 'transparent', color: mode === 'matrix' ? '#0b3b60' : '#5c6f80', boxShadow: mode === 'matrix' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'matrix' ? '#fff' : 'transparent', color: mode === 'matrix' ? '#02457A' : '#5b7183', boxShadow: mode === 'matrix' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
         >
           Damier logements
         </button>
@@ -192,7 +192,7 @@ export function Gantt() {
       </div>
 
       {/* Gantt Table */}
-      <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e3e9ee' }}>
+      <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
         <GanttTable
           tasks={filteredTasks}
           viewState={viewState}

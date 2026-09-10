@@ -69,7 +69,7 @@ export function Reports() {
         <button
           key={t}
           onClick={() => setTab(t)}
-          style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: tab === t ? '#fff' : 'transparent', color: tab === t ? '#0b3b60' : '#5c6f80', boxShadow: tab === t ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+          style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: tab === t ? '#fff' : 'transparent', color: tab === t ? '#02457A' : '#5b7183', boxShadow: tab === t ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
         >
           {t === 'cr' ? 'Comptes-rendus' : 'RFI · Visas · Docs'}
         </button>
@@ -92,7 +92,7 @@ export function Reports() {
       {/* Auto-generate CR */}
       <button
         onClick={() => setShowAutoReport(true)}
-        style={{ width: '100%', marginBottom: '16px', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #0d3f68, #17679e)', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        style={{ width: '100%', marginBottom: '16px', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #02457A, #018ABE)', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
       >
         <Sparkles size={17} />
         Générer le CR automatique
@@ -127,11 +127,11 @@ export function Reports() {
             style={{
               padding: '20px',
               textAlign: 'center',
-              color: '#5c6f80',
+              color: '#5b7183',
               fontSize: '13px',
               borderRadius: '6px',
               background: '#f9fbfd',
-              border: '1px solid #e3e9ee',
+              border: '1px solid #e4ecf2',
             }}
           >
             Aucun rapport enregistré.
@@ -144,7 +144,7 @@ export function Reports() {
               style={{
                 padding: '12px',
                 borderRadius: '6px',
-                border: '1px solid #e3e9ee',
+                border: '1px solid #e4ecf2',
                 background: selectedReport === report.id ? '#eef2f6' : '#fff',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
@@ -152,10 +152,10 @@ export function Reports() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#0b3b60', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#02457A', marginBottom: '2px' }}>
                     CR N°{report.number} — {report.date.toLocaleDateString('fr')}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#5c6f80' }}>
+                  <div style={{ fontSize: '11px', color: '#5b7183' }}>
                     Par {report.author} • {report.items} photos/observations
                   </div>
                 </div>
@@ -183,7 +183,7 @@ export function Reports() {
                         padding: '8px 12px',
                         borderRadius: '4px',
                         border: 'none',
-                        background: '#0b3b60',
+                        background: '#02457A',
                         color: 'white',
                         fontSize: '12px',
                         fontWeight: '500',
@@ -232,15 +232,15 @@ export function Reports() {
           padding: '12px',
           borderRadius: '6px',
           border: 'none',
-          background: '#0b3b60',
+          background: '#02457A',
           color: 'white',
           fontSize: '13px',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'background 0.2s',
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#0a2a47')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#0b3b60')}
+        onMouseEnter={e => (e.currentTarget.style.background = '#001B48')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#02457A')}
       >
         + Nouveau rapport
       </button>

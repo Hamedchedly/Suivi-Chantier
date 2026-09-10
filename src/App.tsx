@@ -30,7 +30,7 @@ export default function App() {
   if (window.location.hash.startsWith('#share=')) {
     if (shared) return <ShareView snapshot={shared} />
     return (
-      <div style={{ padding: '40px 20px', textAlign: 'center', color: '#5c6f80', fontSize: '14px' }}>
+      <div style={{ padding: '40px 20px', textAlign: 'center', color: '#5b7183', fontSize: '14px' }}>
         Lien de partage invalide ou expiré.
       </div>
     )

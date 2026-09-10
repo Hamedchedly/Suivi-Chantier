@@ -42,13 +42,13 @@ export function Config() {
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: '#f3f6f9' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: '#f1f5f9' }}>
       {/* Tabs */}
       <div
         style={{
           display: 'flex',
           gap: '0',
-          borderBottom: '1px solid #e3e9ee',
+          borderBottom: '1px solid #e4ecf2',
           background: 'white',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
@@ -62,11 +62,11 @@ export function Config() {
               padding: '12px 16px',
               border: 'none',
               background: activeTab === tab.id ? 'white' : 'transparent',
-              color: activeTab === tab.id ? '#0b3b60' : '#5c6f80',
+              color: activeTab === tab.id ? '#02457A' : '#5b7183',
               fontSize: '13px',
               fontWeight: activeTab === tab.id ? '600' : '500',
               cursor: 'pointer',
-              borderBottom: activeTab === tab.id ? '2px solid #0b3b60' : '2px solid transparent',
+              borderBottom: activeTab === tab.id ? '2px solid #02457A' : '2px solid transparent',
               transition: 'all 0.2s',
               whiteSpace: 'nowrap',
             }}
@@ -82,7 +82,7 @@ export function Config() {
         {activeTab === 'project' && (
           <div style={{ maxWidth: '600px' }}>
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Nom de l'opération
               </label>
               <input
@@ -101,7 +101,7 @@ export function Config() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Adresse
               </label>
               <input
@@ -120,7 +120,7 @@ export function Config() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Maître d'ouvrage (MOA)
               </label>
               <input
@@ -139,7 +139,7 @@ export function Config() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Maître d'œuvre (MOE)
               </label>
               <input
@@ -158,7 +158,7 @@ export function Config() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 AMO
               </label>
               <input
@@ -182,7 +182,7 @@ export function Config() {
                 padding: '10px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: '#0b3b60',
+                background: '#02457A',
                 color: 'white',
                 fontSize: '13px',
                 fontWeight: '600',
@@ -199,8 +199,8 @@ export function Config() {
         {activeTab === 'lots' && (
           <div style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {lots.map(lot => (
-              <div key={lot.id} style={{ border: '1px solid #e3e9ee', borderRadius: '10px', padding: '12px', background: '#fff' }}>
-                <div style={{ fontWeight: '600', color: '#0b3b60', fontSize: '13px', marginBottom: '10px' }}>{lot.name}</div>
+              <div key={lot.id} style={{ border: '1px solid #e4ecf2', borderRadius: '10px', padding: '12px', background: '#fff' }}>
+                <div style={{ fontWeight: '600', color: '#02457A', fontSize: '13px', marginBottom: '10px' }}>{lot.name}</div>
                 <LotField label="Entreprise" value={lot.company} onChange={v => updateLot(lot.id, 'company', v)} />
                 <LotField label="Contact" value={lot.contactName} onChange={v => updateLot(lot.id, 'contactName', v)} />
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -213,7 +213,7 @@ export function Config() {
                 </div>
               </div>
             ))}
-            <div style={{ fontSize: '11px', color: '#5c6f80' }}>
+            <div style={{ fontSize: '11px', color: '#5b7183' }}>
               Les modifications sont enregistrées automatiquement.
             </div>
           </div>
@@ -222,13 +222,13 @@ export function Config() {
         {/* Email Tab */}
         {activeTab === 'email' && (
           <div style={{ maxWidth: '600px' }}>
-            <p style={{ fontSize: '11px', color: '#5c6f80', marginBottom: '12px' }}>
+            <p style={{ fontSize: '11px', color: '#5b7183', marginBottom: '12px' }}>
               Variables: <code style={{ background: '#eef2f6', padding: '2px 6px', borderRadius: '3px' }}>numero</code>{' '}
               <code style={{ background: '#eef2f6', padding: '2px 6px', borderRadius: '3px' }}>operation</code>{' '}
               <code style={{ background: '#eef2f6', padding: '2px 6px', borderRadius: '3px' }}>date</code>
             </p>
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Sujet
               </label>
               <input
@@ -245,7 +245,7 @@ export function Config() {
               />
             </div>
             <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
                 Corps du message
               </label>
               <textarea
@@ -268,7 +268,7 @@ export function Config() {
                 padding: '10px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: '#0b3b60',
+                background: '#02457A',
                 color: 'white',
                 fontSize: '13px',
                 fontWeight: '600',
@@ -283,7 +283,7 @@ export function Config() {
         {/* Export Tab */}
         {activeTab === 'export' && (
           <div>
-            <p style={{ color: '#5c6f80', fontSize: '13px' }}>Sélectionner le contenu à exporter en développement.</p>
+            <p style={{ color: '#5b7183', fontSize: '13px' }}>Sélectionner le contenu à exporter en développement.</p>
           </div>
         )}
 
@@ -295,7 +295,7 @@ export function Config() {
                 padding: '10px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: '#0b3b60',
+                background: '#02457A',
                 color: 'white',
                 fontSize: '13px',
                 fontWeight: '600',
@@ -337,7 +337,7 @@ export function Config() {
 function LotField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <div style={{ marginBottom: '8px' }}>
-      <label style={{ fontSize: '10px', fontWeight: '600', color: '#5c6f80', display: 'block', marginBottom: '4px' }}>{label}</label>
+      <label style={{ fontSize: '10px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '4px' }}>{label}</label>
       <input
         type={type}
         value={value}

@@ -216,8 +216,8 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
 
   const getStatusColor = (status: GanttTask['status']) => {
     if (status === 'completed')  return '#15803d'
-    if (status === 'in-progress') return '#185fa5'
-    if (status === 'delayed' || status === 'blocked') return '#b91c1c'
+    if (status === 'in-progress') return '#018ABE'
+    if (status === 'delayed' || status === 'blocked') return '#dc2626'
     if (status === 'not-started') return '#94a3b8'
     return '#6b21a8'
   }
@@ -250,7 +250,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             ) : (
               <div style={{ width: 14 }} />
             )}
-            <span style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#b91c1c' : undefined }}>
+            <span style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined }}>
               {task.title}
             </span>
           </div>
@@ -279,7 +279,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 title={tooltip}
                 style={{
                   position: 'absolute', left: bar.leftPx - 7, top: 7, width: 14, height: 14,
-                  background: task.progress >= 100 ? '#15803d' : '#0b3b60',
+                  background: task.progress >= 100 ? '#15803d' : '#02457A',
                   transform: 'rotate(45deg)', borderRadius: 2, zIndex: 3,
                   border: '1.5px solid #fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)',
                   cursor: editable ? 'grab' : 'default', opacity: dimmed ? 0.3 : 1,
@@ -306,7 +306,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                     left: bar.leftPx,
                     width: bar.widthPx,
                     backgroundColor: getStatusColor(task.status),
-                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #b91c1c' : undefined,
+                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : undefined,
                     cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
                   }}
                   title={tooltip}
@@ -347,15 +347,15 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {/* Month row */}
                 <div style={{ position: 'relative', height: 22 }}>
                   {months.map((m, i) => (
-                    <div key={i} style={{ position: 'absolute', left: m.leftPx, width: m.widthPx, fontSize: 10, fontWeight: 700, color: '#0b3b60', padding: '4px 6px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%' }}>
+                    <div key={i} style={{ position: 'absolute', left: m.leftPx, width: m.widthPx, fontSize: 10, fontWeight: 700, color: '#02457A', padding: '4px 6px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e4ecf2', boxSizing: 'border-box', height: '100%' }}>
                       {m.label}
                     </div>
                   ))}
                 </div>
                 {/* Week row */}
-                <div style={{ position: 'relative', height: 20, borderTop: '1px solid #e3e9ee' }}>
+                <div style={{ position: 'relative', height: 20, borderTop: '1px solid #e4ecf2' }}>
                   {weeks.map((w, i) => (
-                    <div key={i} style={{ position: 'absolute', left: w.leftPx, width: w.widthPx, fontSize: 9, color: '#5c6f80', padding: '3px 3px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e3e9ee', boxSizing: 'border-box', height: '100%' }}>
+                    <div key={i} style={{ position: 'absolute', left: w.leftPx, width: w.widthPx, fontSize: 9, color: '#5b7183', padding: '3px 3px', overflow: 'hidden', whiteSpace: 'nowrap', borderRight: '1px solid #e4ecf2', boxSizing: 'border-box', height: '100%' }}>
                       {w.label}
                     </div>
                   ))}
@@ -381,7 +381,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
               </marker>
               <marker id="dep-arrow-crit" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#b91c1c" />
+                <path d="M0,0 L6,3 L0,6 Z" fill="#dc2626" />
               </marker>
             </defs>
             {depLines.map((l, i) => {
@@ -392,7 +392,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   key={i}
                   d={d}
                   fill="none"
-                  stroke={l.critical ? '#b91c1c' : '#94a3b8'}
+                  stroke={l.critical ? '#dc2626' : '#94a3b8'}
                   strokeWidth={1.3}
                   strokeDasharray={l.critical ? undefined : '3 2'}
                   markerEnd={`url(#${l.critical ? 'dep-arrow-crit' : 'dep-arrow'})`}

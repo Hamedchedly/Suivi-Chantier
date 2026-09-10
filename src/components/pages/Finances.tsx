@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Check } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import {
   Avenant, Situation, AvenantStatus,
   projectFinance, marcheFinance, euros,
@@ -13,7 +14,7 @@ type FinSection = 'marches' | 'avenants' | 'situations'
 const AVENANT_META: Record<AvenantStatus, { label: string; bg: string; fg: string }> = {
   proposed: { label: 'Proposé', bg: '#fef3c7', fg: '#b45309' },
   approved: { label: 'Validé', bg: '#dcfce7', fg: '#15803d' },
-  rejected: { label: 'Rejeté', bg: '#fdecec', fg: '#b91c1c' },
+  rejected: { label: 'Rejeté', bg: '#fdecec', fg: '#dc2626' },
 }
 
 const lotShort = (lotId: string) => lotId.replace('L', 'LOT ')
@@ -28,6 +29,11 @@ export function Finances() {
   useEffect(() => { saveSituations(situations) }, [situations])
 
   const pf = projectFinance(marches, avenants, situations)
+  const donutData = [
+    { name: 'Payé', value: Math.max(0, pf.paid), color: '#15803d' },
+    { name: 'Facturé non payé', value: Math.max(0, pf.billed - pf.paid), color: '#018ABE' },
+    { name: 'Reste', value: Math.max(0, pf.remaining), color: '#D6E8EE' },
+  ]
 
   const approveAvenant = (id: string) =>
     setAvenants(prev => prev.map(a => (a.id === id ? { ...a, status: 'approved' } : a)))
@@ -44,18 +50,29 @@ export function Finances() {
         <Kpi label="Reste à facturer" value={euros(pf.remaining)} variant="warn" />
       </div>
 
-      {/* Budget bar */}
-      <div style={{ marginBottom: '14px' }}>
-        <div style={{ height: '10px', borderRadius: '5px', background: 'var(--line)', overflow: 'hidden', display: 'flex' }}>
-          <div style={{ width: `${pctOf(pf.paid, pf.budget)}%`, background: 'var(--ok)' }} title={`Payé ${euros(pf.paid)}`} />
-          <div style={{ width: `${pctOf(pf.billed - pf.paid, pf.budget)}%`, background: 'var(--navy2)' }} title={`En attente ${euros(pf.billed - pf.paid)}`} />
+      {/* Budget donut */}
+      <div className="card" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ width: '112px', height: '112px', flexShrink: 0, position: 'relative' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={donutData} dataKey="value" cx="50%" cy="50%"
+                innerRadius={38} outerRadius={54} startAngle={90} endAngle={-270} stroke="none"
+              >
+                {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy)', lineHeight: 1 }}>{pf.billedPct}%</div>
+            <div style={{ fontSize: '9px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>facturé</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '10px', color: 'var(--muted)' }}>
-          <Legend color="var(--ok)" label="Payé" />
-          <Legend color="var(--navy2)" label="Facturé non payé" />
-          <Legend color="var(--line)" label="Reste" />
-          <div style={{ flex: 1 }} />
-          {pf.avenants !== 0 && <span>dont avenants {euros(pf.avenants)}</span>}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <DonutRow color="var(--ok)" label="Payé" value={euros(pf.paid)} />
+          <DonutRow color="var(--accent)" label="Facturé non payé" value={euros(pf.billed - pf.paid)} />
+          <DonutRow color="var(--sky-soft)" label="Reste à facturer" value={euros(pf.remaining)} />
+          {pf.avenants !== 0 && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>dont avenants validés : {euros(pf.avenants)}</div>}
         </div>
       </div>
 
@@ -157,10 +174,6 @@ export function Finances() {
   )
 }
 
-function pctOf(part: number, whole: number): number {
-  return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0
-}
-
 function Kpi({ label, value, sub, variant }: { label: string; value: string; sub?: string; variant?: 'ok' | 'warn' }) {
   return (
     <div className="kpi-card">
@@ -171,14 +184,15 @@ function Kpi({ label, value, sub, variant }: { label: string; value: string; sub
   )
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function DonutRow({ color, label, value }: { color: string; label: string; value: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-      <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: color, display: 'inline-block' }} />
-      {label}
-    </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+      <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: color, flexShrink: 0 }} />
+      <span style={{ color: 'var(--muted)', flex: 1 }}>{label}</span>
+      <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{value}</span>
+    </div>
   )
 }
 
-const card: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', background: '#fff' }
-const seg = (on: boolean): React.CSSProperties => ({ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: on ? '#fff' : 'transparent', color: on ? '#0b3b60' : '#5c6f80', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' })
+const card: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '14px', padding: '14px', background: '#fff', boxShadow: 'var(--shadow-sm)' }
+const seg = (on: boolean): React.CSSProperties => ({ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: on ? '#fff' : 'transparent', color: on ? '#02457A' : '#5b7183', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' })

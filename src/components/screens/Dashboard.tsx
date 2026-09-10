@@ -20,7 +20,7 @@ export function Dashboard() {
 
   const statusData = [
     { name: 'À jour', value: 3, fill: '#15803d' },
-    { name: 'En retard', value: 1, fill: '#b91c1c' },
+    { name: 'En retard', value: 1, fill: '#dc2626' },
     { name: 'Suspendu', value: 0, fill: '#c2410c' },
   ]
 
@@ -28,7 +28,7 @@ export function Dashboard() {
   const customTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-[#e3e9ee] rounded-lg shadow-lg">
+        <div className="bg-white p-3 border border-[#e4ecf2] rounded-lg shadow-lg">
           <p className="text-sm font-medium text-[#16222e]">{payload[0].payload.week || payload[0].payload.name}</p>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {payload.map((entry: any, idx: number) => (
@@ -45,37 +45,37 @@ export function Dashboard() {
   return (
     <div className="space-y-8 pb-24 md:pb-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#0d3f68] to-[#0b3b60] text-white rounded-lg p-8">
+      <div className="bg-gradient-to-r from-[#02457A] to-[#02457A] text-white rounded-lg p-8">
         <h1 className="text-4xl font-bold mb-2">Gambetta — Réhabilitation</h1>
         <p className="text-blue-100 text-lg">Ref. GAM-2026-001 • Mairie de Reims</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm hover:shadow-md transition">
-          <p className="text-xs uppercase font-bold text-[#5c6f80] mb-3 tracking-wide">Avancement Global</p>
-          <p className="text-5xl font-bold text-[#0b3b60] mb-2">63%</p>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm hover:shadow-md transition">
+          <p className="text-xs uppercase font-bold text-[#5b7183] mb-3 tracking-wide">Avancement Global</p>
+          <p className="text-5xl font-bold text-[#02457A] mb-2">63%</p>
           <div className="flex items-center gap-2 text-green-600">
             <TrendingUp size={16} />
             <span className="text-sm font-semibold">+8% cette semaine</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm hover:shadow-md transition">
-          <p className="text-xs uppercase font-bold text-[#5c6f80] mb-3 tracking-wide">Lots À Jour</p>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm hover:shadow-md transition">
+          <p className="text-xs uppercase font-bold text-[#5b7183] mb-3 tracking-wide">Lots À Jour</p>
           <p className="text-5xl font-bold text-[#15803d]">3</p>
-          <p className="text-sm text-[#5c6f80] mt-2">sur 4 lots</p>
+          <p className="text-sm text-[#5b7183] mt-2">sur 4 lots</p>
         </div>
 
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm hover:shadow-md transition">
-          <p className="text-xs uppercase font-bold text-[#5c6f80] mb-3 tracking-wide">Lots En Retard</p>
-          <p className="text-5xl font-bold text-[#b91c1c]">1</p>
-          <p className="text-sm text-[#5c6f80] mt-2">Fluides (45%)</p>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm hover:shadow-md transition">
+          <p className="text-xs uppercase font-bold text-[#5b7183] mb-3 tracking-wide">Lots En Retard</p>
+          <p className="text-5xl font-bold text-[#dc2626]">1</p>
+          <p className="text-sm text-[#5b7183] mt-2">Fluides (45%)</p>
         </div>
 
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm hover:shadow-md transition">
-          <p className="text-xs uppercase font-bold text-[#5c6f80] mb-3 tracking-wide">Points Bloquants</p>
-          <p className="text-5xl font-bold text-[#0b3b60]">0</p>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm hover:shadow-md transition">
+          <p className="text-xs uppercase font-bold text-[#5b7183] mb-3 tracking-wide">Points Bloquants</p>
+          <p className="text-5xl font-bold text-[#02457A]">0</p>
           <p className="text-sm text-green-600 font-semibold mt-2">✓ Tous résolus</p>
         </div>
       </div>
@@ -83,21 +83,21 @@ export function Dashboard() {
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Timeline Chart */}
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-[#0b3b60] mb-4">Avancement Temporel</h2>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-[#02457A] mb-4">Avancement Temporel</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={timelineData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e3e9ee" />
-              <XAxis dataKey="week" stroke="#5c6f80" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#5c6f80" style={{ fontSize: '12px' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4ecf2" />
+              <XAxis dataKey="week" stroke="#5b7183" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#5b7183" style={{ fontSize: '12px' }} />
               <Tooltip content={customTooltip} />
               <Legend />
               <Line
                 type="monotone"
                 dataKey="real"
-                stroke="#185FA5"
+                stroke="#018ABE"
                 strokeWidth={3}
-                dot={{ fill: '#185FA5', r: 6 }}
+                dot={{ fill: '#018ABE', r: 6 }}
                 activeDot={{ r: 8 }}
                 name="Réel"
               />
@@ -115,8 +115,8 @@ export function Dashboard() {
         </div>
 
         {/* Status Distribution */}
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-[#0b3b60] mb-4">Distribution des Statuts</h2>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-[#02457A] mb-4">Distribution des Statuts</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -142,24 +142,24 @@ export function Dashboard() {
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Comparison Chart */}
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-[#0b3b60] mb-4">Comparaison Planifié vs Réel</h2>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-[#02457A] mb-4">Comparaison Planifié vs Réel</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={lotData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e3e9ee" />
-              <XAxis dataKey="name" stroke="#5c6f80" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#5c6f80" style={{ fontSize: '12px' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4ecf2" />
+              <XAxis dataKey="name" stroke="#5b7183" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#5b7183" style={{ fontSize: '12px' }} />
               <Tooltip content={customTooltip} />
               <Legend />
-              <Bar dataKey="real" fill="#185FA5" radius={[8, 8, 0, 0]} name="Réel" />
+              <Bar dataKey="real" fill="#018ABE" radius={[8, 8, 0, 0]} name="Réel" />
               <Bar dataKey="planned" fill="#15803d" radius={[8, 8, 0, 0]} name="Prévu" />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Lot Progress */}
-        <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-[#0b3b60] mb-4">Avancement par Lot</h2>
+        <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-[#02457A] mb-4">Avancement par Lot</h2>
           <div className="space-y-5">
             {[
               { name: 'LOT 01 — Gros œuvre', progress: 75, status: 'À jour', statusColor: 'bg-green-50 text-green-700' },
@@ -171,7 +171,7 @@ export function Dashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-[#16222e] text-sm">{lot.name}</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#185FA5]">{lot.progress}%</span>
+                    <span className="font-bold text-[#018ABE]">{lot.progress}%</span>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full ${lot.statusColor}`}>
                       {lot.status}
                     </span>
@@ -194,8 +194,8 @@ export function Dashboard() {
       </div>
 
       {/* Alerts */}
-      <div className="bg-white rounded-lg border border-[#e3e9ee] p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-[#0b3b60] mb-4">Alertes & Actions</h2>
+      <div className="bg-white rounded-lg border border-[#e4ecf2] p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-[#02457A] mb-4">Alertes & Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-red-50 border-l-4 border-red-500 rounded p-4 flex items-start gap-3">
             <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />

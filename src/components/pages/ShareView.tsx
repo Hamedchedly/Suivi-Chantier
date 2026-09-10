@@ -31,7 +31,7 @@ export function ShareView({ snapshot }: { snapshot: Snapshot }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: '24px' }}>
       {/* Read-only banner */}
-      <div style={{ background: 'linear-gradient(180deg, #0d3f68, #0b3b60)', color: '#fff', padding: '12px 16px' }}>
+      <div style={{ background: 'linear-gradient(180deg, #02457A, #02457A)', color: '#fff', padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#9bc4df', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
           <Lock size={12} /> Vue partagée — lecture seule
         </div>
@@ -55,7 +55,7 @@ export function ShareView({ snapshot }: { snapshot: Snapshot }) {
 
         {/* Planning (read-only) */}
         <h2 className="section-title" style={{ marginBottom: '8px' }}>Planning</h2>
-        <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e3e9ee', marginBottom: '20px' }}>
+        <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2', marginBottom: '20px' }}>
           <GanttTable
             tasks={tasks}
             viewState={viewState}
