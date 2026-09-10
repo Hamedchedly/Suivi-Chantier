@@ -206,6 +206,14 @@ body { max-width: 100%; padding-bottom: 100px }
 .bnav.active { color: var(--navy); border-top-color: var(--navy-2) }
 .bnav svg { width: 20px; height: 20px }
 
+/* Print — only the CR report is visible on paper */
+@media print {
+  .topbar, .bot-nav, .no-print { display: none !important }
+  .app-wrapper, .app-body { display: block !important; min-height: 0 !important }
+  .cr-print { padding: 0 !important; max-width: 100% !important }
+  body { background: #fff !important }
+}
+
 /* Sections */
 section { margin-bottom: 24px }
 .section-title { font-size: .8rem; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: .05em; margin-bottom: 12px }

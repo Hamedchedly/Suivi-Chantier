@@ -1,5 +1,6 @@
-import { Download, Eye } from 'lucide-react'
+import { Download, Eye, Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { CRReport } from './CRReport'
 
 interface Report {
   id: string
@@ -39,9 +40,23 @@ const MOCK_REPORTS: Report[] = [
 
 export function Reports() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
+  const [showAutoReport, setShowAutoReport] = useState(false)
+
+  if (showAutoReport) {
+    return <CRReport number={MOCK_REPORTS.length + 1} onBack={() => setShowAutoReport(false)} />
+  }
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {/* Auto-generate CR */}
+      <button
+        onClick={() => setShowAutoReport(true)}
+        style={{ width: '100%', marginBottom: '16px', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #0d3f68, #17679e)', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+      >
+        <Sparkles size={17} />
+        Générer le CR automatique
+      </button>
+
       {/* Reports List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {MOCK_REPORTS.length === 0 ? (
