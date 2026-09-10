@@ -1,10 +1,35 @@
 import { useState, useEffect } from 'react'
 import { Plus, Calendar, ChevronRight } from 'lucide-react'
 import { loadState, saveState } from '../../lib/storage'
+import { GanttTask } from '../../types/gantt'
+import { GANTT_TASKS } from '../../data/ganttMockData'
 import { Reserves } from './Reserves'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
 type CRSection = 'cr' | 'reserves'
+
+const GANTT_KEY = 'sc-gantt-v2'
+const CR_LOTS = [
+  { id: 'L05', label: 'LOT 05 — Menuiseries int. / Isolation' },
+  { id: 'L06', label: 'LOT 06 — Électricité / Contrôle accès' },
+  { id: 'L07', label: 'LOT 07 — CVC' },
+  { id: 'L08', label: 'LOT 08 — Embellissements' },
+]
+
+// Read current per-lot (parent) progress from the shared planning store.
+function readLotProgress(): Record<string, number> {
+  const tasks = loadState<GanttTask[]>(GANTT_KEY, GANTT_TASKS)
+  const out: Record<string, number> = {}
+  for (const t of tasks) out[t.lot_id] = t.progress
+  return out
+}
+
+// Write updated per-lot progress back to the planning store (parent tasks).
+function writeLotProgress(progress: Record<string, number>) {
+  const tasks = loadState<GanttTask[]>(GANTT_KEY, GANTT_TASKS)
+  const updated = tasks.map(t => (t.lot_id in progress ? { ...t, progress: progress[t.lot_id] } : t))
+  saveState(GANTT_KEY, updated)
+}
 
 interface Visit {
   id: string
@@ -46,6 +71,7 @@ export function CR() {
   const [section, setSection] = useState<CRSection>('cr')
   const [step, setStep] = useState<CRStep>('list')
   const [draft, setDraft] = useState<VisitDraft>(emptyDraft)
+  const [lotProgress, setLotProgress] = useState<Record<string, number>>(readLotProgress)
   const [visits, setVisits] = useState<Visit[]>(() =>
     loadState<Visit[]>(VISITS_STORAGE_KEY, DEFAULT_VISITS),
   )
@@ -64,6 +90,7 @@ export function CR() {
       status: 'brouillon',
     }
     setVisits(prev => [newVisit, ...prev])
+    writeLotProgress(lotProgress) // push field-measured progress back to the planning
     setDraft(emptyDraft())
     setStep('list')
   }
@@ -163,11 +190,23 @@ export function CR() {
           ← Retour
         </button>
         <h2 style={{ margin: '0 0 4px' }}>Constat par lot</h2>
-        <p style={{ color: 'var(--muted)', fontSize: '13px', margin: '0 0 16px' }}>Étape 3 / 3 — Saisie des observations</p>
+        <p style={{ color: 'var(--muted)', fontSize: '13px', margin: '0 0 16px' }}>Étape 3 / 3 — Avancement & observations (mis à jour dans le planning)</p>
 
-        {['LOT 05 — Menuiseries ext.', 'LOT 06 — Cloisons', 'LOT 07 — Électricité', 'LOT 08 — Peinture'].map(lot => (
-          <div key={lot} style={{ border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', marginBottom: '10px', background: '#fff' }}>
-            <div style={{ fontWeight: '600', color: 'var(--navy)', fontSize: '13px', marginBottom: '8px' }}>{lot}</div>
+        {CR_LOTS.map(lot => (
+          <div key={lot.id} style={{ border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', marginBottom: '10px', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontWeight: '600', color: 'var(--navy)', fontSize: '13px' }}>{lot.label}</div>
+              <div style={{ fontWeight: '700', color: 'var(--navy-2)', fontSize: '15px' }}>{lotProgress[lot.id] ?? 0}%</div>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={lotProgress[lot.id] ?? 0}
+              onChange={e => setLotProgress(prev => ({ ...prev, [lot.id]: Number(e.target.value) }))}
+              style={{ width: '100%', marginBottom: '8px' }}
+            />
             <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
               {['RAS', 'Réserve', 'Point bloquant'].map(status => (
                 <button key={status} style={{ flex: 1, padding: '6px 4px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', fontWeight: '600', cursor: 'pointer', color: 'var(--muted)' }}>
@@ -177,7 +216,7 @@ export function CR() {
             </div>
             <textarea
               placeholder="Observations..."
-              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontFamily: 'inherit', minHeight: '60px', boxSizing: 'border-box', resize: 'vertical' }}
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontFamily: 'inherit', minHeight: '50px', boxSizing: 'border-box', resize: 'vertical' }}
             />
           </div>
         ))}
