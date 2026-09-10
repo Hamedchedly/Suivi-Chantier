@@ -1,9 +1,11 @@
 import { Play, AlertTriangle, CalendarClock, MapPin } from 'lucide-react'
+import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
 import type { Page } from '../../App'
-import { getGanttTasks, getReserves } from '../../lib/repo'
+import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations } from '../../lib/repo'
 import {
   overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
 } from '../../lib/schedule'
+import { projectFinance, euros } from '../../lib/finance'
 import { LOGEMENTS } from '../../data/zones'
 
 interface HomeProps {
@@ -24,6 +26,8 @@ export function Home({ onNavigate }: HomeProps) {
   const lots = lotSummaries(tasks, today)
   const openReserves = reserves.filter(r => r.status === 'open')
   const highReserves = openReserves.filter(r => r.priority === 'high')
+  const pf = projectFinance(getMarches(), getAvenants(), getSituations())
+  const lotsOnTrack = lots.filter(l => !l.late).length
 
   const risks = [
     ...late.map(t => ({ key: `late-${t.id}`, label: `${t.title} en retard`, sub: `échéance ${t.planned_end.toLocaleDateString('fr')}` })),
@@ -33,6 +37,27 @@ export function Home({ onNavigate }: HomeProps) {
 
   return (
     <div style={{ padding: '16px 12px', paddingBottom: '16px' }}>
+      {/* Hero — avancement gauge */}
+      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', padding: '16px 18px' }}>
+        <div style={{ width: '120px', height: '120px', flexShrink: 0, position: 'relative' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart innerRadius="72%" outerRadius="100%" data={[{ value: progress }]} startAngle={90} endAngle={-270}>
+              <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+              <RadialBar dataKey="value" background={{ fill: '#D6E8EE' }} cornerRadius={10} fill="#018ABE" />
+            </RadialBarChart>
+          </ResponsiveContainer>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--navy)', lineHeight: 1 }}>{progress}%</div>
+            <div style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>avancement</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <HeroStat label="Lots à jour" value={`${lotsOnTrack} / ${lots.length}`} tone={lotsOnTrack === lots.length ? 'ok' : 'warn'} />
+          <HeroStat label="Budget facturé" value={`${pf.billedPct}%`} sub={euros(pf.billed)} />
+          <HeroStat label="Réserves ouvertes" value={String(openReserves.length)} tone={openReserves.length ? 'warn' : 'ok'} />
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="kpi-grid">
         <KPICard label="Avancement" value={`${progress}%`} variant="ok" />
@@ -111,6 +136,18 @@ export function Home({ onNavigate }: HomeProps) {
           ))}
         </div>
       </section>
+    </div>
+  )
+}
+
+function HeroStat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'ok' | 'warn' }) {
+  const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--bad)' : 'var(--navy)'
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid var(--line)', paddingBottom: '8px' }}>
+      <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{label}</span>
+      <span style={{ fontSize: '15px', fontWeight: 700, color }}>
+        {value}{sub && <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--muted)', marginLeft: '5px' }}>{sub}</span>}
+      </span>
     </div>
   )
 }
