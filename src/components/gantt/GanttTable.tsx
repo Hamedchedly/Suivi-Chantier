@@ -137,7 +137,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     })
   }
 
-  const handleMouseMove = useCallback((_e: MouseEvent) => {}, [])
+  const handleMouseMove = useCallback(() => {}, [])
 
   const handleMouseUp = useCallback((e: MouseEvent) => {
     setDragState(prev => {
@@ -208,6 +208,8 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
       }
     }
     setDepLines(lines)
+    // geom/visible are recomputed each render on purpose; re-run only on these inputs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, viewState.expandedTasks, viewState.depsVisible, viewState.view, viewState.startDate, viewState.endDate])
 
   const getStatusColor = (status: GanttTask['status']) => {

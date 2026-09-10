@@ -37,14 +37,12 @@ const filterTasks = (
   lotId: string | null,
   zoneId: string | null,
 ): GanttTask[] => {
-  let out = lotId ? tasks.filter(t => t.lot_id === lotId) : tasks
-  if (zoneId) {
-    out = out
-      .map(lot => {
-        const children = (lot.children ?? []).filter(c => c.logement_id === zoneId)
-        return children.length ? { ...lot, children } : null
-      })
-      .filter((t): t is GanttTask => t !== null)
+  const base = lotId ? tasks.filter(t => t.lot_id === lotId) : tasks
+  if (!zoneId) return base
+  const out: GanttTask[] = []
+  for (const lot of base) {
+    const children = (lot.children ?? []).filter(c => c.logement_id === zoneId)
+    if (children.length) out.push({ ...lot, children })
   }
   return out
 }
@@ -206,7 +204,8 @@ export function Gantt() {
           onToggleExpanded={(taskId: string) => {
             setExpandedTasks(prev => {
               const next = new Set(prev)
-              next.has(taskId) ? next.delete(taskId) : next.add(taskId)
+              if (next.has(taskId)) next.delete(taskId)
+              else next.add(taskId)
               return next
             })
           }}

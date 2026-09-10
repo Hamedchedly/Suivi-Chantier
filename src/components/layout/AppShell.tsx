@@ -1,5 +1,5 @@
 import { useState, ReactNode } from 'react'
-import { Home, BarChart3, FileText, Settings, Download } from 'lucide-react'
+import { Home, BarChart3, FileText, Settings } from 'lucide-react'
 import type { Operation } from '../../lib/types'
 
 interface AppShellProps {

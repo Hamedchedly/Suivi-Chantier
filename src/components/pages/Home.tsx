@@ -13,7 +13,6 @@ interface HomeProps {
   onNavigate: (page: Page) => void
 }
 
-const PROJECT = { name: 'Gambetta — Réhabilitation', ref: 'GAM-2026-001', addr: '111 Rue Gambetta, 51100 Reims' }
 const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.label ?? id : '')
 
 export function Home({ onNavigate }: HomeProps) {
