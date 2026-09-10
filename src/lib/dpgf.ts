@@ -8,10 +8,13 @@ export interface DpgfLine {
   unite: string          // m², u, ml, ens, forfait…
   quantite: number
   prixUnitaire: number   // € HT
+  forfait?: boolean      // lump sum: amount entered directly (montantForfait)
+  montantForfait?: number
 }
 
-/** Line amount = quantity × unit price (HT). */
+/** Line amount: forfait → the lump sum; otherwise quantity × unit price (HT). */
 export function lineTotal(l: DpgfLine): number {
+  if (l.forfait) return l.montantForfait ?? 0
   return l.quantite * l.prixUnitaire
 }
 

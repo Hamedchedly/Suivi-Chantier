@@ -81,11 +81,20 @@ export function DpgfView() {
                 {ll.map(l => (
                   <tr key={l.id} style={{ borderTop: '1px solid var(--line)' }}>
                     <td style={td}><input value={l.designation} onChange={e => update(l.id, { designation: e.target.value })} placeholder="Désignation" style={{ ...cell, textAlign: 'left', minWidth: '160px' }} /></td>
-                    <td style={td}><input value={l.unite} onChange={e => update(l.id, { unite: e.target.value })} style={{ ...cell, width: '54px', textAlign: 'center' }} /></td>
-                    <td style={td}><input value={String(l.quantite)} onChange={e => update(l.id, { quantite: num(e.target.value) })} style={{ ...cell, width: '64px', textAlign: 'right' }} /></td>
-                    <td style={td}><input value={String(l.prixUnitaire)} onChange={e => update(l.id, { prixUnitaire: num(e.target.value) })} style={{ ...cell, width: '78px', textAlign: 'right' }} /></td>
+                    <td style={td}><input value={l.unite} onChange={e => update(l.id, { unite: e.target.value })} disabled={l.forfait} style={{ ...cell, width: '54px', textAlign: 'center', opacity: l.forfait ? 0.5 : 1 }} /></td>
+                    {l.forfait ? (
+                      <td style={td} colSpan={2}><input value={String(l.montantForfait ?? 0)} onChange={e => update(l.id, { montantForfait: num(e.target.value) })} placeholder="Montant forfait HT" style={{ ...cell, width: '100%', textAlign: 'right' }} /></td>
+                    ) : (
+                      <>
+                        <td style={td}><input value={String(l.quantite)} onChange={e => update(l.id, { quantite: num(e.target.value) })} style={{ ...cell, width: '64px', textAlign: 'right' }} /></td>
+                        <td style={td}><input value={String(l.prixUnitaire)} onChange={e => update(l.id, { prixUnitaire: num(e.target.value) })} style={{ ...cell, width: '78px', textAlign: 'right' }} /></td>
+                      </>
+                    )}
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--navy)', whiteSpace: 'nowrap' }}>{euros(lineTotal(l))}</td>
-                    <td style={{ ...td, textAlign: 'center' }}><button onClick={() => remove(l.id)} style={{ border: 'none', background: 'none', color: 'var(--bad)', cursor: 'pointer', padding: 2 }}><Trash2 size={14} /></button></td>
+                    <td style={{ ...td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <button onClick={() => update(l.id, { forfait: !l.forfait })} title="Basculer forfait" style={{ border: '1px solid var(--line)', borderRadius: '6px', background: l.forfait ? 'var(--sky-soft)' : '#fff', color: l.forfait ? 'var(--accent)' : 'var(--muted)', cursor: 'pointer', padding: '3px 7px', fontSize: '10px', fontWeight: 700, marginRight: '4px' }}>Fft</button>
+                      <button onClick={() => remove(l.id)} style={{ border: 'none', background: 'none', color: 'var(--bad)', cursor: 'pointer', padding: 2, verticalAlign: 'middle' }}><Trash2 size={14} /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -10,6 +10,9 @@ describe('dpgf totals', () => {
   it('lineTotal = qty × unit price', () => {
     expect(lineTotal(line('x', 'L05', 3, 25))).toBe(75)
   })
+  it('lineTotal uses the lump sum for forfait lines', () => {
+    expect(lineTotal({ ...line('x', 'L05', 99, 99), forfait: true, montantForfait: 12000 })).toBe(12000)
+  })
   it('lotTotal sums a lot', () => {
     expect(lotTotal(lines, 'L05')).toBe(1100)
     expect(lotTotal(lines, 'L06')).toBe(1000)

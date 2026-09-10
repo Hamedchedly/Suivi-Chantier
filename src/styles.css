@@ -227,7 +227,8 @@ body { max-width: 100%; padding-bottom: 100px }
 
 /* Navigation */
 .bot-nav { flex-shrink: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -2px 14px rgba(2, 69, 122, .06) }
-.bnav { border: 0; background: none; padding: 9px 2px 11px; font-size: .58rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; width: 100% }
+.bot-nav { min-height: 58px }
+.bnav { border: 0; background: none; padding: 8px 2px; font-size: .58rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: color .2s; width: 100%; line-height: 1.1 }
 .bnav.active { color: var(--accent); border-top-color: var(--accent) }
 .bnav svg { width: 20px; height: 20px }
 
