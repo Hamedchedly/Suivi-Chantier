@@ -42,7 +42,15 @@ const KEYS = {
   alertActions: 'sc-alert-actions-v1',
   holidays: 'sc-holidays-v1',
   dpgf: 'sc-dpgf-v1',
+  ganttPrefs: 'sc-gantt-prefs-v1',
 } as const
+
+export type GanttGroup = 'lot' | 'zone' | 'chrono'
+export interface GanttPrefs {
+  zoom: number
+  group: GanttGroup
+}
+const DEFAULT_GANTT_PREFS: GanttPrefs = { zoom: 1, group: 'lot' }
 
 export interface Holiday {
   start: Date
@@ -223,4 +231,13 @@ export function getDpgf(): DpgfLine[] {
 }
 export function saveDpgf(lines: DpgfLine[]): void {
   saveState(KEYS.dpgf, lines)
+}
+
+// ── Préférences Gantt (zoom, regroupement) — persistées ─────────────────────
+
+export function getGanttPrefs(): GanttPrefs {
+  return { ...DEFAULT_GANTT_PREFS, ...loadState<Partial<GanttPrefs>>(KEYS.ganttPrefs, {}) }
+}
+export function saveGanttPrefs(p: GanttPrefs): void {
+  saveState(KEYS.ganttPrefs, p)
 }

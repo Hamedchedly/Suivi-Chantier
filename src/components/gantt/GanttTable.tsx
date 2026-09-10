@@ -7,6 +7,7 @@ interface GanttTableProps {
   viewState: GanttViewState
   onToggleExpanded: (taskId: string) => void
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
+  onTaskClick?: (task: GanttTask) => void
   readOnly?: boolean
 }
 
@@ -92,7 +93,7 @@ function flattenVisible(
   return acc
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, readOnly }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onTaskClick, readOnly }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -261,7 +262,10 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             ) : (
               <div style={{ width: 14 }} />
             )}
-            <span style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined }}>
+            <span
+              onClick={() => onTaskClick?.(task)}
+              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: onTaskClick ? 'pointer' : 'default' }}
+            >
               {task.title}
             </span>
           </div>
@@ -286,9 +290,9 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             {curWeekVisible && (
               <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.10)', borderLeft: '1px solid rgba(1,138,190,.35)', borderRight: '1px solid rgba(1,138,190,.35)', zIndex: 0, pointerEvents: 'none' }} />
             )}
-            {/* Today marker */}
+            {/* Today marker — solid red line */}
             {todayVisible && (
-              <div style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(220,38,38,.5)', zIndex: 1, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: todayLeftPx - 1, top: 0, width: 2, height: '100%', background: '#dc2626', zIndex: 2, pointerEvents: 'none', boxShadow: '0 0 0 1px rgba(220,38,38,.15)' }} />
             )}
 
             {task.is_milestone ? (
@@ -362,7 +366,15 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             <tr>
               <th className="gantt-task-header">Tâche</th>
               <th className="gantt-progress-header">%</th>
-              <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx }}>
+              <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx, position: 'relative' }}>
+                {/* Current-week highlight in header */}
+                {curWeekVisible && (
+                  <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.10)', borderLeft: '1px solid rgba(1,138,190,.35)', borderRight: '1px solid rgba(1,138,190,.35)', zIndex: 0, pointerEvents: 'none' }} />
+                )}
+                {/* Today triangle marker */}
+                {todayVisible && (
+                  <div style={{ position: 'absolute', left: todayLeftPx - 5, top: 0, width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '6px solid #dc2626', zIndex: 3, pointerEvents: 'none' }} />
+                )}
                 {/* Month row */}
                 <div style={{ position: 'relative', height: 22 }}>
                   {months.map((m, i) => (

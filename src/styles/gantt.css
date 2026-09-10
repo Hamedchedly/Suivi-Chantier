@@ -162,16 +162,17 @@
   border-radius: 2px;
 }
 
-/* Baseline (contractual) hatched bar — sits behind the actual bar */
+/* Baseline (contractual) hatched bar — same footprint as the actual bar */
 .gantt-baseline {
   position: absolute;
-  top: 3px;
-  height: 22px;
-  border-radius: 2px;
+  top: 7px;
+  height: 14px;
+  border-radius: 3px;
   background: repeating-linear-gradient(45deg, #c8d2db 0 4px, #eef2f6 4px 8px);
   border: 1px solid #cfd8e0;
   z-index: 1;
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 /* Gantt Bar — thinner, overlaid on top of the baseline hatch */
