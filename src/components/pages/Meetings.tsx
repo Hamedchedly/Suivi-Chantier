@@ -18,7 +18,10 @@ export function Meetings() {
   const overdue = new Set(overdueActions(meetings, new Date()).map(a => a.id))
 
   const toggleOpen = (id: string) => setOpen(prev => {
-    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+    const n = new Set(prev)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    return n
   })
 
   const addMeeting = () => {
