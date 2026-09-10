@@ -7,6 +7,7 @@ interface GanttTableProps {
   viewState: GanttViewState
   onToggleExpanded: (taskId: string) => void
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
+  readOnly?: boolean
 }
 
 interface DragState {
@@ -95,7 +96,8 @@ function flattenVisible(
   return acc
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, readOnly }: GanttTableProps) {
+  const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -273,14 +275,14 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             {task.is_milestone ? (
               /* Milestone diamond */
               <div
-                onMouseDown={e => handleBarMouseDown(task, e, 'move')}
+                onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
                 title={tooltip}
                 style={{
                   position: 'absolute', left: bar.leftPx - 7, top: 7, width: 14, height: 14,
                   background: task.progress >= 100 ? '#15803d' : '#0b3b60',
                   transform: 'rotate(45deg)', borderRadius: 2, zIndex: 3,
                   border: '1.5px solid #fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)',
-                  cursor: 'grab', opacity: dimmed ? 0.3 : 1,
+                  cursor: editable ? 'grab' : 'default', opacity: dimmed ? 0.3 : 1,
                 }}
               />
             ) : (
@@ -289,21 +291,23 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {base && <div className="gantt-baseline" style={{ left: base.leftPx, width: base.widthPx }} />}
 
                 {/* Left resize handle */}
-                <div
-                  onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
-                  style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
-                />
+                {editable && (
+                  <div
+                    onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
+                    style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                  />
+                )}
 
                 {/* Actual/planned bar */}
                 <div
                   className="gantt-bar"
-                  onMouseDown={e => handleBarMouseDown(task, e, 'move')}
+                  onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
                   style={{
                     left: bar.leftPx,
                     width: bar.widthPx,
                     backgroundColor: getStatusColor(task.status),
                     boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #b91c1c' : undefined,
-                    cursor: dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
+                    cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
                   }}
                   title={tooltip}
                 >
@@ -318,10 +322,12 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 </div>
 
                 {/* Right resize handle */}
-                <div
-                  onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
-                  style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
-                />
+                {editable && (
+                  <div
+                    onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
+                    style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                  />
+                )}
               </div>
             )}
           </div>

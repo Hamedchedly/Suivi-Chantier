@@ -1,7 +1,8 @@
-import { Download, Eye, Sparkles } from 'lucide-react'
+import { Download, Eye, Sparkles, Share2, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { CRReport } from './CRReport'
 import { Documents } from './Documents'
+import { buildSnapshot, buildShareUrl } from '../../lib/share'
 
 interface Report {
   id: string
@@ -43,6 +44,20 @@ export function Reports() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
   const [showAutoReport, setShowAutoReport] = useState(false)
   const [tab, setTab] = useState<'cr' | 'docs'>('cr')
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const generateShare = async () => {
+    const url = buildShareUrl(buildSnapshot())
+    setShareUrl(url)
+    setCopied(false)
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      // clipboard blocked — the field below lets the user copy manually
+    }
+  }
 
   if (showAutoReport) {
     return <CRReport number={MOCK_REPORTS.length + 1} onBack={() => setShowAutoReport(false)} />
@@ -82,6 +97,28 @@ export function Reports() {
         <Sparkles size={17} />
         Générer le CR automatique
       </button>
+
+      {/* Share read-only link for MOA */}
+      <button
+        onClick={generateShare}
+        style={{ width: '100%', marginBottom: shareUrl ? '10px' : '16px', padding: '12px', borderRadius: '12px', border: '1px solid #d1dce5', background: '#fff', color: 'var(--navy)', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+      >
+        <Share2 size={16} />
+        Partager le suivi (MOA — lecture seule)
+      </button>
+      {shareUrl && (
+        <div style={{ marginBottom: '16px', padding: '10px 12px', borderRadius: '10px', background: 'var(--ok-bg)', border: '1px solid #cbe8d5' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--ok)', marginBottom: '6px' }}>
+            {copied ? <><Check size={14} /> Lien copié — la MOA peut consulter sans compte</> : 'Lien de partage prêt'}
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()} style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #d1dce5', fontSize: '11px', background: '#fff', color: 'var(--muted)' }} />
+            <button onClick={() => { navigator.clipboard?.writeText(shareUrl).then(() => setCopied(true)).catch(() => {}) }} style={{ padding: '8px 10px', borderRadius: '6px', border: 'none', background: 'var(--navy)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Copier">
+              <Copy size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Reports List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

@@ -19,6 +19,15 @@ function reviver(_key: string, value: unknown) {
   return value
 }
 
+/** Date-aware JSON serialize/deserialize (reused for URL share snapshots). */
+export function serialize<T>(value: T): string {
+  return JSON.stringify(value, replacer)
+}
+
+export function deserialize<T>(raw: string): T {
+  return JSON.parse(raw, reviver) as T
+}
+
 export function loadState<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
