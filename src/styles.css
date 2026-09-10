@@ -202,9 +202,9 @@ body { max-width: 100%; padding-bottom: 100px }
 .btn-primary:hover { filter: brightness(1.08) }
 .btn-primary:active { transform: translateY(1px) }
 
-/* App shell */
-.app-wrapper { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg) }
-.app-body { flex: 1 }
+/* App shell — body scrolls internally so the bottom nav never shifts on scroll */
+.app-wrapper { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; background: var(--bg) }
+.app-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain }
 
 /* Topbar */
 .topbar { position: sticky; top: 0; z-index: 20; background: linear-gradient(135deg, #02457A 0%, #001B48 100%); color: #fff; padding: 12px 16px 14px; box-shadow: 0 4px 18px rgba(0, 27, 72, .28) }
@@ -213,7 +213,7 @@ body { max-width: 100%; padding-bottom: 100px }
 .topbar-sub { font-size: .78rem; color: var(--sky); margin-top: 3px }
 
 /* Navigation */
-.bot-nav { position: sticky; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(6, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -2px 14px rgba(2, 69, 122, .06) }
+.bot-nav { flex-shrink: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -2px 14px rgba(2, 69, 122, .06) }
 .bnav { border: 0; background: none; padding: 9px 2px 11px; font-size: .58rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; width: 100% }
 .bnav.active { color: var(--accent); border-top-color: var(--accent) }
 .bnav svg { width: 20px; height: 20px }

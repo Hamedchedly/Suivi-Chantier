@@ -22,6 +22,7 @@ import { Marche, Avenant, Situation } from './finance'
 import { DEFAULT_MARCHES, DEFAULT_AVENANTS, DEFAULT_SITUATIONS } from '../data/financeMock'
 import { Rfi, Visa, Doc } from './admin'
 import { DEFAULT_RFIS, DEFAULT_VISAS, DEFAULT_DOCS } from '../data/adminMock'
+import { AlertActions } from './alerts'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -36,6 +37,7 @@ const KEYS = {
   rfis: 'sc-rfis-v1',
   visas: 'sc-visas-v1',
   docs: 'sc-docs-v1',
+  alertActions: 'sc-alert-actions-v1',
 } as const
 
 // ── Entity types owned by the repository ────────────────────────────────────
@@ -178,4 +180,13 @@ export function getDocs(): Doc[] {
 }
 export function saveDocs(d: Doc[]): void {
   saveState(KEYS.docs, d)
+}
+
+// ── Alertes (actions utilisateur : résolu / épinglé réunion) ────────────────
+
+export function getAlertActions(): AlertActions {
+  return loadState<AlertActions>(KEYS.alertActions, {})
+}
+export function saveAlertActions(a: AlertActions): void {
+  saveState(KEYS.alertActions, a)
 }

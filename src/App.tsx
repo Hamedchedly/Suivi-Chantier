@@ -5,12 +5,13 @@ import { CR } from './components/pages/CR'
 import { Reports } from './components/pages/Reports'
 import { Config } from './components/pages/Config'
 import { Finances } from './components/pages/Finances'
+import { Alertes } from './components/pages/Alertes'
 import { ShareView } from './components/pages/ShareView'
 import { Navigation } from './components/layout/Navigation'
 import { Topbar } from './components/layout/Topbar'
 import { readShareFromUrl } from './lib/share'
 
-export type Page = 'home' | 'gantt' | 'cr' | 'finances' | 'config' | 'rapports'
+export type Page = 'home' | 'gantt' | 'cr' | 'finances' | 'config' | 'rapports' | 'alertes'
 
 const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   home:     { title: 'Gambetta — Réhabilitation', sub: 'GAM-2026-001 • 111 Rue Gambetta, Reims' },
@@ -19,6 +20,7 @@ const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   finances: { title: 'Finances', sub: 'Marchés, avenants & situations' },
   config:   { title: 'Configuration', sub: 'Paramètres du projet' },
   rapports: { title: 'Rapports', sub: 'CRs envoyés et brouillons' },
+  alertes:  { title: 'Alertes & vigilance', sub: 'Retards, dérives et points à évoquer' },
 }
 
 export default function App() {
@@ -45,6 +47,7 @@ export default function App() {
         {currentPage === 'cr'       && <CR />}
         {currentPage === 'finances' && <Finances />}
         {currentPage === 'rapports' && <Reports />}
+        {currentPage === 'alertes'  && <Alertes />}
         {currentPage === 'config'   && <Config />}
       </div>
       <Navigation currentPage={currentPage} onPageChange={setCurrentPage} />
