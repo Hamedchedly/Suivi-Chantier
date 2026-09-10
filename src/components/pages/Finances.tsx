@@ -8,8 +8,9 @@ import {
 import {
   getMarches, getAvenants, saveAvenants, getSituations, saveSituations,
 } from '../../lib/repo'
+import { DpgfView } from './DpgfView'
 
-type FinSection = 'marches' | 'avenants' | 'situations'
+type FinSection = 'marches' | 'avenants' | 'situations' | 'dpgf'
 
 const AVENANT_META: Record<AvenantStatus, { label: string; bg: string; fg: string }> = {
   proposed: { label: 'Proposé', bg: '#fef3c7', fg: '#b45309' },
@@ -77,13 +78,15 @@ export function Finances() {
       </div>
 
       {/* Segmented */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-        {(['marches', 'avenants', 'situations'] as const).map(s => (
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#eef2f6', padding: '3px', borderRadius: '8px', overflowX: 'auto' }}>
+        {(['marches', 'avenants', 'situations', 'dpgf'] as const).map(s => (
           <button key={s} onClick={() => setSection(s)} style={seg(section === s)}>
-            {s === 'marches' ? 'Marchés' : s === 'avenants' ? 'Avenants' : 'Situations'}
+            {s === 'marches' ? 'Marchés' : s === 'avenants' ? 'Avenants' : s === 'situations' ? 'Situations' : 'DPGF'}
           </button>
         ))}
       </div>
+
+      {section === 'dpgf' && <DpgfView />}
 
       {/* Marchés */}
       {section === 'marches' && (

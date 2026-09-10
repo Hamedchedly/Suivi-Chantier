@@ -23,6 +23,8 @@ import { DEFAULT_MARCHES, DEFAULT_AVENANTS, DEFAULT_SITUATIONS } from '../data/f
 import { Rfi, Visa, Doc } from './admin'
 import { DEFAULT_RFIS, DEFAULT_VISAS, DEFAULT_DOCS } from '../data/adminMock'
 import { AlertActions } from './alerts'
+import { DpgfLine } from './dpgf'
+import { DEFAULT_DPGF } from '../data/dpgfMock'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -39,6 +41,7 @@ const KEYS = {
   docs: 'sc-docs-v1',
   alertActions: 'sc-alert-actions-v1',
   holidays: 'sc-holidays-v1',
+  dpgf: 'sc-dpgf-v1',
 } as const
 
 export interface Holiday {
@@ -211,4 +214,13 @@ export function getHolidays(): Holiday[] {
 }
 export function saveHolidays(h: Holiday[]): void {
   saveState(KEYS.holidays, h)
+}
+
+// ── DPGF (quantitatif) ──────────────────────────────────────────────────────
+
+export function getDpgf(): DpgfLine[] {
+  return loadState<DpgfLine[]>(KEYS.dpgf, DEFAULT_DPGF)
+}
+export function saveDpgf(lines: DpgfLine[]): void {
+  saveState(KEYS.dpgf, lines)
 }
