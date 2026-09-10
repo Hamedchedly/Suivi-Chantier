@@ -69,7 +69,7 @@ export function Meetings() {
           {meetings.length} réunion{meetings.length > 1 ? 's' : ''} • {openCount} action{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''}
           {overdue.size > 0 && <span style={{ color: 'var(--bad)', fontWeight: 700 }}> • {overdue.size} en retard</span>}
         </div>
-        <button onClick={() => setShowForm(v => !v)} style={primaryBtn}><Plus size={15} /> Réunion</button>
+        <button onClick={() => setShowForm(v => !v)} title="Nouvelle réunion" style={primaryBtn}><Plus size={15} /> Réunion</button>
       </div>
 
       {showForm && (
