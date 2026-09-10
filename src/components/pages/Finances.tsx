@@ -1,0 +1,184 @@
+import { useState, useEffect } from 'react'
+import { Check } from 'lucide-react'
+import {
+  Avenant, Situation, AvenantStatus,
+  projectFinance, marcheFinance, euros,
+} from '../../lib/finance'
+import {
+  getMarches, getAvenants, saveAvenants, getSituations, saveSituations,
+} from '../../lib/repo'
+
+type FinSection = 'marches' | 'avenants' | 'situations'
+
+const AVENANT_META: Record<AvenantStatus, { label: string; bg: string; fg: string }> = {
+  proposed: { label: 'Proposé', bg: '#fef3c7', fg: '#b45309' },
+  approved: { label: 'Validé', bg: '#dcfce7', fg: '#15803d' },
+  rejected: { label: 'Rejeté', bg: '#fdecec', fg: '#b91c1c' },
+}
+
+const lotShort = (lotId: string) => lotId.replace('L', 'LOT ')
+
+export function Finances() {
+  const [section, setSection] = useState<FinSection>('marches')
+  const marches = getMarches()
+  const [avenants, setAvenants] = useState<Avenant[]>(getAvenants)
+  const [situations, setSituations] = useState<Situation[]>(getSituations)
+
+  useEffect(() => { saveAvenants(avenants) }, [avenants])
+  useEffect(() => { saveSituations(situations) }, [situations])
+
+  const pf = projectFinance(marches, avenants, situations)
+
+  const approveAvenant = (id: string) =>
+    setAvenants(prev => prev.map(a => (a.id === id ? { ...a, status: 'approved' } : a)))
+  const toggleSituation = (id: string) =>
+    setSituations(prev => prev.map(s => (s.id === id ? { ...s, status: s.status === 'paid' ? 'pending' : 'paid' } : s)))
+
+  return (
+    <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {/* KPIs */}
+      <div className="kpi-grid" style={{ marginBottom: '12px' }}>
+        <Kpi label="Budget (HT)" value={euros(pf.budget)} />
+        <Kpi label="Facturé" value={euros(pf.billed)} sub={`${pf.billedPct}%`} />
+        <Kpi label="Payé" value={euros(pf.paid)} variant="ok" />
+        <Kpi label="Reste à facturer" value={euros(pf.remaining)} variant="warn" />
+      </div>
+
+      {/* Budget bar */}
+      <div style={{ marginBottom: '14px' }}>
+        <div style={{ height: '10px', borderRadius: '5px', background: 'var(--line)', overflow: 'hidden', display: 'flex' }}>
+          <div style={{ width: `${pctOf(pf.paid, pf.budget)}%`, background: 'var(--ok)' }} title={`Payé ${euros(pf.paid)}`} />
+          <div style={{ width: `${pctOf(pf.billed - pf.paid, pf.budget)}%`, background: 'var(--navy2)' }} title={`En attente ${euros(pf.billed - pf.paid)}`} />
+        </div>
+        <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '10px', color: 'var(--muted)' }}>
+          <Legend color="var(--ok)" label="Payé" />
+          <Legend color="var(--navy2)" label="Facturé non payé" />
+          <Legend color="var(--line)" label="Reste" />
+          <div style={{ flex: 1 }} />
+          {pf.avenants !== 0 && <span>dont avenants {euros(pf.avenants)}</span>}
+        </div>
+      </div>
+
+      {/* Segmented */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+        {(['marches', 'avenants', 'situations'] as const).map(s => (
+          <button key={s} onClick={() => setSection(s)} style={seg(section === s)}>
+            {s === 'marches' ? 'Marchés' : s === 'avenants' ? 'Avenants' : 'Situations'}
+          </button>
+        ))}
+      </div>
+
+      {/* Marchés */}
+      {section === 'marches' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {marches.map(m => {
+            const f = marcheFinance(m, avenants, situations)
+            return (
+              <div key={m.id} style={card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: '13px' }}>{lotShort(m.lotId)} — {m.company}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>Montant marché : {euros(f.amount)}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, color: 'var(--navy-2)', fontSize: '14px' }}>{f.billedPct}%</div>
+                </div>
+                <div style={{ height: '8px', borderRadius: '4px', background: 'var(--line)', overflow: 'hidden', margin: '8px 0 4px' }}>
+                  <div style={{ width: `${f.billedPct}%`, height: '100%', background: 'var(--navy2)' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
+                  <span>Facturé {euros(f.billed)}</span>
+                  <span>Payé {euros(f.paid)}</span>
+                  <span>Reste {euros(f.remaining)}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Avenants */}
+      {section === 'avenants' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {avenants.map(a => {
+            const meta = AVENANT_META[a.status]
+            const marche = marches.find(m => m.id === a.marcheId)
+            return (
+              <div key={a.id} style={card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <span style={{ padding: '2px 7px', borderRadius: '10px', fontSize: '9px', fontWeight: 700, background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{marche ? lotShort(marche.lotId) : a.marcheId}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--ink)' }}>{a.label}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: a.amountHT >= 0 ? 'var(--navy-2)' : 'var(--bad)' }}>
+                    {a.amountHT >= 0 ? '+' : ''}{euros(a.amountHT)}
+                  </div>
+                </div>
+                {a.status === 'proposed' && (
+                  <button onClick={() => approveAvenant(a.id)} style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--ok)', cursor: 'pointer' }}>
+                    <Check size={13} /> Valider l'avenant
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Situations */}
+      {section === 'situations' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {situations.map(s => {
+            const marche = marches.find(m => m.id === s.marcheId)
+            return (
+              <div key={s.id} style={card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: '13px' }}>
+                      Situation N°{s.number} — {marche ? lotShort(marche.lotId) : s.marcheId}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{new Date(s.date).toLocaleDateString('fr')} • {euros(s.amountHT)}</div>
+                  </div>
+                  <button
+                    onClick={() => toggleSituation(s.id)}
+                    style={{ padding: '5px 10px', borderRadius: '14px', border: 'none', fontSize: '11px', fontWeight: 700, cursor: 'pointer', background: s.status === 'paid' ? 'var(--ok-bg)' : 'var(--warn-bg)', color: s.status === 'paid' ? 'var(--ok)' : 'var(--warn)' }}
+                  >
+                    {s.status === 'paid' ? 'Payée' : 'En attente'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function pctOf(part: number, whole: number): number {
+  return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0
+}
+
+function Kpi({ label, value, sub, variant }: { label: string; value: string; sub?: string; variant?: 'ok' | 'warn' }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-label">{label}</div>
+      <div className={`kpi-value ${variant || ''}`} style={{ fontSize: '18px' }}>{value}</div>
+      {sub && <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ width: '9px', height: '9px', borderRadius: '2px', background: color, display: 'inline-block' }} />
+      {label}
+    </span>
+  )
+}
+
+const card: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', background: '#fff' }
+const seg = (on: boolean): React.CSSProperties => ({ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: on ? '#fff' : 'transparent', color: on ? '#0b3b60' : '#5c6f80', boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' })

@@ -1,6 +1,6 @@
-import { Home, BarChart3, FileText, Settings, ClipboardList } from 'lucide-react'
+import { Home, BarChart3, FileText, Settings, ClipboardList, Euro } from 'lucide-react'
 
-type Page = 'home' | 'gantt' | 'cr' | 'config' | 'rapports'
+type Page = 'home' | 'gantt' | 'cr' | 'finances' | 'config' | 'rapports'
 
 interface NavigationProps {
   currentPage: Page
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { id: 'home' as const,    label: 'Accueil',  icon: Home },
   { id: 'gantt' as const,   label: 'Planning', icon: BarChart3 },
   { id: 'cr' as const,      label: 'CR',       icon: ClipboardList },
+  { id: 'finances' as const,label: 'Finances', icon: Euro },
   { id: 'config' as const,  label: 'Config',   icon: Settings },
   { id: 'rapports' as const,label: 'Rapports', icon: FileText },
 ]

@@ -201,8 +201,8 @@ body { max-width: 100%; padding-bottom: 100px }
 .topbar-sub { font-size: .78rem; color: #9bc4df; margin-top: 2px }
 
 /* Navigation */
-.bot-nav { position: sticky; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px) }
-.bnav { border: 0; background: none; padding: 10px 4px 12px; font-size: .62rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; width: 100% }
+.bot-nav { position: sticky; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(6, 1fr); z-index: 100; padding-bottom: env(safe-area-inset-bottom, 0px) }
+.bnav { border: 0; background: none; padding: 10px 2px 12px; font-size: .58rem; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 3px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .2s; width: 100% }
 .bnav.active { color: var(--navy); border-top-color: var(--navy-2) }
 .bnav svg { width: 20px; height: 20px }
 

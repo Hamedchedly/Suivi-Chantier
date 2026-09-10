@@ -18,6 +18,8 @@
 import { GanttTask } from '../types/gantt'
 import { GANTT_TASKS } from '../data/ganttMockData'
 import { Reserve } from './reserves'
+import { Marche, Avenant, Situation } from './finance'
+import { DEFAULT_MARCHES, DEFAULT_AVENANTS, DEFAULT_SITUATIONS } from '../data/financeMock'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -26,6 +28,9 @@ const KEYS = {
   reserves: 'sc-reserves-v1',
   visits: 'sc-visits-v1',
   lotsConfig: 'sc-lots-config-v1',
+  marches: 'sc-marches-v1',
+  avenants: 'sc-avenants-v1',
+  situations: 'sc-situations-v1',
 } as const
 
 // ── Entity types owned by the repository ────────────────────────────────────
@@ -120,4 +125,28 @@ export function getLotsConfig(): LotContact[] {
 
 export function saveLotsConfig(lots: LotContact[]): void {
   saveState(KEYS.lotsConfig, lots)
+}
+
+// ── Finances (marchés / avenants / situations) ──────────────────────────────
+// Supabase mapping: markets, market_amendments, market_situations.
+
+export function getMarches(): Marche[] {
+  return loadState<Marche[]>(KEYS.marches, DEFAULT_MARCHES)
+}
+export function saveMarches(m: Marche[]): void {
+  saveState(KEYS.marches, m)
+}
+
+export function getAvenants(): Avenant[] {
+  return loadState<Avenant[]>(KEYS.avenants, DEFAULT_AVENANTS)
+}
+export function saveAvenants(a: Avenant[]): void {
+  saveState(KEYS.avenants, a)
+}
+
+export function getSituations(): Situation[] {
+  return loadState<Situation[]>(KEYS.situations, DEFAULT_SITUATIONS)
+}
+export function saveSituations(s: Situation[]): void {
+  saveState(KEYS.situations, s)
 }
