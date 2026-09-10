@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Plus, Calendar, ChevronRight } from 'lucide-react'
 import { loadState, saveState } from '../../lib/storage'
+import { Reserves } from './Reserves'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
+type CRSection = 'cr' | 'reserves'
 
 interface Visit {
   id: string
@@ -41,6 +43,7 @@ function formatFr(iso: string): string {
 }
 
 export function CR() {
+  const [section, setSection] = useState<CRSection>('cr')
   const [step, setStep] = useState<CRStep>('list')
   const [draft, setDraft] = useState<VisitDraft>(emptyDraft)
   const [visits, setVisits] = useState<Visit[]>(() =>
@@ -189,9 +192,34 @@ export function CR() {
     )
   }
 
-  // Default: list view
+  // Segmented control (shared by both sections)
+  const segmented = (
+    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+      {(['cr', 'reserves'] as const).map(s => (
+        <button
+          key={s}
+          onClick={() => setSection(s)}
+          style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: section === s ? '#fff' : 'transparent', color: section === s ? '#0b3b60' : '#5c6f80', boxShadow: section === s ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+        >
+          {s === 'cr' ? 'Comptes rendus' : 'Réserves'}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (section === 'reserves') {
+    return (
+      <div>
+        <div style={{ padding: '12px 12px 0' }}>{segmented}</div>
+        <Reserves />
+      </div>
+    )
+  }
+
+  // Default: CR list view
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {segmented}
       <button
         onClick={() => setStep('presences')}
         style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: 'var(--navy)', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '20px' }}

@@ -6,6 +6,7 @@ import { ZONES } from '../../data/zones'
 import { loadState, saveState } from '../../lib/storage'
 import { maxDrift, lateTasks } from '../../lib/schedule'
 import GanttTable from '../gantt/GanttTable'
+import LogementMatrix from '../gantt/LogementMatrix'
 import '../../styles/gantt.css'
 
 // v2: data model gained zone_id / logement_id — invalidate v1 stored trees
@@ -49,6 +50,7 @@ const filterTasks = (
 }
 
 export function Gantt() {
+  const [mode, setMode] = useState<'gantt' | 'matrix'>('gantt')
   const [view, setView] = useState<'week' | 'month'>('week')
   const [selectedLot, setSelectedLot] = useState<string | null>(null)
   const [selectedZone, setSelectedZone] = useState<string | null>(null)
@@ -99,6 +101,22 @@ export function Gantt() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {/* Mode switch: Gantt vs Damier logements */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '10px', background: '#eef2f6', padding: '3px', borderRadius: '8px', width: 'fit-content' }}>
+        <button
+          onClick={() => setMode('gantt')}
+          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'gantt' ? '#fff' : 'transparent', color: mode === 'gantt' ? '#0b3b60' : '#5c6f80', boxShadow: mode === 'gantt' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+        >
+          Gantt
+        </button>
+        <button
+          onClick={() => setMode('matrix')}
+          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: mode === 'matrix' ? '#fff' : 'transparent', color: mode === 'matrix' ? '#0b3b60' : '#5c6f80', boxShadow: mode === 'matrix' ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+        >
+          Damier logements
+        </button>
+      </div>
+
       {/* Drift / late banner */}
       {(drift > 0 || lateCount > 0) && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -135,6 +153,10 @@ export function Gantt() {
         ))}
       </div>
 
+      {mode === 'matrix' ? (
+        <LogementMatrix tasks={filteredTasks} />
+      ) : (
+      <>
       {/* Toolbar — row 2: zone filter + controls */}
       <div className="g-toolbar">
         <select
@@ -191,6 +213,8 @@ export function Gantt() {
           onTaskUpdate={handleTaskUpdate}
         />
       </div>
+      </>
+      )}
     </div>
   )
 }
