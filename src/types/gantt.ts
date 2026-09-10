@@ -45,5 +45,7 @@ export interface GanttViewState {
   selectedZoneId?: string | null // filter by logement
   depsVisible: boolean
   highlightCritical?: boolean // dim non-critical tasks
+  zoom?: number // day-width multiplier (default 1)
+  holidays?: { start: Date; end: Date; label?: string }[] // hatched/greyed columns
   expandedTasks: Set<string>
 }

@@ -25,14 +25,6 @@ interface DepLine {
 
 const MONTH_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
-function isoWeek(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const day = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - day)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
-}
-
 function buildHeaders(startDate: Date, daysInRange: number, dayWidthPx: number) {
   const msPerDay = 86400000
   const months: { label: string; leftPx: number; widthPx: number }[] = []
@@ -54,13 +46,17 @@ function buildHeaders(startDate: Date, daysInRange: number, dayWidthPx: number) 
     day += span
   }
 
+  // Weeks numbered relative to the project start: the start week is S0.
+  // startDate is anchored to a Monday, so segments are clean 7-day weeks.
   day = 0
+  let weekIndex = 0
   while (day < daysInRange) {
     const date = new Date(startDate.getTime() + day * msPerDay)
     const dow = date.getDay() || 7
     const span = Math.min(8 - dow, daysInRange - day)
-    weeks.push({ label: `S${isoWeek(date)}`, leftPx: day * dayWidthPx, widthPx: span * dayWidthPx })
+    weeks.push({ label: `S${weekIndex}`, leftPx: day * dayWidthPx, widthPx: span * dayWidthPx })
     day += span
+    weekIndex++
   }
 
   return { months, weeks }
@@ -104,7 +100,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const [depLines, setDepLines] = useState<DepLine[]>([])
   const [svgSize, setSvgSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
-  const dayWidthPx = viewState.view === 'week' ? 24 : 12
+  const dayWidthPx = (viewState.view === 'week' ? 24 : 12) * (viewState.zoom ?? 1)
   const msPerDay = 86400000
   const daysInRange = Math.ceil(
     (viewState.endDate.getTime() - viewState.startDate.getTime()) / msPerDay,
@@ -115,6 +111,21 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const todayOffset = Math.floor((Date.now() - viewState.startDate.getTime()) / msPerDay)
   const todayVisible = todayOffset >= 0 && todayOffset < daysInRange
   const todayLeftPx = todayOffset * dayWidthPx
+
+  // Current-week band (startDate is Monday-anchored → weeks align on 7-day steps)
+  const curWeekStartDay = Math.floor(todayOffset / 7) * 7
+  const curWeekVisible = todayOffset >= 0 && curWeekStartDay < daysInRange
+  const curWeekLeftPx = Math.max(0, curWeekStartDay) * dayWidthPx
+  const curWeekWidthPx = (Math.min(daysInRange, curWeekStartDay + 7) - Math.max(0, curWeekStartDay)) * dayWidthPx
+
+  // Holiday / non-working bands (hatched grey columns)
+  const holidayBands = (viewState.holidays ?? [])
+    .map(h => {
+      const s = Math.max(0, Math.floor((h.start.getTime() - viewState.startDate.getTime()) / msPerDay))
+      const e = Math.min(daysInRange, Math.ceil((h.end.getTime() - viewState.startDate.getTime()) / msPerDay))
+      return { leftPx: s * dayWidthPx, widthPx: (e - s) * dayWidthPx, label: h.label }
+    })
+    .filter(b => b.widthPx > 0)
 
   const visible = flattenVisible(tasks, viewState.expandedTasks)
 
@@ -267,9 +278,17 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               else containerRefs.current.delete(task.id)
             }}
           >
+            {/* Holiday / non-working bands */}
+            {holidayBands.map((b, i) => (
+              <div key={`h${i}`} title={b.label} style={{ position: 'absolute', left: b.leftPx, top: 0, width: b.widthPx, height: '100%', zIndex: 0, pointerEvents: 'none', background: 'repeating-linear-gradient(45deg, rgba(91,113,131,.12) 0 6px, rgba(91,113,131,.04) 6px 12px)' }} />
+            ))}
+            {/* Current-week highlight band */}
+            {curWeekVisible && (
+              <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.10)', borderLeft: '1px solid rgba(1,138,190,.35)', borderRight: '1px solid rgba(1,138,190,.35)', zIndex: 0, pointerEvents: 'none' }} />
+            )}
             {/* Today marker */}
             {todayVisible && (
-              <div style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(185,28,28,.35)', zIndex: 1, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: todayLeftPx, top: 0, width: 2, height: '100%', background: 'rgba(220,38,38,.5)', zIndex: 1, pointerEvents: 'none' }} />
             )}
 
             {task.is_milestone ? (

@@ -38,7 +38,20 @@ const KEYS = {
   visas: 'sc-visas-v1',
   docs: 'sc-docs-v1',
   alertActions: 'sc-alert-actions-v1',
+  holidays: 'sc-holidays-v1',
 } as const
+
+export interface Holiday {
+  start: Date
+  end: Date
+  label?: string
+}
+
+const _today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })()
+const _addDays = (n: number) => new Date(_today.getTime() + n * 86400000)
+const DEFAULT_HOLIDAYS: Holiday[] = [
+  { start: _addDays(28), end: _addDays(35), label: 'Congés' },
+]
 
 // ── Entity types owned by the repository ────────────────────────────────────
 
@@ -189,4 +202,13 @@ export function getAlertActions(): AlertActions {
 }
 export function saveAlertActions(a: AlertActions): void {
   saveState(KEYS.alertActions, a)
+}
+
+// ── Congés / périodes non travaillées ───────────────────────────────────────
+
+export function getHolidays(): Holiday[] {
+  return loadState<Holiday[]>(KEYS.holidays, DEFAULT_HOLIDAYS)
+}
+export function saveHolidays(h: Holiday[]): void {
+  saveState(KEYS.holidays, h)
 }

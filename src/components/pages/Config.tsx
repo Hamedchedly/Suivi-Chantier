@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
+import { PlanningConfig } from './PlanningConfig'
 
-type ConfigTab = 'project' | 'lots' | 'email' | 'export' | 'backup'
+type ConfigTab = 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
 
 interface ProjectConfig {
   name: string
@@ -35,6 +36,7 @@ export function Config() {
 
   const tabs: { id: ConfigTab; label: string }[] = [
     { id: 'project', label: 'Projet' },
+    { id: 'planning', label: 'Planning & congés' },
     { id: 'lots', label: 'Lots & contacts' },
     { id: 'email', label: 'Modèle mail' },
     { id: 'export', label: 'Export' },
@@ -194,6 +196,9 @@ export function Config() {
             </button>
           </div>
         )}
+
+        {/* Planning & holidays Tab */}
+        {activeTab === 'planning' && <PlanningConfig />}
 
         {/* Lots Tab */}
         {activeTab === 'lots' && (

@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap } from 'lucide-react'
+import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
 import { ZONES } from '../../data/zones'
-import { getGanttTasks, saveGanttTasks } from '../../lib/repo'
+import { getGanttTasks, saveGanttTasks, getHolidays } from '../../lib/repo'
 import { maxDrift, lateTasks } from '../../lib/schedule'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
@@ -51,19 +51,34 @@ export function Gantt() {
   const [selectedZone, setSelectedZone] = useState<string | null>(null)
   const [depsVisible, setDepsVisible] = useState(true)
   const [highlightCritical, setHighlightCritical] = useState(false)
+  const [zoom, setZoom] = useState(1)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
+  const holidays = useMemo(() => getHolidays(), [])
 
   useEffect(() => {
     saveGanttTasks(ganttTasks)
   }, [ganttTasks])
 
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - 21)
-  startDate.setHours(0, 0, 0, 0)
-
-  const endDate = new Date()
-  endDate.setDate(endDate.getDate() + 63)
+  // Anchor the timeline to the project start: Monday of the earliest baseline,
+  // so the first column is week S0. End = latest task end + 2 weeks of margin.
+  const { startDate, endDate } = useMemo(() => {
+    const dates = ganttTasks.flatMap(l => [
+      (l.baseline_start ?? l.planned_start).getTime(),
+      ...(l.children ?? []).map(c => (c.baseline_start ?? c.planned_start).getTime()),
+    ])
+    const ends = ganttTasks.flatMap(l => [
+      l.planned_end.getTime(), (l.baseline_end ?? l.planned_end).getTime(),
+      ...(l.children ?? []).flatMap(c => [c.planned_end.getTime(), (c.baseline_end ?? c.planned_end).getTime()]),
+    ])
+    const start = new Date(Math.min(...dates))
+    start.setHours(0, 0, 0, 0)
+    const dow = start.getDay() || 7           // Mon=1..Sun=7
+    start.setDate(start.getDate() - (dow - 1)) // back to Monday
+    const end = new Date(Math.max(...ends))
+    end.setDate(end.getDate() + 14)
+    return { startDate: start, endDate: end }
+  }, [ganttTasks])
 
   const filteredTasks = useMemo(
     () => filterTasks(ganttTasks, selectedLot, selectedZone),
@@ -78,6 +93,8 @@ export function Gantt() {
     selectedZoneId: selectedZone,
     depsVisible,
     highlightCritical,
+    zoom,
+    holidays,
     expandedTasks,
   }
 
@@ -184,8 +201,10 @@ export function Gantt() {
           {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}
           <span style={{ fontSize: '10px', fontWeight: '600', marginLeft: '4px' }}>Liaisons</span>
         </button>
-        <button className={`gtb ${view === 'week' ? 'on' : ''}`} onClick={() => setView('week')}>S</button>
-        <button className={`gtb ${view === 'month' ? 'on' : ''}`} onClick={() => setView('month')}>M</button>
+        <button className={`gtb ${view === 'week' ? 'on' : ''}`} onClick={() => setView('week')} title="Vue semaine">S</button>
+        <button className={`gtb ${view === 'month' ? 'on' : ''}`} onClick={() => setView('month')} title="Vue mois">M</button>
+        <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
+        <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
         <button className="gtb" onClick={handleReset} title="Réinitialiser les dates">
           <RotateCcw size={14} />
         </button>
