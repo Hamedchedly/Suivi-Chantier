@@ -5,3 +5,7 @@ dist/
 !.env.example
 *.local
 coverage/
+
+# Caches et configs locales d'outils
+.vite/
+.claude/
