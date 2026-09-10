@@ -59,8 +59,9 @@ export type GanttGroup = 'lot' | 'zone' | 'chrono'
 export interface GanttPrefs {
   zoom: number
   group: GanttGroup
+  autoSchedule: boolean   // propager les décalages aux tâches liées
 }
-const DEFAULT_GANTT_PREFS: GanttPrefs = { zoom: 1, group: 'lot' }
+const DEFAULT_GANTT_PREFS: GanttPrefs = { zoom: 1, group: 'lot', autoSchedule: true }
 
 export interface Holiday {
   start: Date

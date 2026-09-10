@@ -18,9 +18,11 @@ interface Props {
   task: GanttTask
   onClose: () => void
   onProgress?: (taskId: string, progress: number) => void
+  /** Marge totale (jours) issue du CPM — absente pour les regroupements. */
+  totalFloat?: number
 }
 
-export function TaskDetail({ task, onClose, onProgress }: Props) {
+export function TaskDetail({ task, onClose, onProgress, totalFloat }: Props) {
   const drift = driftDays(task)
   const st = STATUS_LABEL[task.status] ?? STATUS_LABEL['not-started']
 
@@ -62,6 +64,13 @@ export function TaskDetail({ task, onClose, onProgress }: Props) {
           <Row label="Planifié — début" value={fmt(task.planned_start)} />
           <Row label="Planifié — fin" value={fmt(task.planned_end)} />
           <Row label="Dérive" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
+          {totalFloat !== undefined && (
+            <Row
+              label="Marge totale"
+              value={totalFloat <= 0 ? 'aucune (critique)' : `${totalFloat} j`}
+              tone={totalFloat <= 0 ? 'bad' : 'ok'}
+            />
+          )}
           {task.dependencies.length > 0 && (
             <>
               <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />

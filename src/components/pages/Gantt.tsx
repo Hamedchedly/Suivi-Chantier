@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut } from 'lucide-react'
+import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { GANTT_TASKS } from '../../data/ganttMockData'
 import { LOGEMENTS } from '../../data/zones'
 import {
-  getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup,
+  getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
 } from '../../lib/repo'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
+import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -76,6 +77,7 @@ export function Gantt() {
   const [mode, setMode] = useState<'gantt' | 'matrix'>('gantt')
   const [group, setGroup] = useState<GanttGroup>(prefs0.group)
   const [zoom, setZoom] = useState(prefs0.zoom)
+  const [autoPlan, setAutoPlan] = useState(prefs0.autoSchedule)
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
   const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
   const [depsVisible, setDepsVisible] = useState(true)
@@ -86,11 +88,18 @@ export function Gantt() {
   const holidays = useMemo(() => getHolidays(), [])
 
   useEffect(() => { saveGanttTasks(ganttTasks) }, [ganttTasks])
-  useEffect(() => { saveGanttPrefs({ zoom, group }) }, [zoom, group])
+  useEffect(() => { saveGanttPrefs({ zoom, group, autoSchedule: autoPlan }) }, [zoom, group, autoPlan])
+
+  // CPM : chemin critique + marges recalculés depuis le réseau de dépendances.
+  const cpm = useMemo(() => computeCpm(ganttTasks), [ganttTasks])
+  const tasksWithCpm = useMemo(
+    () => applyCriticality(ganttTasks, cpm.criticalIds),
+    [ganttTasks, cpm],
+  )
 
   const displayTree = useMemo(
-    () => buildTree(ganttTasks, group, selectedLots, selectedZones),
-    [ganttTasks, group, selectedLots, selectedZones],
+    () => buildTree(tasksWithCpm, group, selectedLots, selectedZones),
+    [tasksWithCpm, group, selectedLots, selectedZones],
   )
 
   // Expand all group parents whenever the grouping / filters change.
@@ -116,7 +125,16 @@ export function Gantt() {
   const lateCount = useMemo(() => lateTasks(ganttTasks, new Date()).length, [ganttTasks])
 
   const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date }) =>
-    setGanttTasks(prev => updateTaskInList(prev, id, updates))
+    setGanttTasks(prev => {
+      const moved = updateTaskInList(prev, id, updates)
+      if (!autoPlan) return moved
+      // Propage la contrainte fin -> début aux successeurs.
+      const { tasks: replanned, shifted } = autoSchedule(moved)
+      if (shifted.length) {
+        logActivity('planning', `Auto-planification : ${shifted.length} tâche${shifted.length > 1 ? 's' : ''} décalée${shifted.length > 1 ? 's' : ''} suite au déplacement`)
+      }
+      return replanned
+    })
   const handleProgress = (id: string, progress: number) => {
     setGanttTasks(prev => updateTaskInList(prev, id, { progress }))
     setDetailTask(t => (t && t.id === id ? { ...t, progress } : t))
@@ -164,8 +182,11 @@ export function Gantt() {
             <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
             <MultiSelect label="Logements" options={LOGEMENT_OPTS} selected={selectedZones} onChange={setSelectedZones} />
             <div style={{ flex: 1 }} />
-            <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique">
+            <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique (calculé par CPM)">
               <Zap size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Critique</span>
+            </button>
+            <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification : décaler les tâches liées">
+              <GitBranch size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-planif</span>
             </button>
             <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
               {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
@@ -191,7 +212,14 @@ export function Gantt() {
         </>
       )}
 
-      {detailTask && <TaskDetail task={detailTask} onClose={() => setDetailTask(null)} onProgress={handleProgress} />}
+      {detailTask && (
+        <TaskDetail
+          task={detailTask}
+          onClose={() => setDetailTask(null)}
+          onProgress={handleProgress}
+          totalFloat={cpm.nodes.get(detailTask.id)?.totalFloat}
+        />
+      )}
     </div>
   )
 }
