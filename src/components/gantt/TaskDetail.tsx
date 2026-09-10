@@ -18,11 +18,20 @@ interface Props {
   task: GanttTask
   onClose: () => void
   onProgress?: (taskId: string, progress: number) => void
+  /** Modifie les dates planifiées (déclenche l'auto-planification). */
+  onDates?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
   /** Marge totale (jours) issue du CPM — absente pour les regroupements. */
   totalFloat?: number
 }
 
-export function TaskDetail({ task, onClose, onProgress, totalFloat }: Props) {
+const isoDate = (d: Date) => {
+  const x = new Date(d)
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+}
+const parseDate = (s: string) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
+
+export function TaskDetail({ task, onClose, onProgress, onDates, totalFloat }: Props) {
+  const editable = !!onDates && !task.children?.length
   const drift = driftDays(task)
   const st = STATUS_LABEL[task.status] ?? STATUS_LABEL['not-started']
 
@@ -61,8 +70,25 @@ export function TaskDetail({ task, onClose, onProgress, totalFloat }: Props) {
           <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
           <Row label="Contractuel — début" value={fmt(task.baseline_start)} />
           <Row label="Contractuel — fin" value={fmt(task.baseline_end)} />
-          <Row label="Planifié — début" value={fmt(task.planned_start)} />
-          <Row label="Planifié — fin" value={fmt(task.planned_end)} />
+          {editable ? (
+            <>
+              <EditRow
+                label="Planifié — début"
+                value={isoDate(task.planned_start)}
+                onChange={v => onDates!(task.id, { planned_start: parseDate(v) })}
+              />
+              <EditRow
+                label="Planifié — fin"
+                value={isoDate(task.planned_end)}
+                onChange={v => onDates!(task.id, { planned_end: parseDate(v) })}
+              />
+            </>
+          ) : (
+            <>
+              <Row label="Planifié — début" value={fmt(task.planned_start)} />
+              <Row label="Planifié — fin" value={fmt(task.planned_end)} />
+            </>
+          )}
           <Row label="Dérive" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
           {totalFloat !== undefined && (
             <Row
@@ -83,6 +109,20 @@ export function TaskDetail({ task, onClose, onProgress, totalFloat }: Props) {
         </div>
       </div>
     </>
+  )
+}
+
+function EditRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+      <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={e => e.target.value && onChange(e.target.value)}
+        style={{ width: '150px', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}
+      />
+    </div>
   )
 }
 

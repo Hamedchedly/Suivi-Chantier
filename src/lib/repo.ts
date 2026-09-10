@@ -26,6 +26,8 @@ import { AlertActions } from './alerts'
 import { DpgfLine } from './dpgf'
 import { DEFAULT_DPGF } from '../data/dpgfMock'
 import { ActivityEvent, ActivityType, pushEvent } from './activity'
+import { Meeting } from './meetings'
+import { DEFAULT_MEETINGS } from '../data/meetingsMock'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -45,6 +47,7 @@ const KEYS = {
   dpgf: 'sc-dpgf-v1',
   ganttPrefs: 'sc-gantt-prefs-v1',
   activity: 'sc-activity-v1',
+  meetings: 'sc-meetings-v1',
 } as const
 
 const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
@@ -264,4 +267,13 @@ export function saveActivity(events: ActivityEvent[]): void {
 /** Append an event to the journal (read-modify-write). */
 export function logActivity(type: ActivityType, message: string): void {
   saveActivity(pushEvent(getActivity(), type, message))
+}
+
+// ── Réunions / décisions / actions ──────────────────────────────────────────
+
+export function getMeetings(): Meeting[] {
+  return loadState<Meeting[]>(KEYS.meetings, DEFAULT_MEETINGS)
+}
+export function saveMeetings(m: Meeting[]): void {
+  saveState(KEYS.meetings, m)
 }

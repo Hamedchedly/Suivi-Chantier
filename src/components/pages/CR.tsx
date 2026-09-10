@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { Plus, Calendar, ChevronRight } from 'lucide-react'
 import { Visit, getVisits, saveVisits, getLotProgress as readLotProgress, setLotProgress as writeLotProgress, logActivity } from '../../lib/repo'
 import { Reserves } from './Reserves'
+import { Meetings } from './Meetings'
 
 type CRStep = 'list' | 'presences' | 'zone' | 'lots'
-type CRSection = 'cr' | 'reserves'
+type CRSection = 'cr' | 'reserves' | 'reunions'
 
 const CR_LOTS = [
   { id: 'L05', label: 'LOT 05 — Menuiseries int. / Isolation' },
@@ -198,13 +199,13 @@ export function CR() {
   // Segmented control (shared by both sections)
   const segmented = (
     <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-      {(['cr', 'reserves'] as const).map(s => (
+      {(['cr', 'reserves', 'reunions'] as const).map(s => (
         <button
           key={s}
           onClick={() => setSection(s)}
           style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: section === s ? '#fff' : 'transparent', color: section === s ? '#02457A' : '#5b7183', boxShadow: section === s ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
         >
-          {s === 'cr' ? 'Comptes rendus' : 'Réserves'}
+          {s === 'cr' ? 'Comptes rendus' : s === 'reserves' ? 'Réserves' : 'Réunions'}
         </button>
       ))}
     </div>
@@ -215,6 +216,15 @@ export function CR() {
       <div>
         <div style={{ padding: '12px 12px 0' }}>{segmented}</div>
         <Reserves />
+      </div>
+    )
+  }
+
+  if (section === 'reunions') {
+    return (
+      <div style={{ padding: '12px', paddingBottom: '80px' }}>
+        {segmented}
+        <Meetings />
       </div>
     )
   }

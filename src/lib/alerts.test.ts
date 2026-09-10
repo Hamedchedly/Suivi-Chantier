@@ -53,6 +53,24 @@ describe('buildAlerts selection & priority', () => {
   })
 })
 
+describe('actions de réunion en retard', () => {
+  it('remonte une action non faite dont l’échéance est dépassée', () => {
+    const meetings = [{
+      id: 'm1', date: '2026-01-01', title: 'RC', attendees: [], decisions: [],
+      actions: [
+        { id: 'x1', ref: 'A-001', text: 'Transmettre la note', assignee: 'Soveclim', dueDate: '2026-01-05', status: 'todo' as const },
+        { id: 'x2', ref: 'A-002', text: 'Fait', assignee: 'MOE', dueDate: '2026-01-05', status: 'done' as const },
+        { id: 'x3', ref: 'A-003', text: 'À venir', assignee: 'MOE', dueDate: '2026-02-01', status: 'todo' as const },
+      ],
+    }]
+    const a = buildAlerts([], [], today, {}, meetings)
+    expect(a).toHaveLength(1)
+    expect(a[0].type).toBe('action-overdue')
+    expect(a[0].severity).toBe(75)
+    expect(a[0].title).toContain('A-001')
+  })
+})
+
 describe('actions: resolved & flagged', () => {
   const tasks = [parent('L05', [leaf('t', { start: '2026-01-01', end: '2026-01-05', progress: 10, status: 'blocked' })])]
 

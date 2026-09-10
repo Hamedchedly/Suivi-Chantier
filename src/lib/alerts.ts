@@ -1,8 +1,9 @@
 import { GanttTask } from '../types/gantt'
 import { Reserve } from './reserves'
+import { Meeting, overdueActions } from './meetings'
 import { flattenLeaves, isLate, lotSummaries } from './schedule'
 
-export type AlertType = 'blocked' | 'late-critical' | 'lot-drift' | 'late' | 'reserve-high' | 'reserve-open'
+export type AlertType = 'blocked' | 'late-critical' | 'lot-drift' | 'late' | 'action-overdue' | 'reserve-high' | 'reserve-open'
 export type AlertLevel = 'critique' | 'eleve' | 'moyen'
 
 export interface AlertAction { resolved?: boolean; flagged?: boolean }
@@ -28,8 +29,8 @@ export function levelOf(severity: number): AlertLevel {
 /**
  * Derive the project's vigilance items from live state and apply user actions.
  * Selection & priority (severity):
- *   100 point bloquant · 90 retard critique · 80 dérive ≥7j · 70 retard ·
- *    60 réserve haute · 50 dérive 1–6j · 30 réserve ouverte
+ *   100 point bloquant · 90 retard critique · 80 dérive ≥7j · 75 action en
+ *   retard · 70 retard · 60 réserve haute · 50 dérive 1–6j · 30 réserve ouverte
  * Alerts disappear automatically when their underlying condition is gone
  * (task completed, reserve resolved, drift recovered). The `resolved` flag lets
  * the user confirm resolution manually; `flagged` pins it for the next meeting.
@@ -39,6 +40,7 @@ export function buildAlerts(
   reserves: Reserve[],
   today: Date,
   actions: AlertActions = {},
+  meetings: Meeting[] = [],
 ): Alert[] {
   const raw: { id: string; type: AlertType; severity: number; title: string; detail: string }[] = []
 
@@ -68,6 +70,16 @@ export function buildAlerts(
         detail: 'vs planning contractuel',
       })
     }
+  }
+
+  for (const a of overdueActions(meetings, today)) {
+    raw.push({
+      id: `action-${a.id}`,
+      type: 'action-overdue',
+      severity: 75,
+      title: `${a.ref} — ${a.text}`,
+      detail: `Action en retard · ${a.assignee} · échéance ${new Date(a.dueDate + 'T00:00:00').toLocaleDateString('fr')}`,
+    })
   }
 
   for (const r of reserves.filter(x => x.status === 'open')) {
