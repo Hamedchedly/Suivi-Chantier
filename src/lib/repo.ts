@@ -20,6 +20,8 @@ import { GANTT_TASKS } from '../data/ganttMockData'
 import { Reserve } from './reserves'
 import { Marche, Avenant, Situation } from './finance'
 import { DEFAULT_MARCHES, DEFAULT_AVENANTS, DEFAULT_SITUATIONS } from '../data/financeMock'
+import { Rfi, Visa, Doc } from './admin'
+import { DEFAULT_RFIS, DEFAULT_VISAS, DEFAULT_DOCS } from '../data/adminMock'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -31,6 +33,9 @@ const KEYS = {
   marches: 'sc-marches-v1',
   avenants: 'sc-avenants-v1',
   situations: 'sc-situations-v1',
+  rfis: 'sc-rfis-v1',
+  visas: 'sc-visas-v1',
+  docs: 'sc-docs-v1',
 } as const
 
 // ── Entity types owned by the repository ────────────────────────────────────
@@ -149,4 +154,28 @@ export function getSituations(): Situation[] {
 }
 export function saveSituations(s: Situation[]): void {
   saveState(KEYS.situations, s)
+}
+
+// ── Administratif (RFI / VISA / GED) ────────────────────────────────────────
+// Supabase mapping (future): rfis, submittals/visas, documents tables.
+
+export function getRfis(): Rfi[] {
+  return loadState<Rfi[]>(KEYS.rfis, DEFAULT_RFIS)
+}
+export function saveRfis(r: Rfi[]): void {
+  saveState(KEYS.rfis, r)
+}
+
+export function getVisas(): Visa[] {
+  return loadState<Visa[]>(KEYS.visas, DEFAULT_VISAS)
+}
+export function saveVisas(v: Visa[]): void {
+  saveState(KEYS.visas, v)
+}
+
+export function getDocs(): Doc[] {
+  return loadState<Doc[]>(KEYS.docs, DEFAULT_DOCS)
+}
+export function saveDocs(d: Doc[]): void {
+  saveState(KEYS.docs, d)
 }

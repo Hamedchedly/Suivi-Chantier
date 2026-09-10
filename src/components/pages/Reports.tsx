@@ -1,6 +1,7 @@
 import { Download, Eye, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { CRReport } from './CRReport'
+import { Documents } from './Documents'
 
 interface Report {
   id: string
@@ -41,13 +42,38 @@ const MOCK_REPORTS: Report[] = [
 export function Reports() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
   const [showAutoReport, setShowAutoReport] = useState(false)
+  const [tab, setTab] = useState<'cr' | 'docs'>('cr')
 
   if (showAutoReport) {
     return <CRReport number={MOCK_REPORTS.length + 1} onBack={() => setShowAutoReport(false)} />
   }
 
+  const segmented = (
+    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+      {(['cr', 'docs'] as const).map(t => (
+        <button
+          key={t}
+          onClick={() => setTab(t)}
+          style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: tab === t ? '#fff' : 'transparent', color: tab === t ? '#0b3b60' : '#5c6f80', boxShadow: tab === t ? '0 1px 2px rgba(0,0,0,.08)' : 'none' }}
+        >
+          {t === 'cr' ? 'Comptes-rendus' : 'RFI · Visas · Docs'}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (tab === 'docs') {
+    return (
+      <div style={{ padding: '12px', paddingBottom: '80px' }}>
+        {segmented}
+        <Documents />
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      {segmented}
       {/* Auto-generate CR */}
       <button
         onClick={() => setShowAutoReport(true)}
