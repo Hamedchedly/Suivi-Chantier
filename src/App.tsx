@@ -8,10 +8,13 @@ import { Finances } from './components/pages/Finances'
 import { Alertes } from './components/pages/Alertes'
 import { ShareView } from './components/pages/ShareView'
 import { Navigation } from './components/layout/Navigation'
+import { SideNav } from './components/layout/SideNav'
+import { GestionSheet } from './components/layout/GestionSheet'
 import { Topbar } from './components/layout/Topbar'
+import type { Page } from './components/layout/navConfig'
 import { readShareFromUrl } from './lib/share'
 
-export type Page = 'home' | 'gantt' | 'cr' | 'finances' | 'config' | 'rapports' | 'alertes'
+export type { Page }
 
 const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   home:     { title: 'Gambetta — Réhabilitation', sub: 'GAM-2026-001 • 111 Rue Gambetta, Reims' },
@@ -25,9 +28,10 @@ const PAGE_META: Record<Page, { title: string; sub?: string }> = {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home')
+  const [gestionOpen, setGestionOpen] = useState(false)
   const meta = PAGE_META[currentPage]
 
-  // Shared read-only snapshot link (?#share=…): render the MOA view, no app chrome.
+  // Shared read-only snapshot link (#share=…): render the MOA view, no app chrome.
   const shared = useMemo(() => readShareFromUrl(), [])
   if (window.location.hash.startsWith('#share=')) {
     if (shared) return <ShareView snapshot={shared} />
@@ -38,19 +42,27 @@ export default function App() {
     )
   }
 
+  const go = (p: Page) => { setCurrentPage(p); setGestionOpen(false) }
+
   return (
     <div className="app-wrapper">
-      <Topbar title={meta.title} sub={meta.sub} />
-      <div className="app-body">
-        {currentPage === 'home'     && <Home onNavigate={setCurrentPage} />}
-        {currentPage === 'gantt'    && <Gantt />}
-        {currentPage === 'cr'       && <CR />}
-        {currentPage === 'finances' && <Finances />}
-        {currentPage === 'rapports' && <Reports />}
-        {currentPage === 'alertes'  && <Alertes />}
-        {currentPage === 'config'   && <Config />}
+      <SideNav currentPage={currentPage} onPageChange={go} onOpenGestion={() => setGestionOpen(true)} />
+
+      <div className="app-main">
+        <Topbar title={meta.title} sub={meta.sub} />
+        <div className="app-body">
+          {currentPage === 'home'     && <Home onNavigate={setCurrentPage} />}
+          {currentPage === 'gantt'    && <Gantt />}
+          {currentPage === 'cr'       && <CR />}
+          {currentPage === 'finances' && <Finances />}
+          {currentPage === 'rapports' && <Reports />}
+          {currentPage === 'alertes'  && <Alertes />}
+          {currentPage === 'config'   && <Config />}
+        </div>
       </div>
-      <Navigation currentPage={currentPage} onPageChange={setCurrentPage} />
+
+      <Navigation currentPage={currentPage} onPageChange={go} onOpenGestion={() => setGestionOpen(true)} />
+      <GestionSheet open={gestionOpen} currentPage={currentPage} onClose={() => setGestionOpen(false)} onPick={go} />
     </div>
   )
 }
