@@ -12,6 +12,7 @@ import { VisitPhoto } from '../../lib/photoStore'
 import { Annotation } from '../../lib/annotations'
 import { PhotoAnnotator } from './PhotoAnnotator'
 import { CarriedPoints } from './CarriedPoints'
+import { RemarkForm } from './RemarkForm'
 import type { LotContact } from '../../lib/repo'
 import {
   ZONE_META, lotLabel, lotCompany, fmtFr,
@@ -40,6 +41,7 @@ interface Props {
   onOpenLot: (lotId: string) => void
   onUpdateZone: (fn: (z: VisitZone) => VisitZone) => void
   onAddRemark: (r: RemarkInput) => void
+  onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
   onFollowUp: (reserveId: string, status: FollowUpStatus, dueDate?: string) => void
   onAddPhoto: (lotId: string | undefined, file: File) => void
@@ -53,7 +55,7 @@ interface Props {
 /** A logement: its lots as a list, plus everything recorded at zone level. */
 export function ZoneControl(props: Props) {
   const { zone, lots, photos, carriedPoints, visitReserves, readOnly, isLast,
-    onOpenLot, onUpdateZone, onAddRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
+    onOpenLot, onUpdateZone, onAddRemark, onUpdateRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
     onBack, onPrev, onCloseZone } = props
 
   const groups = lotGroups(zone)
@@ -137,18 +139,8 @@ export function ZoneControl(props: Props) {
           <div style={sectionLabel}>Relevé de cette visite ({zoneRemarks.length})</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {zoneRemarks.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px' }}>
-                {reserveKind(r) === 'observation' ? <Eye size={13} color="#5b7183" /> : <Flag size={13} color="#b45309" />}
-                <span style={{ flex: 1 }}>{r.description}</span>
-                {r.dueDate && <span style={{ fontSize: '10px', color: '#b45309' }}>{fmtFr(r.dueDate)}</span>}
-                {!readOnly && (
-                  <button onClick={() => { if (window.confirm('Supprimer cette remarque ?')) onRemoveRemark(r.id) }}
-                    title="Supprimer"
-                    style={{ display: 'flex', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '2px' }}>
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
+              <ZoneRemarkRow key={r.id} remark={r} readOnly={readOnly}
+                onUpdate={onUpdateRemark} onRemove={onRemoveRemark} />
             ))}
           </div>
         </div>
@@ -191,24 +183,57 @@ const zonePill = (on: boolean, fg: string, bg: string): React.CSSProperties => (
 
 // ── Zone-level remarks (not tied to one task) ────────────────────────────────
 
+/** Same row and same form as on a task — only the context differs. */
+function ZoneRemarkRow({ remark, readOnly, onUpdate, onRemove }: {
+  remark: Reserve
+  readOnly: boolean
+  onUpdate: (id: string, patch: Partial<Reserve>) => void
+  onRemove: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const isAction = reserveKind(remark) === 'action'
+
+  if (editing) {
+    return (
+      <RemarkForm
+        kind={isAction ? 'action' : 'observation'}
+        initial={{ description: remark.description, dueDate: remark.dueDate, priority: remark.priority }}
+        onSubmit={(description, dueDate, priority) => {
+          onUpdate(remark.id, { description, dueDate, ...(priority ? { priority } : {}) })
+          setEditing(false)
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px' }}>
+      {isAction ? <Flag size={13} color="#b45309" /> : <Eye size={13} color="#5b7183" />}
+      <span style={{ flex: 1 }}>{remark.description}</span>
+      {remark.dueDate && <span style={{ fontSize: '10px', color: '#b45309' }}>{fmtFr(remark.dueDate)}</span>}
+      {!readOnly && (
+        <>
+          <button onClick={() => setEditing(true)} title="Modifier" style={rowIconBtn}><Pencil size={13} /></button>
+          <button onClick={() => { if (window.confirm('Supprimer cette remarque ?')) onRemove(remark.id) }}
+            title="Supprimer" style={rowIconBtn}><Trash2 size={13} /></button>
+        </>
+      )}
+    </div>
+  )
+}
+
+const rowIconBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px',
+  border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer', flexShrink: 0,
+}
+
 function ZoneRemarkButtons({ lots, lotIds, onAddRemark }: {
   lots: LotContact[]; lotIds: string[]; onAddRemark: (r: RemarkInput) => void
 }) {
   const [panel, setPanel] = useState<null | 'observation' | 'action'>(null)
   const [lot, setLot] = useState(lotIds[0] ?? lots[0]?.id ?? '')
-  const [text, setText] = useState('')
-  const [due, setDue] = useState('')
   const choices = lotIds.length ? lotIds : lots.map(l => l.id)
-
-  const submit = () => {
-    if (!text.trim() || !panel) return
-    onAddRemark({
-      kind: panel, description: text.trim(), lotId: lot,
-      dueDate: panel === 'action' ? (due || undefined) : undefined,
-      priority: panel === 'action' ? 'medium' : 'low',
-    })
-    setText(''); setDue(''); setPanel(null)
-  }
 
   return (
     <div style={{ marginTop: '16px' }}>
@@ -222,25 +247,20 @@ function ZoneRemarkButtons({ lots, lotIds, onAddRemark }: {
       </div>
 
       {panel && (
-        <div style={{ marginTop: '8px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }}>
-          <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, width: '100%', marginBottom: '8px' }}>
+        <>
+          <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, width: '100%', marginTop: '8px' }}>
             {choices.map(id => <option key={id} value={id}>{id} — {lotLabel(lots, id)}</option>)}
           </select>
-          <textarea autoFocus value={text} onChange={e => setText(e.target.value)}
-            placeholder={panel === 'observation' ? 'Constat sur la zone…' : 'Action à réaliser sur la zone…'}
-            style={{ ...input, width: '100%', minHeight: '54px', resize: 'vertical', marginBottom: '8px' }} />
-          {panel === 'action' && (
-            <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
-              style={{ ...input, width: '100%', marginBottom: '8px' }} />
-          )}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button onClick={() => setPanel(null)} style={linkBtn}>Annuler</button>
-            <button disabled={!text.trim()} onClick={submit}
-              style={{ ...bigBtnInline, background: panel === 'action' ? '#b45309' : 'var(--navy)', padding: '10px 14px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
-              Ajouter
-            </button>
-          </div>
-        </div>
+          <RemarkForm
+            kind={panel}
+            company={lotCompany(lots, lot)}
+            onSubmit={(description, dueDate, priority) => {
+              onAddRemark({ kind: panel, description, lotId: lot, dueDate, priority: priority ?? 'low' })
+              setPanel(null)
+            }}
+            onCancel={() => setPanel(null)}
+          />
+        </>
       )}
     </div>
   )

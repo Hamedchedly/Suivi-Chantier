@@ -1,23 +1,24 @@
 import { useState, useRef } from 'react'
 import {
   ArrowLeft, Camera, Plus, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, Pencil, Trash2, CalendarRange, CalendarClock,
+  X, ChevronRight, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
   tasksState, tasksWorksProgress, progressGap, stateAfterEdit,
 } from '../../lib/visits'
 import { DateCommitment, latestCommitment, isBroken } from '../../lib/commitments'
-import { Reserve, ReservePriority, reserveKind } from '../../lib/reserves'
+import { Reserve, reserveKind } from '../../lib/reserves'
 import { VisitPhoto } from '../../lib/photoStore'
 import { weekToFriday, weekLabel, dateToWeek } from '../../lib/weeks'
 import type { LotContact } from '../../lib/repo'
 import {
   ZONE_META, lotLabel, lotCompany, fmtFr, taskTitle,
-  badge, input, linkBtn, bigBtnInline,
+  badge, input, linkBtn, ghostBtn, bigBtnInline,
 } from './visiteStyles'
 import { Bar, Empty } from './visiteBits'
 import type { RemarkInput } from './ZoneControl'
+import { RemarkForm } from './RemarkForm'
 
 /** One candidate blocker, flattened from the planning. */
 export interface BlockerOption {
@@ -134,6 +135,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
   const blockers = task.blockedBy ?? []
+  const isNa = task.state === 'na'
 
   const actual = task.progress ?? 0
   const planned = task.plannedProgress ?? actual
@@ -156,26 +158,42 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
-        <strong style={{ fontSize: '19px', color: 'var(--navy)' }}>{actual}%</strong>
+        {!isNa && <strong style={{ fontSize: '19px', color: 'var(--navy)' }}>{actual}%</strong>}
       </div>
 
-      <input
-        className="task-slider"
-        type="range" min={0} max={100} step={5}
-        value={actual}
-        disabled={readOnly}
-        onChange={e => patchProgress(Number(e.target.value))}
-        style={{ background: track }}
-      />
+      {/* A non-applicable task is set aside: no bar, and it stops counting */}
+      {isNa ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '9px', background: '#f1f5f9', border: '1px solid var(--line)', marginBottom: '10px' }}>
+          <CircleSlash size={15} color="#64748b" />
+          <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+            Non applicable — exclue de l'avancement
+          </span>
+          {!readOnly && (
+            <button onClick={() => onPatch({ state: task.progress === undefined ? 'not_checked' : 'ok' })}
+              style={{ ...ghostBtn, padding: '6px 10px' }}>
+              <RotateCcw size={13} /> Rétablir
+            </button>
+          )}
+        </div>
+      ) : (
+        <input
+          className="task-slider"
+          type="range" min={0} max={100} step={5}
+          value={actual}
+          disabled={readOnly}
+          onChange={e => patchProgress(Number(e.target.value))}
+          style={{ background: track }}
+        />
+      )}
 
       {/* The bar carries the plan; only the gap itself needs spelling out */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10px', marginTop: '6px', marginBottom: '10px' }}>
-        {gap !== null && gap !== 0 && (
+        {!isNa && gap !== null && gap !== 0 && (
           <span style={{ color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 700 }}>
             {gap < 0 ? `${-gap} pts de retard` : `${gap} pts d'avance`} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>sur le prévu ({planned}%)</span>
           </span>
         )}
-        {gap === 0 && <span style={{ color: '#15803d', fontWeight: 700 }}>conforme au prévu</span>}
+        {!isNa && gap === 0 && <span style={{ color: '#15803d', fontWeight: 700 }}>conforme au prévu</span>}
         {delta !== null && delta !== 0 && (
           <span style={{ color: 'var(--muted)' }}>
             depuis le {fmtFr(previous!.date)}
@@ -256,7 +274,10 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               <button onClick={() => setPanel('observation')} style={menuBtn('#5b7183')}><Eye size={16} /> Observation</button>
               <button onClick={() => setPanel('action')} style={menuBtn('#b45309')}><Flag size={16} /> Action</button>
               <button onClick={() => setPanel('engagement')} style={menuBtn('#6d28d9')}><Handshake size={16} /> Engagement</button>
-              <button onClick={() => setPanel(null)} style={{ ...menuBtn('#94a3b8'), gridColumn: '1 / -1' }}><X size={15} /> Fermer</button>
+              <button onClick={() => { onPatch({ state: 'na' }); setPanel(null) }} style={menuBtn('#64748b')}>
+                <CircleSlash size={16} /> Non applicable
+              </button>
+              <button onClick={() => setPanel(null)} style={menuBtn('#94a3b8')}><X size={15} /> Fermer</button>
             </div>
           )}
 
@@ -363,60 +384,6 @@ function RemarkRow({ remark, readOnly, onUpdate, onRemove }: {
           <button onClick={() => { if (window.confirm('Supprimer cette remarque ?')) onRemove(remark.id) }} title="Supprimer" style={iconBtn}><Trash2 size={13} /></button>
         </>
       )}
-    </div>
-  )
-}
-
-/** One form for both observations and actions, new or being edited. */
-function RemarkForm({ kind, company, initial, onSubmit, onCancel }: {
-  kind: 'observation' | 'action'
-  company?: string
-  initial?: { description: string; dueDate?: string; priority?: ReservePriority }
-  onSubmit: (description: string, dueDate: string | undefined, priority: ReservePriority | undefined) => void
-  onCancel: () => void
-}) {
-  const [text, setText] = useState(initial?.description ?? '')
-  const [due, setDue] = useState(initial?.dueDate ?? '')
-  const [priority, setPriority] = useState<ReservePriority>(initial?.priority ?? 'medium')
-  const isAction = kind === 'action'
-
-  return (
-    <div style={{ ...panelBox, borderColor: isAction ? '#fcd34d' : 'var(--line)', background: isAction ? '#fffbeb' : '#f8fafc' }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, color: isAction ? '#b45309' : '#5b7183', marginBottom: '7px' }}>
-        {isAction ? `Action à réaliser${company ? ` — ${company}` : ''}` : 'Observation'}
-      </div>
-      <textarea autoFocus value={text} onChange={e => setText(e.target.value)}
-        placeholder={isAction ? 'ex. Reprendre le joint avant la prochaine visite' : 'ex. Joint fissuré autour de la menuiserie'}
-        style={{ ...input, width: '100%', minHeight: '56px', resize: 'vertical', marginBottom: '8px' }} />
-
-      {isAction && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-            <CalendarClock size={14} color="var(--muted)" />
-            <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
-              style={{ ...input, flex: 1, padding: '8px 9px' }} />
-          </div>
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-            {(['low', 'medium', 'high'] as ReservePriority[]).map(p => {
-              const meta = { low: { l: 'Faible', c: '#5b7183' }, medium: { l: 'Moyenne', c: '#b45309' }, high: { l: 'Haute', c: '#dc2626' } }[p]
-              return (
-                <button key={p} onClick={() => setPriority(p)}
-                  style={{ flex: 1, padding: '9px', borderRadius: '7px', border: priority === p ? `2px solid ${meta.c}` : '1px solid var(--line)', background: priority === p ? '#fff' : '#fff', color: meta.c, fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-                  {meta.l}
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} style={linkBtn}>Annuler</button>
-        <button disabled={!text.trim()} onClick={() => onSubmit(text.trim(), due || undefined, isAction ? priority : undefined)}
-          style={{ ...bigBtnInline, background: isAction ? '#b45309' : 'var(--navy)', padding: '10px 15px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
-          Enregistrer
-        </button>
-      </div>
     </div>
   )
 }

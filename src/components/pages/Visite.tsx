@@ -236,6 +236,7 @@ export function Visite() {
             onOpenLot={lotId => push({ v: 'lot', ref: zone.refId, lotId })}
             onUpdateZone={fn => updateZone(zone.refId, fn)}
             onAddRemark={r => addRemark(active, zone, r)}
+            onUpdateRemark={updateRemark}
             onRemoveRemark={removeRemark}
             onFollowUp={(id, status, dueDate) => followUp(active, id, status, dueDate)}
             onAddPhoto={(lotId, file) => addPhoto(zone, lotId, undefined, file)}
