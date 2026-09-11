@@ -1,8 +1,8 @@
-import { Home, BarChart3, FolderOpen, Bell, Settings, ClipboardList, Euro, FileText, ClipboardCheck } from 'lucide-react'
+import { Home, BarChart3, FolderOpen, Bell, Settings, ClipboardList, Euro, FileText, ClipboardCheck, Building2 } from 'lucide-react'
 
-export type Page = 'home' | 'gantt' | 'visite' | 'cr' | 'finances' | 'config' | 'rapports' | 'alertes'
+export type Page = 'home' | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances' | 'config' | 'rapports' | 'alertes'
 
-export const GESTION_PAGES: Page[] = ['cr', 'finances', 'rapports']
+export const GESTION_PAGES: Page[] = ['cr', 'entreprises', 'finances', 'rapports']
 
 // Primary navigation entries (shared by the desktop sidebar and the mobile bottom bar).
 export const PRIMARY_NAV = [
@@ -16,6 +16,7 @@ export const PRIMARY_NAV = [
 
 export const GESTION_ITEMS = [
   { id: 'cr' as Page, label: 'Réserves & réunions', desc: 'Réserves de chantier & relevés de réunions', icon: ClipboardList },
+  { id: 'entreprises' as Page, label: 'Entreprises', desc: 'Lots, actions, engagements et historique', icon: Building2 },
   { id: 'finances' as Page, label: 'Finances', desc: 'Marchés, avenants, situations', icon: Euro },
-  { id: 'rapports' as Page, label: 'Rapports & documents', desc: 'CR auto, RFI, visas, GED', icon: FileText },
+  { id: 'rapports' as Page, label: 'Rapports & documents', desc: 'CR de visite, RFI, visas, GED', icon: FileText },
 ]

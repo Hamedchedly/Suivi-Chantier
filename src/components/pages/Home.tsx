@@ -131,7 +131,7 @@ export function Home({ onNavigate }: HomeProps) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '10px' }}>
           <AlertCount n={overdueActions.length} label="actions en retard" tone="bad" onClick={() => onNavigate('cr')} />
-          <AlertCount n={brokenCommitments.length} label="engagements non tenus" tone="warn" onClick={() => onNavigate('visite')} />
+          <AlertCount n={brokenCommitments.length} label="engagements non tenus" tone="warn" onClick={() => onNavigate('entreprises')} />
           <AlertCount n={toCheck.length} label="points à vérifier" tone="mid" onClick={() => onNavigate('cr')} />
         </div>
 
@@ -145,7 +145,7 @@ export function Home({ onNavigate }: HomeProps) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: '8px', marginBottom: '20px' }}>
         <Shortcut icon={<BarChart3 size={16} />} label="Planning" onClick={() => onNavigate('gantt')} />
         <Shortcut icon={<Flag size={16} />} label="Actions" onClick={() => onNavigate('cr')} />
-        <Shortcut icon={<Building2 size={16} />} label="Entreprises" onClick={() => onNavigate('config')} />
+        <Shortcut icon={<Building2 size={16} />} label="Entreprises" onClick={() => onNavigate('entreprises')} />
         <Shortcut icon={<FileText size={16} />} label="Rapports" onClick={() => onNavigate('rapports')} />
         <Shortcut icon={<FolderOpen size={16} />} label="Finances" onClick={() => onNavigate('finances')} />
       </div>

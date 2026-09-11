@@ -3,6 +3,7 @@ import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
 import { Visite } from './components/pages/Visite'
 import { CR } from './components/pages/CR'
+import { Entreprises } from './components/pages/Entreprises'
 import { Reports } from './components/pages/Reports'
 import { Config } from './components/pages/Config'
 import { Finances } from './components/pages/Finances'
@@ -23,6 +24,7 @@ const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   gantt:    { title: 'Planning', sub: 'Déplacez les barres pour modifier les dates' },
   visite:   { title: 'Visites & réunions', sub: 'Sessions de contrôle terrain' },
   cr:       { title: 'Réserves & réunions', sub: 'Réserves de chantier & relevés de réunions' },
+  entreprises: { title: 'Entreprises', sub: 'Lots, actions, engagements et historique' },
   finances: { title: 'Finances', sub: 'Marchés, avenants & situations' },
   config:   { title: 'Configuration', sub: 'Paramètres du projet' },
   rapports: { title: 'Rapports', sub: 'CRs envoyés et brouillons' },
@@ -76,10 +78,11 @@ export default function App() {
       <div className="app-main">
         <Topbar title={meta.title} sub={meta.sub} />
         <div className="app-body">
-          {currentPage === 'home'     && <Home onNavigate={setCurrentPage} />}
+          {currentPage === 'home'     && <Home onNavigate={go} />}
           {currentPage === 'gantt'    && <Gantt />}
           {currentPage === 'visite'   && <Visite />}
           {currentPage === 'cr'       && <CR />}
+          {currentPage === 'entreprises' && <Entreprises />}
           {currentPage === 'finances' && <Finances />}
           {currentPage === 'rapports' && <Reports onNavigate={go} />}
           {currentPage === 'alertes'  && <Alertes />}
