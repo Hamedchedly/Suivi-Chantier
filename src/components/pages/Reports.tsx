@@ -3,7 +3,7 @@ import { Share2, Copy, Check, ClipboardCheck, ChevronRight, Calendar } from 'luc
 import { Documents } from './Documents'
 import { buildSnapshot, buildShareUrl } from '../../lib/share'
 import { getVisits } from '../../lib/repo'
-import { VISIT_KIND_LABEL } from '../../lib/visits'
+import { visitKindLabel } from '../../lib/visits'
 import type { Page } from '../layout/navConfig'
 
 // Comptes rendus are produced by the Visite module — a CR always comes from a
@@ -114,7 +114,7 @@ export function Reports({ onNavigate }: { onNavigate?: (p: Page) => void }) {
                 <Calendar size={17} color="var(--muted)" style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#02457A' }}>
-                    {VISIT_KIND_LABEL[v.kind]} — {fmtFr(v.date)}
+                    {visitKindLabel(v)} — {fmtFr(v.date)}
                   </div>
                   <div style={{ fontSize: '11px', color: '#5b7183' }}>
                     {v.title ? `${v.title} • ` : ''}{v.zones.length} zones • {v.participants.length} participants

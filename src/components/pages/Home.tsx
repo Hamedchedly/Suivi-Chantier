@@ -12,7 +12,7 @@ import {
 } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
 import { isOverdue, reserveKind } from '../../lib/reserves'
-import { VISIT_KIND_LABEL, visitWorksProgress, progressGap } from '../../lib/visits'
+import { visitKindLabel, visitWorksProgress, progressGap } from '../../lib/visits'
 import { LOGEMENTS } from '../../data/zones'
 
 interface HomeProps {
@@ -101,7 +101,7 @@ export function Home({ onNavigate }: HomeProps) {
           <button onClick={() => onNavigate('visite')} style={{ ...rowCard, borderLeft: '3px solid var(--navy-2)', marginBottom: '8px' }}>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
-                {VISIT_KIND_LABEL[running.kind]} en cours
+                {visitKindLabel(running)} en cours
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                 <Clock size={11} />

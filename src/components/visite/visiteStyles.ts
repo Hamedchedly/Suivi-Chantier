@@ -60,6 +60,14 @@ export const KIND_META: Record<VisitKind, { label: string; short: string; bg: st
   opl: { label: 'OPL / pré-réception', short: 'OPL', bg: '#fef3c7', fg: '#b45309' },
 }
 
+/** Badge for a session: its own name when it has one, else the standard kind. */
+export function kindBadge(v: { kind: VisitKind; kindLabel?: string }): { label: string; bg: string; fg: string } {
+  const custom = v.kindLabel?.trim()
+  if (custom) return { label: custom, bg: '#ede9fe', fg: '#6d28d9' }
+  const meta = KIND_META[v.kind] ?? KIND_META.visite
+  return { label: meta.short, bg: meta.bg, fg: meta.fg }
+}
+
 export const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {
   low: { label: 'Faible', bg: '#eef2f6', fg: '#5b7183' },
   medium: { label: 'Moyenne', bg: '#fef3c7', fg: '#b45309' },

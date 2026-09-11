@@ -52,6 +52,7 @@ const KEYS = {
   meetings: 'sc-meetings-v1',
   visits: 'sc-visits-v3',
   commitments: 'sc-commitments-v1',
+  visitKinds: 'sc-visit-kinds-v1',
 } as const
 
 const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
@@ -183,6 +184,15 @@ export function getVisits(): VisitSession[] {
 
 export function saveVisits(visits: VisitSession[]): void {
   saveState(KEYS.visits, visits)
+}
+
+/** Session names the user added beyond "visite" / "réunion", kept for reuse. */
+export function getVisitKinds(): string[] {
+  return loadState<string[]>(KEYS.visitKinds, [])
+}
+
+export function saveVisitKinds(kinds: string[]): void {
+  saveState(KEYS.visitKinds, kinds)
 }
 
 // ── Engagements de dates pris par les entreprises ───────────────────────────

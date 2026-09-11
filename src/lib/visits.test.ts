@@ -6,7 +6,7 @@ import {
   visitCounts, visitControlProgress, visitWorksProgress, remainingToControl,
   visitLotIds, nextZoneRef, notesForCompany, generalNotes,
   applyVisitToPlanning, commitmentsFromVisit, buildPlanningSnapshot, newVisit,
-  progressGap, previousObservation, visitStats, visitChanges,
+  progressGap, previousObservation, visitStats, visitChanges, visitKindLabel,
 } from './visits'
 import type { GanttTask } from '../types/gantt'
 import type { Reserve } from './reserves'
@@ -285,14 +285,21 @@ describe('buildPlanningSnapshot', () => {
 
 describe('newVisit', () => {
   it('opens an "en cours" session of the requested kind and stamps the start', () => {
-    const v = newVisit({ kind: 'reunion', date: '2026-09-11', participants: [], zones: [], title: '  Hebdo  ' })
-    expect(v).toMatchObject({ kind: 'reunion', status: 'en_cours', title: 'Hebdo', notes: [] })
+    const v = newVisit({ kind: 'reunion', date: '2026-09-11', participants: [], zones: [] })
+    expect(v).toMatchObject({ kind: 'reunion', status: 'en_cours', notes: [] })
     expect(v.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
   it('keeps optional context only when provided', () => {
-    const v = newVisit({ kind: 'opl', date: '2026-09-11', participants: [], zones: [], brief: '   ' })
+    const v = newVisit({ kind: 'visite', date: '2026-09-11', participants: [], zones: [], brief: '   ', kindLabel: '  ' })
     expect(v.brief).toBeUndefined()
+    expect(v.kindLabel).toBeUndefined()
     expect(v.companiesPresent).toBeUndefined()
+  })
+  it('lets a session carry a name of its own', () => {
+    const v = newVisit({ kind: 'visite', date: '2026-09-11', participants: [], zones: [], kindLabel: '  OPL bâtiment A  ' })
+    expect(v.kindLabel).toBe('OPL bâtiment A')
+    expect(visitKindLabel(v)).toBe('OPL bâtiment A')
+    expect(visitKindLabel({ kind: 'reunion' })).toBe('Réunion de chantier')
   })
 })
 

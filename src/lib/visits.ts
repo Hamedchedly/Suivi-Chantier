@@ -39,6 +39,15 @@ export const VISIT_KIND_LABEL: Record<VisitKind, string> = {
   opl: 'OPL / pré-réception',
 }
 
+/**
+ * A session can carry a name of its own ("OPL bâtiment A", "Visite CVC").
+ * `kind` stays the underlying family so nothing downstream has to change;
+ * `kindLabel`, when set, is what the user sees everywhere.
+ */
+export function visitKindLabel(v: Pick<Visit, 'kind' | 'kindLabel'>): string {
+  return v.kindLabel?.trim() || VISIT_KIND_LABEL[v.kind]
+}
+
 // ── Roles & participants ─────────────────────────────────────────────────────
 
 export const ROLES = [
@@ -161,8 +170,9 @@ export interface AuditEntry {
 export interface Visit {
   id: string
   kind: VisitKind
+  kindLabel?: string     // user-defined session name, overrides the standard one
   date: string           // ISO yyyy-mm-dd
-  title?: string
+  title?: string         // legacy free-text object, no longer captured
   status: VisitStatus
   participants: Participant[]
   companiesPresent?: string[]
@@ -577,10 +587,10 @@ export function emptyCr(): CrData {
 
 export interface NewVisitInput {
   kind: VisitKind
+  kindLabel?: string
   date: string
   participants: Participant[]
   zones: VisitZone[]
-  title?: string
   companiesPresent?: string[]
   brief?: string
 }
@@ -591,8 +601,8 @@ export function newVisit(i: NewVisitInput): Visit {
   return {
     id: `VS${Date.now()}`,
     kind: i.kind,
+    kindLabel: i.kindLabel?.trim() || undefined,
     date: i.date,
-    title: i.title?.trim() || undefined,
     status: 'en_cours',
     participants: i.participants,
     companiesPresent: i.companiesPresent?.length ? i.companiesPresent : undefined,

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock,
+  Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock, X,
   CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag,
 } from 'lucide-react'
 import {
   Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant,
-  VISIT_KIND_LABEL, zoneState, zoneWorksProgress, zoneControlProgress,
+  VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, type ChangeKind,
@@ -20,7 +20,8 @@ import {
 import type { RemarkInput } from '../visite/ZoneControl'
 import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
-  getCommitments, saveCommitments, getLotsConfig, logActivity, ZONE_REFS, type LotContact,
+  getCommitments, saveCommitments, getLotsConfig, getVisitKinds, saveVisitKinds,
+  logActivity, ZONE_REFS, type LotContact,
 } from '../../lib/repo'
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
 import { summarizeAnnotations } from '../../lib/annotations'
@@ -29,7 +30,7 @@ import { LotControl, type BlockerOption } from '../visite/LotControl'
 import { SessionNotes } from '../visite/SessionNotes'
 import { setBackHandler } from '../../lib/backHandler'
 import {
-  ZONE_META, STATUS_META, KIND_META, PRIORITY_META, lotLabel, lotCompany, fmtFr, todayIso,
+  ZONE_META, STATUS_META, KIND_META, kindBadge, PRIORITY_META, lotLabel, lotCompany, fmtFr, todayIso,
   bigBtn, bigBtnInline, sectionLabel, visitCard, zoneRow, badge, input, ghostBtn, linkBtn,
   tableStyle, thStyle, tdStyle, pStyle,
 } from '../visite/visiteStyles'
@@ -164,7 +165,7 @@ export function Visite() {
       ...prev, status: 'terminee', endedAt: new Date().toISOString(),
       snapshot: buildPlanningSnapshot(updated, new Date()), cr: prev.cr ?? emptyCr(),
     }))
-    logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} terminée — planning mis à jour et figé`)
+    logActivity('visit', `${visitKindLabel(v)} du ${fmtFr(v.date)} terminée — planning mis à jour et figé`)
     setStack([{ v: 'list' }, { v: 'cr' }])
   }
 
@@ -172,7 +173,7 @@ export function Visite() {
   if (view.v === 'create') {
     return <CreateSession lots={lots} onCancel={back} onCreate={v => {
       setVisits(prev => [v, ...prev]); setActiveId(v.id); setStack([{ v: 'list' }, { v: 'session' }])
-      logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} démarrée`)
+      logActivity('visit', `${visitKindLabel(v)} du ${fmtFr(v.date)} démarrée`)
     }} />
   }
 
@@ -258,11 +259,11 @@ export function Visite() {
         <button onClick={back} style={{ ...linkBtn, marginBottom: '8px' }}>← Toutes les sessions</button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-          <span style={{ ...badge, background: KIND_META[active.kind].bg, color: KIND_META[active.kind].fg }}>{KIND_META[active.kind].short}</span>
+          <span style={{ ...badge, background: kindBadge(active).bg, color: kindBadge(active).fg }}>{kindBadge(active).label}</span>
           <h2 style={{ margin: 0, flex: 1 }}>{fmtFr(active.date)}</h2>
         </div>
         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
-          {active.title ?? VISIT_KIND_LABEL[active.kind]} • {counts.total} zones • {active.participants.length} présents
+          {visitKindLabel(active)} • {counts.total} zones • {active.participants.length} présents
           {active.startedAt && <> • démarrée à {fmtTime(active.startedAt)}</>}
         </div>
 
@@ -382,7 +383,7 @@ export function Visite() {
         <button onClick={back} style={{ ...linkBtn, marginBottom: '10px' }}>
           <ArrowLeft size={15} /> Retour
         </button>
-        <h2 style={{ margin: '0 0 2px' }}>Notes de fin de {KIND_META[active.kind].short.toLowerCase()}</h2>
+        <h2 style={{ margin: '0 0 2px' }}>Notes de fin de session</h2>
         <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 16px' }}>
           Adressez une note à tout le monde ou à une entreprise en particulier.
         </p>
@@ -413,7 +414,7 @@ export function Visite() {
       onReopen={() => updateVisit(active.id, { status: 'terminee' })}
       onDiffuse={() => {
         updateVisit(active.id, { status: 'diffuse', diffusedAt: new Date().toISOString() })
-        logActivity('doc', `CR de la ${VISIT_KIND_LABEL[active.kind].toLowerCase()} du ${fmtFr(active.date)} diffusé`)
+        logActivity('doc', `CR de la ${visitKindLabel(active).toLowerCase()} du ${fmtFr(active.date)} diffusé`)
         push({ v: 'report' })
       }}
       onReport={() => push({ v: 'report' })}
@@ -448,17 +449,17 @@ export function Visite() {
         {visits.map(v => {
           const c = visitCounts(v)
           const st = STATUS_META[v.status]
-          const k = KIND_META[v.kind]
+          const k = kindBadge(v)
           return (
             <button key={v.id} onClick={() => openVisit(v)} style={visitCard}>
               <Calendar size={18} color="var(--muted)" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ ...badge, background: k.bg, color: k.fg }}>{k.short}</span>
+                  <span style={{ ...badge, background: k.bg, color: k.fg }}>{k.label}</span>
                   <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--navy)' }}>{fmtFr(v.date)}</span>
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                  {v.title ? `${v.title} • ` : ''}{c.total} zones • travaux {visitWorksProgress(v)}% • tournée {visitControlProgress(v)}%
+                  {c.total} zones • travaux {visitWorksProgress(v)}% • tournée {visitControlProgress(v)}%
                 </div>
               </div>
               <span style={{ ...badge, background: st.bg, color: st.fg }}>{st.label}</span>
@@ -477,28 +478,25 @@ export function Visite() {
 
 function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCancel: () => void; onCreate: (v: Visit) => void }) {
   const [kind, setKind] = useState<VisitKind>('visite')
+  const [customKinds, setCustomKinds] = useState<string[]>(getVisitKinds)
+  const [kindLabel, setKindLabel] = useState<string | null>(null)  // null = a standard kind
+  const [newKind, setNewKind] = useState<string | null>(null)      // the "+" input, when open
   const [date, setDate] = useState(todayIso())
-  const [title, setTitle] = useState('')
   const [brief, setBrief] = useState('')
-  const [participants, setParticipants] = useState<Participant[]>([])
-  const [pName, setPName] = useState('')
-  const [pRole, setPRole] = useState<Role>('MOE')
+  const [guests, setGuests] = useState<Participant[]>([])
+  const [guestForm, setGuestForm] = useState<{ name: string; role: Role } | null>(null)
   const [companies, setCompanies] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set(ZONE_REFS.map(r => r.refId)))
 
   const allCompanies = [...new Set(lots.map(l => l.company))].sort()
-  const toggleCompany = (c: string) => setCompanies(prev => {
-    const n = new Set(prev)
-    if (n.has(c)) n.delete(c); else n.add(c)
-    return n
-  })
-
   const buildings = [...new Set(ZONE_REFS.map(r => r.buildingId))]
-  const toggle = (refId: string) => setSelected(prev => {
-    const n = new Set(prev)
-    if (n.has(refId)) n.delete(refId); else n.add(refId)
+
+  const toggleIn = <T,>(set: Set<T>, value: T) => {
+    const n = new Set(set)
+    if (n.has(value)) n.delete(value); else n.add(value)
     return n
-  })
+  }
+
   const toggleBuilding = (bid: string) => {
     const refs = ZONE_REFS.filter(r => r.buildingId === bid).map(r => r.refId)
     const allOn = refs.every(r => selected.has(r))
@@ -508,20 +506,44 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
       return n
     })
   }
-  const addP = () => {
-    if (!pName.trim()) return
-    setParticipants(prev => [...prev, { id: `p${Date.now()}`, name: pName.trim(), role: pRole }])
-    setPName('')
+
+  const addCustomKind = () => {
+    const name = newKind?.trim()
+    if (!name) { setNewKind(null); return }
+    if (!customKinds.includes(name)) {
+      const next = [...customKinds, name]
+      setCustomKinds(next)
+      saveVisitKinds(next)
+    }
+    setKindLabel(name)
+    setNewKind(null)
+  }
+
+  const addGuest = () => {
+    const name = guestForm?.name.trim()
+    if (!name) { setGuestForm(null); return }
+    setGuests(prev => [...prev, { id: `p${Date.now()}`, name, role: guestForm!.role }])
+    setGuestForm(null)
   }
 
   const create = () => {
     const refs: ZoneRef[] = ZONE_REFS.filter(r => selected.has(r.refId))
     onCreate(newVisit({
-      kind, date, participants, title, brief,
+      kind, kindLabel: kindLabel ?? undefined, date, participants: guests, brief,
       companiesPresent: [...companies],
       zones: buildZonesFromPlanning(getGanttTasks(), refs),
     }))
   }
+
+  /** Standard kinds first, then the names the user created. */
+  const kindChip = (label: string, on: boolean, onClick: () => void, meta: { bg: string; fg: string }) => (
+    <button key={label} onClick={onClick} style={{
+      padding: '14px 10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
+      border: on ? `2px solid ${meta.fg}` : '1px solid var(--line)',
+      background: on ? meta.bg : '#fff',
+      color: on ? meta.fg : 'var(--muted)',
+    }}>{label}</button>
+  )
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
@@ -529,58 +551,82 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
       <h2 style={{ margin: '0 0 16px' }}>Nouvelle session</h2>
 
       <Field label="Type de session">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {(['visite', 'reunion', 'technique', 'opl'] as VisitKind[]).map(k => (
-            <button key={k} onClick={() => setKind(k)} style={{
-              padding: '14px 10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
-              border: kind === k ? `2px solid ${KIND_META[k].fg}` : '1px solid var(--line)',
-              background: kind === k ? KIND_META[k].bg : '#fff',
-              color: kind === k ? KIND_META[k].fg : 'var(--muted)',
-            }}>
-              {VISIT_KIND_LABEL[k]}
-            </button>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'stretch' }}>
+          {(['visite', 'reunion'] as VisitKind[]).map(k =>
+            kindChip(VISIT_KIND_LABEL[k], kind === k && kindLabel === null,
+              () => { setKind(k); setKindLabel(null) }, KIND_META[k]))}
+          <button onClick={() => setNewKind('')} title="Ajouter un type de session"
+            style={{ padding: '0 16px', borderRadius: '10px', border: '1px dashed #9bb0c2', background: '#fff', color: 'var(--navy)', cursor: 'pointer' }}>
+            <Plus size={18} />
+          </button>
         </div>
+
+        {customKinds.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+            {customKinds.map(name => (
+              <button key={name} onClick={() => setKindLabel(name)} style={{
+                padding: '9px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                border: kindLabel === name ? '2px solid #6d28d9' : '1px solid var(--line)',
+                background: kindLabel === name ? '#ede9fe' : '#fff',
+                color: kindLabel === name ? '#6d28d9' : 'var(--muted)',
+              }}>{name}</button>
+            ))}
+          </div>
+        )}
+
+        {newKind !== null && (
+          <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+            <input autoFocus value={newKind} onChange={e => setNewKind(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addCustomKind() }}
+              placeholder="ex. OPL bâtiment A" style={{ ...input, flex: 1 }} />
+            <button onClick={addCustomKind} style={ghostBtn}>Ajouter</button>
+          </div>
+        )}
       </Field>
 
       <Field label="Date">
         <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...input, width: '100%' }} />
       </Field>
-      <Field label="Objet (facultatif)">
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="ex. Visite hebdomadaire" style={{ ...input, width: '100%' }} />
-      </Field>
 
-      <Field label={`Intervenants présents (${participants.length})`}>
-        {participants.map(p => (
-          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
-            <span style={{ ...badge, background: '#eef2f6', color: '#02457A' }}>{p.role}</span>
-            <span style={{ flex: 1, fontSize: '13px' }}>{p.name}</span>
-            <button onClick={() => setParticipants(prev => prev.filter(x => x.id !== p.id))} style={linkBtn}>Retirer</button>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-          <input value={pName} onChange={e => setPName(e.target.value)} placeholder="Nom" style={{ ...input, flex: '2 1 140px' }}
-            onKeyDown={e => { if (e.key === 'Enter') addP() }} />
-          <select value={pRole} onChange={e => setPRole(e.target.value as Role)} style={{ ...input, flex: '1 1 120px' }}>
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <button onClick={addP} style={ghostBtn}><Plus size={14} /></button>
-        </div>
-      </Field>
-
-      <Field label={`Entreprises présentes (${companies.size})`}>
+      <Field label={`Présents (${companies.size + guests.length})`}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {allCompanies.map(c => (
-            <button key={c} onClick={() => toggleCompany(c)} style={{
+            <button key={c} onClick={() => setCompanies(prev => toggleIn(prev, c))} style={{
               padding: '9px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
               border: companies.has(c) ? '2px solid #02457A' : '1px solid var(--line)',
               background: companies.has(c) ? 'var(--sky-soft)' : '#fff',
               color: companies.has(c) ? '#02457A' : 'var(--muted)',
-            }}>
-              {c}
+            }}>{c}</button>
+          ))}
+          {guests.map(g => (
+            <button key={g.id} onClick={() => setGuests(prev => prev.filter(x => x.id !== g.id))}
+              title="Retirer" style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '9px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                border: '2px solid #6d28d9', background: '#ede9fe', color: '#6d28d9',
+              }}>
+              {g.name} <span style={{ opacity: .7 }}>({g.role})</span> <X size={12} />
             </button>
           ))}
+          <button onClick={() => setGuestForm({ name: '', role: 'MOA' })} title="Ajouter un intervenant extérieur"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '9px 12px', borderRadius: '20px', border: '1px dashed #9bb0c2', background: '#fff', color: 'var(--navy)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+            <Plus size={14} /> Intervenant
+          </button>
         </div>
+
+        {guestForm && (
+          <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+            <input autoFocus value={guestForm.name} placeholder="Nom"
+              onChange={e => setGuestForm({ ...guestForm, name: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
+              style={{ ...input, flex: '2 1 140px' }} />
+            <select value={guestForm.role} onChange={e => setGuestForm({ ...guestForm, role: e.target.value as Role })}
+              style={{ ...input, flex: '1 1 120px' }}>
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <button onClick={addGuest} style={ghostBtn}>Ajouter</button>
+          </div>
+        )}
       </Field>
 
       <Field label="Observations générales (facultatif)">
@@ -594,17 +640,23 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
           const refs = ZONE_REFS.filter(r => r.buildingId === bid)
           const allOn = refs.every(r => selected.has(r.refId))
           return (
-            <div key={bid} style={{ marginBottom: '10px' }}>
+            <div key={bid} style={{ marginBottom: '12px' }}>
               <button onClick={() => toggleBuilding(bid)} style={{ ...linkBtn, marginBottom: '6px' }}>
                 {refs[0].buildingLabel} — {allOn ? 'tout décocher' : 'tout cocher'}
               </button>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {refs.map(r => (
-                  <label key={r.refId} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: selected.has(r.refId) ? 'var(--ok-bg)' : '#fff', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={selected.has(r.refId)} onChange={() => toggle(r.refId)} />
-                    <span style={{ fontSize: '13px' }}>{r.label}</span>
-                  </label>
-                ))}
+              {/* 3 columns on a phone; capped so a desktop does not spread them thin */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))', gap: '6px', maxWidth: '460px' }}>
+                {refs.map(r => {
+                  const on = selected.has(r.refId)
+                  return (
+                    <button key={r.refId} onClick={() => setSelected(prev => toggleIn(prev, r.refId))} style={{
+                      padding: '12px 8px', borderRadius: '9px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                      border: on ? '2px solid var(--ok)' : '1px solid var(--line)',
+                      background: on ? 'var(--ok-bg)' : '#fff',
+                      color: on ? 'var(--ok)' : 'var(--muted)',
+                    }}>{r.label}</button>
+                  )
+                })}
               </div>
             </div>
           )
@@ -653,7 +705,7 @@ function CrEditor(props: {
         <span style={{ ...badge, background: STATUS_META[visit.status].bg, color: STATUS_META[visit.status].fg }}>{STATUS_META[visit.status].label}</span>
       </div>
       <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 6px' }}>
-        {VISIT_KIND_LABEL[visit.kind]} — {locked ? 'document diffusé, verrouillé.' : 'brouillon éditable, relisez puis validez avant diffusion.'}
+        {visitKindLabel(visit)} — {locked ? 'document diffusé, verrouillé.' : 'brouillon éditable, relisez puis validez avant diffusion.'}
       </p>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
         <Clock size={12} /> {fmtTime(visit.startedAt)} → {fmtTime(visit.endedAt)} · {fmtDuration(visitStats(visit, reserves, photos.length).durationMin)}
@@ -810,7 +862,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
       <div className="cr-print" style={{ padding: '20px', maxWidth: '780px', margin: '0 auto', background: '#fff', color: '#16222e' }}>
         <div style={{ borderBottom: '2px solid #02457A', paddingBottom: '12px', marginBottom: '16px' }}>
           <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.08em', color: '#018ABE', fontWeight: 700 }}>
-            Compte rendu — {VISIT_KIND_LABEL[visit.kind]}
+            Compte rendu — {visitKindLabel(visit)}
           </div>
           <h1 style={{ margin: '4px 0', fontSize: '22px', color: '#02457A' }}>{fmtFr(visit.date)}{visit.title ? ` — ${visit.title}` : ''}</h1>
           <div style={{ fontSize: '12px', color: '#5b7183' }}>
@@ -1028,7 +1080,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
         {cr.nextMeeting && <RSection title={`${++s}. Prochaine réunion`}><p style={pStyle}>{cr.nextMeeting}</p></RSection>}
 
         <div style={{ marginTop: '24px', paddingTop: '10px', borderTop: '1px solid #e4ecf2', fontSize: '10px', color: '#9bb0c2', textAlign: 'center' }}>
-          Suivi-Chantier — {VISIT_KIND_LABEL[visit.kind]} du {fmtFr(visit.date)}
+          Suivi-Chantier — {visitKindLabel(visit)} du {fmtFr(visit.date)}
         </div>
       </div>
     </div>
