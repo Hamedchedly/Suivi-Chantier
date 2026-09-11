@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock,
   CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag,
@@ -12,6 +12,7 @@ import {
   buildZonesFromPlanning, applyVisitToPlanning, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr,
 } from '../../lib/visits'
+import { flattenLeaves } from '../../lib/schedule'
 import { DateCommitment, withoutVisit, commitmentsForTask } from '../../lib/commitments'
 import {
   Reserve, FollowUpStatus, carriedOverPoints, applyFollowUp, nextReserveNumber, reserveKind,
@@ -24,7 +25,9 @@ import {
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
 import { summarizeAnnotations } from '../../lib/annotations'
 import { ZoneControl } from '../visite/ZoneControl'
+import { LotControl, type BlockerOption } from '../visite/LotControl'
 import { SessionNotes } from '../visite/SessionNotes'
+import { setBackHandler } from '../../lib/backHandler'
 import {
   ZONE_META, STATUS_META, KIND_META, PRIORITY_META, lotLabel, lotCompany, fmtFr, todayIso,
   bigBtn, bigBtnInline, sectionLabel, visitCard, zoneRow, badge, input, ghostBtn, linkBtn,
@@ -36,7 +39,21 @@ const isLocked = (v: Visit) => v.status === 'diffuse' || v.status === 'verrouill
 const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : '—'
 const fmtDuration = (min: number | null) => min === null ? '—' : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 
-type View = 'list' | 'create' | 'session' | 'notes' | 'cr' | 'report'
+/**
+ * Screens are kept as a stack rather than a single value: going back pops one
+ * screen and shows it exactly as it was. Nothing is re-initialised on the way
+ * back, and every entry is already persisted, so stepping back never discards
+ * work. The system Back button pops the same stack (see backHandler).
+ */
+type View =
+  | { v: 'list' }
+  | { v: 'create' }
+  | { v: 'session' }
+  | { v: 'zone'; ref: string }
+  | { v: 'lot'; ref: string; lotId: string }
+  | { v: 'notes' }
+  | { v: 'cr' }
+  | { v: 'report' }
 
 export function Visite() {
   const [visits, setVisits] = useState<Visit[]>(getVisits)
@@ -44,9 +61,25 @@ export function Visite() {
   const [commitments, setCommitments] = useState<DateCommitment[]>(getCommitments)
   const [lots] = useState<LotContact[]>(getLotsConfig)
   const [photos, setPhotos] = useState<VisitPhoto[]>([])
-  const [view, setView] = useState<View>('list')
+  const [stack, setStack] = useState<View[]>([{ v: 'list' }])
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeZone, setActiveZone] = useState<string | null>(null)
+
+  const view = stack[stack.length - 1]
+  const push = (v: View) => setStack(s => [...s, v])
+  const back = () => setStack(s => (s.length > 1 ? s.slice(0, -1) : s))
+  const swap = (v: View) => setStack(s => [...s.slice(0, -1), v])
+
+  // The system Back button unwinds this stack before leaving the app.
+  const stackRef = useRef(stack)
+  stackRef.current = stack
+  useEffect(() => {
+    setBackHandler(() => {
+      if (stackRef.current.length <= 1) return false
+      setStack(s => (s.length > 1 ? s.slice(0, -1) : s))
+      return true
+    })
+    return () => setBackHandler(null)
+  }, [])
 
   // Auto-save as you go — nothing is ever lost between two taps.
   useEffect(() => { saveVisits(visits) }, [visits])
@@ -105,9 +138,16 @@ export function Visite() {
     [...new Set(visitLotIds(v).map(id => lotCompany(lots, id)).filter((c): c is string => !!c))].sort()
 
   const openVisit = (v: Visit) => {
-    setActiveId(v.id); setActiveZone(null)
-    setView(v.status === 'en_cours' ? 'session' : v.status === 'diffuse' || v.status === 'verrouille' ? 'report' : 'cr')
+    setActiveId(v.id)
+    const entry: View = v.status === 'en_cours' ? { v: 'session' }
+      : v.status === 'diffuse' || v.status === 'verrouille' ? { v: 'report' } : { v: 'cr' }
+    setStack([{ v: 'list' }, entry])
   }
+
+  /** Every planning task, offered as a candidate blocker. */
+  const blockerOptions: BlockerOption[] = flattenLeaves(getGanttTasks()).map(t => ({
+    id: t.id, title: t.title, lotId: t.lot_id, logementId: t.logement_id, company: t.company_id,
+  }))
 
   /**
    * Closing the session: what was observed is written onto the planning, the
@@ -125,52 +165,86 @@ export function Visite() {
       snapshot: buildPlanningSnapshot(updated, new Date()), cr: prev.cr ?? emptyCr(),
     }))
     logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} terminée — planning mis à jour et figé`)
-    setView('cr')
+    setStack([{ v: 'list' }, { v: 'cr' }])
   }
 
   // ── Create ─────────────────────────────────────────────────────────────────
-  if (view === 'create') {
-    return <CreateSession lots={lots} onCancel={() => setView('list')} onCreate={v => {
-      setVisits(prev => [v, ...prev]); setActiveId(v.id); setActiveZone(null); setView('session')
+  if (view.v === 'create') {
+    return <CreateSession lots={lots} onCancel={back} onCreate={v => {
+      setVisits(prev => [v, ...prev]); setActiveId(v.id); setStack([{ v: 'list' }, { v: 'session' }])
       logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} démarrée`)
     }} />
   }
 
-  // ── Zone control ───────────────────────────────────────────────────────────
-  if (view === 'session' && active && activeZone) {
-    const zone = active.zones.find(z => z.refId === activeZone)
+  // ── One lot, on its own page ───────────────────────────────────────────────
+  if (view.v === 'lot' && active) {
+    const zone = active.zones.find(z => z.refId === view.ref)
+    const lotTasks = zone?.tasks.filter(t => t.lotId === view.lotId) ?? []
     if (zone) {
-      const idx = active.zones.findIndex(z => z.refId === activeZone)
-      const next = nextZoneRef(active, activeZone)
-      const control = <ZoneControl
-        zone={zone}
-        lots={lots}
-        commitments={commitments}
-        photos={photos.filter(p => p.zoneRefId === zone.refId)}
-        carriedPoints={carriedOverPoints(reserves, zone.refId, active.id)}
-        visitReserves={reservesForVisit(reserves, active.id)}
-        readOnly={active.status !== 'en_cours'}
-        isLast={next === null}
-        previousOf={taskId => previousObservation(visits, active, taskId)}
-        onUpdateZone={fn => updateZone(zone.refId, fn)}
-        onAddRemark={r => addRemark(active, zone, r)}
-        onFollowUp={(id, status, dueDate) => followUp(active, id, status, dueDate)}
-        onAddPhoto={(lotId, taskId, file) => addPhoto(zone, lotId, taskId, file)}
-        onUpdatePhoto={updatePhoto}
-        onRemovePhoto={removePhoto}
-        onBack={() => setActiveZone(null)}
-        onPrev={idx > 0 ? () => setActiveZone(active.zones[idx - 1].refId) : null}
-        onCloseZone={() => {
-          updateZone(zone.refId, z => ({ ...z, closedAt: z.closedAt ?? new Date().toISOString() }))
-          setActiveZone(next)
-        }}
-      />
-      return <><TourBar visit={active} zoneRef={activeZone} />{control}</>
+      return (
+        <>
+          <TourBar visit={active} zoneRef={zone.refId} lotId={view.lotId} />
+          <LotControl
+            zone={zone}
+            lotId={view.lotId}
+            tasks={lotTasks}
+            lots={lots}
+            commitments={commitments}
+            photos={photos.filter(p => p.zoneRefId === zone.refId)}
+            reserves={reservesForVisit(reserves, active.id)}
+            blockerOptions={blockerOptions}
+            readOnly={active.status !== 'en_cours'}
+            previousOf={taskId => previousObservation(visits, active, taskId)}
+            onPatchTask={(taskId, patch) => updateZone(zone.refId, z => ({
+              ...z, tasks: z.tasks.map(t => t.taskId === taskId ? { ...t, ...patch } : t),
+            }))}
+            onAddRemark={r => addRemark(active, zone, r)}
+            onAddPhoto={(lotId, taskId, file) => addPhoto(zone, lotId, taskId, file)}
+            onBack={back}
+          />
+        </>
+      )
+    }
+  }
+
+  // ── One logement: its lots ─────────────────────────────────────────────────
+  if (view.v === 'zone' && active) {
+    const zone = active.zones.find(z => z.refId === view.ref)
+    if (zone) {
+      const idx = active.zones.findIndex(z => z.refId === zone.refId)
+      const next = nextZoneRef(active, zone.refId)
+      return (
+        <>
+          <TourBar visit={active} zoneRef={zone.refId} />
+          <ZoneControl
+            zone={zone}
+            lots={lots}
+            photos={photos.filter(p => p.zoneRefId === zone.refId)}
+            carriedPoints={carriedOverPoints(reserves, zone.refId, active.id)}
+            visitReserves={reservesForVisit(reserves, active.id)}
+            readOnly={active.status !== 'en_cours'}
+            isLast={next === null}
+            onOpenLot={lotId => push({ v: 'lot', ref: zone.refId, lotId })}
+            onUpdateZone={fn => updateZone(zone.refId, fn)}
+            onAddRemark={r => addRemark(active, zone, r)}
+            onFollowUp={(id, status, dueDate) => followUp(active, id, status, dueDate)}
+            onAddPhoto={(lotId, file) => addPhoto(zone, lotId, undefined, file)}
+            onUpdatePhoto={updatePhoto}
+            onRemovePhoto={removePhoto}
+            onBack={back}
+            onPrev={idx > 0 ? () => swap({ v: 'zone', ref: active.zones[idx - 1].refId }) : null}
+            onCloseZone={() => {
+              updateZone(zone.refId, z => ({ ...z, closedAt: z.closedAt ?? new Date().toISOString() }))
+              if (next) swap({ v: 'zone', ref: next }); else back()
+            }}
+          />
+        </>
+      )
     }
   }
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
-  if (view === 'session' && active) {
+  if (view.v === 'session' && active) {
     const counts = visitCounts(active)
     const visitReserves = reservesForVisit(reserves, active.id).filter(r => r.status === 'open')
     const buildings = [...new Set(active.zones.map(z => z.buildingId))]
@@ -181,7 +255,7 @@ export function Visite() {
       <>
       {active.status === 'en_cours' && <TourBar visit={active} zoneRef={null} />}
       <div style={{ padding: '12px', paddingBottom: '90px' }}>
-        <button onClick={() => setView('list')} style={{ ...linkBtn, marginBottom: '8px' }}>← Toutes les sessions</button>
+        <button onClick={back} style={{ ...linkBtn, marginBottom: '8px' }}>← Toutes les sessions</button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
           <span style={{ ...badge, background: KIND_META[active.kind].bg, color: KIND_META[active.kind].fg }}>{KIND_META[active.kind].short}</span>
@@ -225,7 +299,7 @@ export function Visite() {
                   const m = ZONE_META[zoneState(z)]
                   const carried = carriedOverPoints(reserves, z.refId, active.id).length
                   return (
-                    <button key={z.refId} onClick={() => setActiveZone(z.refId)} style={zoneRow}>
+                    <button key={z.refId} onClick={() => push({ v: 'zone', ref: z.refId })} style={zoneRow}>
                       <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
@@ -251,7 +325,7 @@ export function Visite() {
             <div style={sectionLabel}>Relevé de la session ({visitReserves.length})</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
               {visitReserves.map(r => (
-                <button key={r.id} onClick={() => setActiveZone(r.logementId)} style={{ ...zoneRow, alignItems: 'flex-start' }}>
+                <button key={r.id} onClick={() => push({ v: 'zone', ref: r.logementId })} style={{ ...zoneRow, alignItems: 'flex-start' }}>
                   {reserveKind(r) === 'observation'
                     ? <Eye size={14} color="#5b7183" style={{ marginTop: '2px', flexShrink: 0 }} />
                     : <Flag size={14} color="#b45309" style={{ marginTop: '2px', flexShrink: 0 }} />}
@@ -278,7 +352,7 @@ export function Visite() {
             <ImageIcon size={15} color="var(--muted)" />
             <span style={{ fontSize: '12px' }}><strong style={{ color: 'var(--navy)' }}>{photos.length}</strong> photo{photos.length > 1 ? 's' : ''}</span>
           </div>
-          <button onClick={() => setView('notes')} style={{ ...zoneRow, flex: 1 }}>
+          <button onClick={() => push({ v: 'notes' })} style={{ ...zoneRow, flex: 1 }}>
             <StickyNote size={15} color="var(--muted)" />
             <span style={{ flex: 1, textAlign: 'left', fontSize: '12px' }}><strong style={{ color: 'var(--navy)' }}>{active.notes.length}</strong> note{active.notes.length > 1 ? 's' : ''}</span>
             <ChevronRight size={14} color="var(--muted)" />
@@ -302,10 +376,10 @@ export function Visite() {
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
-  if (view === 'notes' && active) {
+  if (view.v === 'notes' && active) {
     return (
       <div style={{ padding: '12px', paddingBottom: '90px' }}>
-        <button onClick={() => setView(active.status === 'en_cours' ? 'session' : 'cr')} style={{ ...linkBtn, marginBottom: '10px' }}>
+        <button onClick={back} style={{ ...linkBtn, marginBottom: '10px' }}>
           <ArrowLeft size={15} /> Retour
         </button>
         <h2 style={{ margin: '0 0 2px' }}>Notes de fin de {KIND_META[active.kind].short.toLowerCase()}</h2>
@@ -324,30 +398,30 @@ export function Visite() {
   }
 
   // ── CR ─────────────────────────────────────────────────────────────────────
-  if (view === 'cr' && active) {
+  if (view.v === 'cr' && active) {
     return <CrEditor
       visit={active}
       lots={lots}
       reserves={reservesForVisit(reserves, active.id)}
       photos={photos}
       companies={companiesOf(active)}
-      onBack={() => setView('list')}
+      onBack={back}
       onUpdate={fn => updateVisit(active.id, fn)}
       onUpdatePhoto={updatePhoto}
-      onNotes={() => setView('notes')}
+      onNotes={() => push({ v: 'notes' })}
       onValidate={() => updateVisit(active.id, { status: 'cr_pret' })}
       onReopen={() => updateVisit(active.id, { status: 'terminee' })}
       onDiffuse={() => {
         updateVisit(active.id, { status: 'diffuse', diffusedAt: new Date().toISOString() })
         logActivity('doc', `CR de la ${VISIT_KIND_LABEL[active.kind].toLowerCase()} du ${fmtFr(active.date)} diffusé`)
-        setView('report')
+        push({ v: 'report' })
       }}
-      onReport={() => setView('report')}
+      onReport={() => push({ v: 'report' })}
     />
   }
 
   // ── Report ─────────────────────────────────────────────────────────────────
-  if (view === 'report' && active) {
+  if (view.v === 'report' && active) {
     return <Report
       visit={active}
       visits={visits}
@@ -357,14 +431,14 @@ export function Visite() {
       photos={photos}
       commitments={commitments}
       companies={companiesOf(active)}
-      onBack={() => setView(isLocked(active) ? 'list' : 'cr')}
+      onBack={back}
     />
   }
 
   // ── List ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      <button onClick={() => setView('create')} style={bigBtn}>
+      <button onClick={() => push({ v: 'create' })} style={bigBtn}>
         <Plus size={18} /> Nouvelle visite ou réunion
       </button>
 
@@ -969,19 +1043,22 @@ const RSection = ({ title, children }: { title: string; children: React.ReactNod
 )
 
 /** Permanent, discreet reminder of where the tour stands. */
-function TourBar({ visit, zoneRef }: { visit: Visit; zoneRef: string | null }) {
+function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | null; lotId?: string }) {
   const zones = visit.zones
   const idx = zoneRef ? zones.findIndex(z => z.refId === zoneRef) : -1
   const current = idx >= 0 ? zones[idx] : null
   const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
   const controlled = checks.filter(t => t.state !== 'not_checked').length
   const closed = zones.filter(z => z.closedAt).length
+  const lotIds = current ? [...new Set(current.tasks.map(t => t.lotId))] : []
+  const lotPos = lotId ? lotIds.indexOf(lotId) + 1 : 0
 
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#02457A', color: '#fff', padding: '7px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', fontWeight: 600 }}>
         {current && <span>{current.buildingLabel} · {current.label}</span>}
         <span style={{ opacity: .85 }}>Logements {closed}/{zones.length}</span>
+        {lotPos > 0 && <span style={{ opacity: .85 }}>Lot {lotPos}/{lotIds.length}</span>}
         <span style={{ opacity: .85 }}>Tâches {controlled}/{checks.length}</span>
         <div style={{ flex: 1 }} />
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: .85 }}>

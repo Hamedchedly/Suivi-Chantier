@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
 import { Visite } from './components/pages/Visite'
@@ -14,6 +14,7 @@ import { GestionSheet } from './components/layout/GestionSheet'
 import { Topbar } from './components/layout/Topbar'
 import type { Page } from './components/layout/navConfig'
 import { readShareFromUrl } from './lib/share'
+import { runBackHandler } from './lib/backHandler'
 
 export type { Page }
 
@@ -32,6 +33,28 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home')
   const [gestionOpen, setGestionOpen] = useState(false)
   const meta = PAGE_META[currentPage]
+
+  // Back button: step back inside the app instead of closing it. A spare
+  // history entry is kept ahead of us; each Back consumes it and we push a new
+  // one, until there is nothing left to step back to.
+  const pageRef = useRef(currentPage)
+  pageRef.current = currentPage
+  const sheetRef = useRef(gestionOpen)
+  sheetRef.current = gestionOpen
+
+  useEffect(() => {
+    if (window.location.hash.startsWith('#share=')) return
+    history.pushState({ sc: true }, '')
+    const onPop = () => {
+      const keepInside = () => history.pushState({ sc: true }, '')
+      if (sheetRef.current) { setGestionOpen(false); keepInside(); return }
+      if (runBackHandler()) { keepInside(); return }
+      if (pageRef.current !== 'home') { setCurrentPage('home'); keepInside(); return }
+      // at the root with nothing to unwind — let the browser leave
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   // Shared read-only snapshot link (#share=…): render the MOA view, no app chrome.
   const shared = useMemo(() => readShareFromUrl(), [])

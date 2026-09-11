@@ -75,8 +75,10 @@ export interface VisitTaskCheck {
   comment?: string
   baselineEnd?: string     // ISO yyyy-mm-dd — contractual, frozen
   plannedEnd?: string      // ISO yyyy-mm-dd — planning the day of the session
-  promisedEnd?: string     // ISO yyyy-mm-dd — new date announced by the company
+  promisedEnd?: string     // ISO yyyy-mm-dd — derived from promisedWeek (its Friday)
+  promisedWeek?: string    // ISO week the company committed to ("2026-W38")
   promisedLabel?: string   // what exactly was promised ("Livraison pompe")
+  blockedBy?: string[]     // ids of the planning tasks holding this one up
   company?: string
 }
 

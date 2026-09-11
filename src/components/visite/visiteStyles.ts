@@ -16,6 +16,14 @@ export function lotCompany(lots: LotContact[], lotId: string): string | undefine
   return lots.find(l => l.id === lotId)?.company
 }
 
+/**
+ * Planning titles carry the logement ("Visiophonie A-102") so they read well in
+ * the Gantt. Inside a logement's own page that suffix is noise — drop it.
+ */
+export function taskTitle(title: string, logementId: string): string {
+  return title.endsWith(` ${logementId}`) ? title.slice(0, -(logementId.length + 1)) : title
+}
+
 export const fmtFr = (iso?: string) => {
   if (!iso) return '—'
   const [y, m, d] = iso.split('-')
