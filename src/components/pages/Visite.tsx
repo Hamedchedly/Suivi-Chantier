@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock, X,
-  CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag,
+  CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag, ShieldCheck,
 } from 'lucide-react'
 import {
   Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant,
@@ -29,6 +29,8 @@ import { ZoneControl } from '../visite/ZoneControl'
 import { LotControl, type BlockerOption } from '../visite/LotControl'
 import { SessionNotes } from '../visite/SessionNotes'
 import { setBackHandler } from '../../lib/backHandler'
+import { User, canEditLocked, isSuperadmin } from '../../lib/auth'
+import { getSession, getUsers } from '../../lib/repo'
 import {
   ZONE_META, STATUS_META, KIND_META, kindBadge, PRIORITY_META, lotLabel, lotCompany, fmtFr, todayIso,
   bigBtn, bigBtnInline, sectionLabel, visitCard, zoneRow, badge, input, ghostBtn, linkBtn,
@@ -36,7 +38,9 @@ import {
 } from '../visite/visiteStyles'
 import { Field, Empty, Stat, Bar } from '../visite/visiteBits'
 
-const isLocked = (v: Visit) => v.status === 'diffuse' || v.status === 'verrouille'
+const isDiffused = (v: Visit) => v.status === 'diffuse' || v.status === 'verrouille'
+/** A diffused CR is frozen for everyone but a super-admin. */
+const isLockedFor = (v: Visit, user: User | null) => isDiffused(v) && !canEditLocked(user)
 const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : '—'
 const fmtDuration = (min: number | null) => min === null ? '—' : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 
@@ -57,6 +61,11 @@ type View =
   | { v: 'report' }
 
 export function Visite() {
+  // Who is signed in decides whether a diffused CR can be reopened.
+  const [me] = useState<User | null>(() => {
+    const s = getSession()
+    return s ? getUsers().find(u => u.id === s.userId) ?? null : null
+  })
   const [visits, setVisits] = useState<Visit[]>(getVisits)
   const [reserves, setReserves] = useState<Reserve[]>(getReserves)
   const [commitments, setCommitments] = useState<DateCommitment[]>(getCommitments)
@@ -146,8 +155,9 @@ export function Visite() {
 
   const openVisit = (v: Visit) => {
     setActiveId(v.id)
+    // A diffused CR opens on the report — unless the user may correct it.
     const entry: View = v.status === 'en_cours' ? { v: 'session' }
-      : v.status === 'diffuse' || v.status === 'verrouille' ? { v: 'report' } : { v: 'cr' }
+      : isDiffused(v) && !canEditLocked(me) ? { v: 'report' } : { v: 'cr' }
     setStack([{ v: 'list' }, entry])
   }
 
@@ -400,7 +410,7 @@ export function Visite() {
         <SessionNotes
           notes={active.notes}
           companies={companiesOf(active)}
-          readOnly={isLocked(active)}
+          readOnly={isLockedFor(active, me)}
           onAdd={n => updateVisit(active.id, v => ({ ...v, notes: [...v.notes, n] }))}
           onRemove={id => updateVisit(active.id, v => ({ ...v, notes: v.notes.filter(n => n.id !== id) }))}
         />
@@ -416,6 +426,8 @@ export function Visite() {
       reserves={reservesForVisit(reserves, active.id)}
       photos={photos}
       companies={companiesOf(active)}
+      locked={isLockedFor(active, me)}
+      canOverride={isDiffused(active) && isSuperadmin(me)}
       onBack={back}
       onUpdate={fn => updateVisit(active.id, fn)}
       onUpdatePhoto={updatePhoto}
@@ -693,6 +705,8 @@ function CrEditor(props: {
   reserves: Reserve[]
   photos: VisitPhoto[]
   companies: string[]
+  locked: boolean
+  canOverride: boolean
   onBack: () => void
   onUpdate: (fn: (v: Visit) => Visit) => void
   onUpdatePhoto: (p: VisitPhoto) => void
@@ -702,9 +716,9 @@ function CrEditor(props: {
   onReopen: () => void
   onReport: () => void
 }) {
-  const { visit, lots, reserves, photos, companies, onBack, onUpdate, onUpdatePhoto, onNotes, onValidate, onDiffuse, onReopen, onReport } = props
+  const { visit, lots, reserves, photos, companies, locked, canOverride,
+    onBack, onUpdate, onUpdatePhoto, onNotes, onValidate, onDiffuse, onReopen, onReport } = props
   const cr = visit.cr ?? emptyCr()
-  const locked = isLocked(visit)
   const setCr = (patch: Partial<typeof cr>) => onUpdate(v => ({ ...v, cr: { ...(v.cr ?? emptyCr()), ...patch } }))
 
   return (
@@ -723,7 +737,20 @@ function CrEditor(props: {
 
       {locked && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: '#ede9fe', color: '#6d28d9', fontSize: '12px', fontWeight: 600, marginBottom: '14px' }}>
-          <Lock size={14} /> Diffusé le {visit.diffusedAt ? new Date(visit.diffusedAt).toLocaleDateString('fr') : '—'}. Modification réservée à un administrateur.
+          <Lock size={14} /> Diffusé le {visit.diffusedAt ? new Date(visit.diffusedAt).toLocaleDateString('fr') : '—'}. Modification réservée à un super-administrateur.
+        </div>
+      )}
+
+      {canOverride && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: '12px', marginBottom: '14px' }}>
+          <ShieldCheck size={15} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            Document diffusé. Vous pouvez le corriger en tant que super-administrateur — la reprise est journalisée.
+          </span>
+          <button onClick={() => { if (window.confirm('Rouvrir ce CR diffusé ?')) { onReopen(); logActivity('doc', `CR du ${fmtFr(visit.date)} rouvert par un super-administrateur`) } }}
+            style={{ ...ghostBtn, borderColor: '#fdba74', color: '#9a3412', flexShrink: 0 }}>
+            Rouvrir
+          </button>
         </div>
       )}
 

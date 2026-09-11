@@ -30,6 +30,7 @@ import { Meeting } from './meetings'
 import { DEFAULT_MEETINGS } from '../data/meetingsMock'
 import { Visit as VisitSession, buildZonesFromPlanning, type ZoneRef, type TaskState } from './visits'
 import { DateCommitment } from './commitments'
+import type { User, Session } from './auth'
 import { LOGEMENTS } from '../data/zones'
 import { loadState, saveState } from './storage'
 
@@ -53,6 +54,8 @@ const KEYS = {
   visits: 'sc-visits-v3',
   commitments: 'sc-commitments-v1',
   visitKinds: 'sc-visit-kinds-v1',
+  users: 'sc-users-v1',
+  session: 'sc-session-v1',
 } as const
 
 const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
@@ -193,6 +196,31 @@ export function getVisitKinds(): string[] {
 
 export function saveVisitKinds(kinds: string[]): void {
   saveState(KEYS.visitKinds, kinds)
+}
+
+// ── Comptes & session ───────────────────────────────────────────────────────
+// Demo credentials for the prototype. They are stored — and compared — in the
+// browser, so they gate the interface, not the data. See lib/auth.ts.
+
+const DEFAULT_USERS: User[] = [
+  { id: 'u-user', username: 'user', password: 'user', role: 'user', displayName: 'Utilisateur', createdAt: '2026-09-01T08:00:00.000Z' },
+  { id: 'u-super', username: 'superadmin', password: 'superadmin', role: 'superadmin', displayName: 'Super-administrateur', createdAt: '2026-09-01T08:00:00.000Z' },
+]
+
+export function getUsers(): User[] {
+  return loadState<User[]>(KEYS.users, DEFAULT_USERS)
+}
+
+export function saveUsers(users: User[]): void {
+  saveState(KEYS.users, users)
+}
+
+export function getSession(): Session | null {
+  return loadState<Session | null>(KEYS.session, null)
+}
+
+export function saveSession(session: Session | null): void {
+  saveState(KEYS.session, session)
 }
 
 // ── Engagements de dates pris par les entreprises ───────────────────────────

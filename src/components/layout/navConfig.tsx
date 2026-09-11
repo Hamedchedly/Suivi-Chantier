@@ -1,6 +1,6 @@
 import { Home, BarChart3, FolderOpen, Bell, Settings, ClipboardList, Euro, FileText, ClipboardCheck, Building2 } from 'lucide-react'
 
-export type Page = 'home' | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances' | 'config' | 'rapports' | 'alertes'
+export type Page = 'home' | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances' | 'config' | 'rapports' | 'alertes' | 'comptes'
 
 export const GESTION_PAGES: Page[] = ['cr', 'entreprises', 'finances', 'rapports']
 
