@@ -48,6 +48,8 @@ export const STATUS_META: Record<VisitStatus, { label: string; bg: string; fg: s
 export const KIND_META: Record<VisitKind, { label: string; short: string; bg: string; fg: string }> = {
   visite: { label: 'Visite de chantier', short: 'Visite', bg: '#e0f2fe', fg: '#0369a1' },
   reunion: { label: 'Réunion de chantier', short: 'Réunion', bg: '#ede9fe', fg: '#6d28d9' },
+  technique: { label: 'Visite technique', short: 'Technique', bg: '#dcfce7', fg: '#15803d' },
+  opl: { label: 'OPL / pré-réception', short: 'OPL', bg: '#fef3c7', fg: '#b45309' },
 }
 
 export const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {

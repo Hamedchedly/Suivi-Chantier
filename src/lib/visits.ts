@@ -30,11 +30,13 @@ import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, drif
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
-export type VisitKind = 'visite' | 'reunion'
+export type VisitKind = 'visite' | 'reunion' | 'technique' | 'opl'
 
 export const VISIT_KIND_LABEL: Record<VisitKind, string> = {
   visite: 'Visite de chantier',
   reunion: 'Réunion de chantier',
+  technique: 'Visite technique',
+  opl: 'OPL / pré-réception',
 }
 
 // ── Roles & participants ─────────────────────────────────────────────────────
@@ -69,11 +71,19 @@ export interface VisitTaskCheck {
   title: string
   state: TaskState
   progress?: number        // % observed on site (undefined = not filled in)
+  plannedProgress?: number // % the planning expected, frozen when the session opened
   comment?: string
   baselineEnd?: string     // ISO yyyy-mm-dd — contractual, frozen
   plannedEnd?: string      // ISO yyyy-mm-dd — planning the day of the session
   promisedEnd?: string     // ISO yyyy-mm-dd — new date announced by the company
+  promisedLabel?: string   // what exactly was promised ("Livraison pompe")
   company?: string
+}
+
+/** Gap between what the planning expected and what was observed, in points. */
+export function progressGap(c: VisitTaskCheck): number | null {
+  if (c.progress === undefined || c.plannedProgress === undefined) return null
+  return c.progress - c.plannedProgress
 }
 
 export interface VisitZone {
@@ -153,8 +163,12 @@ export interface Visit {
   title?: string
   status: VisitStatus
   participants: Participant[]
+  companiesPresent?: string[]
+  brief?: string         // observations générales noted before setting off
   zones: VisitZone[]
   notes: VisitNote[]
+  startedAt?: string     // ISO datetime — stamped when the tour starts
+  endedAt?: string       // ISO datetime — stamped on close
   snapshot?: PlanningSnapshot
   cr?: CrData
   createdAt: string      // ISO datetime
@@ -206,6 +220,7 @@ export function buildZonesFromPlanning(tasks: GanttTask[], refs: ZoneRef[]): Vis
         lotId: t.lot_id,
         title: t.title,
         state: 'not_checked' as TaskState,
+        plannedProgress: t.progress,
         baselineEnd: t.baseline_end ? isoDay(t.baseline_end) : undefined,
         plannedEnd: isoDay(t.planned_end),
         company: t.company_id,
@@ -333,6 +348,112 @@ export function reservesForVisit(reserves: Reserve[], visitId: string): Reserve[
   return reserves.filter(r => r.visitId === visitId)
 }
 
+// ── Comparing one session to the previous ones ───────────────────────────────
+
+export interface PreviousObservation {
+  visitId: string
+  date: string
+  progress?: number
+  promisedEnd?: string
+}
+
+/**
+ * What the last CLOSED session before this one observed on a given task —
+ * the basis for "70 % → 100 %, +30 pts" and "échéance reportée".
+ */
+export function previousObservation(visits: Visit[], current: Visit, taskId: string): PreviousObservation | undefined {
+  const earlier = visits
+    .filter(v => v.id !== current.id && v.status !== 'en_cours' && v.date <= current.date)
+    .sort((a, b) => b.date.localeCompare(a.date))
+  for (const v of earlier) {
+    const c = v.zones.flatMap(z => z.tasks).find(t => t.taskId === taskId && t.state !== 'not_checked' && t.state !== 'na')
+    if (c) return { visitId: v.id, date: v.date, progress: c.progress, promisedEnd: c.promisedEnd }
+  }
+  return undefined
+}
+
+// ── What changed since the previous session ─────────────────────────────────
+
+export type ChangeKind = 'lifted' | 'still_open' | 'rescheduled' | 'new' | 'progress_up' | 'progress_down'
+
+export interface VisitChange {
+  kind: ChangeKind
+  label: string
+  detail?: string
+  zone?: string
+}
+
+/**
+ * The delta a CR reader cares about: which points were lifted, which slipped,
+ * what was newly raised and where the works moved — so nobody has to re-read
+ * the previous comptes rendus.
+ */
+export function visitChanges(current: Visit, visits: Visit[], reserves: Reserve[]): VisitChange[] {
+  const out: VisitChange[] = []
+
+  for (const r of reserves) {
+    const verdict = r.follow?.filter(f => f.visitId === current.id).pop()
+    if (verdict) {
+      const label = `${r.number} — ${r.description}`
+      if (verdict.status === 'done') out.push({ kind: 'lifted', label, zone: r.logementId })
+      else if (verdict.status === 'rescheduled') {
+        out.push({ kind: 'rescheduled', label, zone: r.logementId, detail: verdict.dueDate ? `nouvelle échéance ${verdict.dueDate}` : undefined })
+      } else out.push({ kind: 'still_open', label, zone: r.logementId, detail: verdict.status === 'not_done' ? 'non réalisé' : 'toujours en cours' })
+    }
+    if (r.visitId === current.id) {
+      out.push({ kind: 'new', label: `${r.number} — ${r.description}`, zone: r.logementId, detail: r.dueDate ? `échéance ${r.dueDate}` : undefined })
+    }
+  }
+
+  for (const z of current.zones) {
+    for (const c of z.tasks) {
+      if (c.state === 'not_checked' || c.state === 'na' || c.progress === undefined) continue
+      const prev = previousObservation(visits, current, c.taskId)
+      if (prev?.progress === undefined) continue
+      const delta = c.progress - prev.progress
+      if (delta === 0) continue
+      out.push({
+        kind: delta > 0 ? 'progress_up' : 'progress_down',
+        label: c.title,
+        zone: z.label,
+        detail: `${prev.progress}% → ${c.progress}% (${delta > 0 ? '+' : ''}${delta} pts)`,
+      })
+    }
+  }
+
+  return out
+}
+
+// ── Closing statistics ───────────────────────────────────────────────────────
+
+export interface VisitStats {
+  durationMin: number | null
+  buildings: number
+  logements: number
+  tasksChecked: number
+  observations: number
+  actions: number
+  photos: number
+  commitments: number
+}
+
+export function visitStats(v: Visit, reserves: Reserve[], photoCount: number): VisitStats {
+  const mine = reservesForVisit(reserves, v.id)
+  const visited = v.zones.filter(z => z.closedAt || zoneControlProgress(z) > 0)
+  const start = v.startedAt ? Date.parse(v.startedAt) : NaN
+  const end = v.endedAt ? Date.parse(v.endedAt) : NaN
+  return {
+    durationMin: isNaN(start) || isNaN(end) ? null : Math.max(0, Math.round((end - start) / 60000)),
+    buildings: new Set(visited.map(z => z.buildingId)).size,
+    logements: visited.length,
+    tasksChecked: allChecks(v).filter(t => t.state !== 'not_checked' && t.state !== 'na').length,
+    observations: mine.filter(r => (r.kind ?? 'action') === 'observation').length,
+    actions: mine.filter(r => (r.kind ?? 'action') === 'action').length,
+    photos: photoCount,
+    commitments: allChecks(v).filter(t => t.promisedEnd).length,
+  }
+}
+
 // ── Notes ────────────────────────────────────────────────────────────────────
 
 export function notesForCompany(v: Visit, company: string): VisitNote[] {
@@ -405,10 +526,12 @@ export function commitmentsFromVisit(v: Visit): DateCommitment[] {
       taskId: c.taskId,
       lotId: c.lotId,
       company: c.company,
+      label: c.promisedLabel?.trim() || c.title,
       promisedEnd: c.promisedEnd,
       at: new Date().toISOString(),
       visitId: v.id,
       visitDate: v.date,
+      outcome: 'pending',
     })
   }
   return out
@@ -450,16 +573,31 @@ export function emptyCr(): CrData {
   return { synthese: '', conclusions: '', nextMeeting: '', reserveOrder: [], photoOrder: [] }
 }
 
-export function newVisit(kind: VisitKind, date: string, participants: Participant[], zones: VisitZone[], title?: string): Visit {
+export interface NewVisitInput {
+  kind: VisitKind
+  date: string
+  participants: Participant[]
+  zones: VisitZone[]
+  title?: string
+  companiesPresent?: string[]
+  brief?: string
+}
+
+/** Opening a session stamps its start time — the tour begins now. */
+export function newVisit(i: NewVisitInput): Visit {
+  const now = new Date().toISOString()
   return {
     id: `VS${Date.now()}`,
-    kind,
-    date,
-    title: title?.trim() || undefined,
+    kind: i.kind,
+    date: i.date,
+    title: i.title?.trim() || undefined,
     status: 'en_cours',
-    participants,
-    zones,
+    participants: i.participants,
+    companiesPresent: i.companiesPresent?.length ? i.companiesPresent : undefined,
+    brief: i.brief?.trim() || undefined,
+    zones: i.zones,
     notes: [],
-    createdAt: new Date().toISOString(),
+    startedAt: now,
+    createdAt: now,
   }
 }

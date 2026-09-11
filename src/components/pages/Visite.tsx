@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react'
 import {
-  Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote,
-  CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users,
+  Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock,
+  CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag,
 } from 'lucide-react'
 import {
   Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant,
   VISIT_KIND_LABEL, zoneState, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
-  reservesForVisit, generalNotes, notesForCompany, nextZoneRef,
+  reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
+  visitStats, visitChanges, progressGap, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr,
 } from '../../lib/visits'
 import { DateCommitment, withoutVisit, commitmentsForTask } from '../../lib/commitments'
-import { Reserve } from '../../lib/reserves'
+import {
+  Reserve, FollowUpStatus, carriedOverPoints, applyFollowUp, nextReserveNumber, reserveKind,
+} from '../../lib/reserves'
+import type { RemarkInput } from '../visite/ZoneControl'
 import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
   getCommitments, saveCommitments, getLotsConfig, logActivity, ZONE_REFS, type LotContact,
@@ -29,6 +33,8 @@ import {
 import { Field, Empty, Stat, Bar } from '../visite/visiteBits'
 
 const isLocked = (v: Visit) => v.status === 'diffuse' || v.status === 'verrouille'
+const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : '—'
+const fmtDuration = (min: number | null) => min === null ? '—' : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 
 type View = 'list' | 'create' | 'session' | 'notes' | 'cr' | 'report'
 
@@ -70,6 +76,30 @@ export function Visite() {
   const updatePhoto = async (p: VisitPhoto) => { await savePhoto(p); if (activeId) reloadPhotos(activeId) }
   const removePhoto = async (id: string) => { await deletePhoto(id); if (activeId) reloadPhotos(activeId) }
 
+  /** Observations and actions raised on the spot, always carrying their context. */
+  const addRemark = (v: Visit, zone: VisitZone, r: RemarkInput) =>
+    setReserves(prev => [{
+      id: `r${Date.now()}`,
+      number: nextReserveNumber(prev),
+      kind: r.kind,
+      lotId: r.lotId,
+      taskId: r.taskId,
+      logementId: zone.refId,
+      description: r.description,
+      priority: r.priority,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      dueDate: r.dueDate,
+      visitId: v.id,
+      company: lotCompany(lots, r.lotId),
+    }, ...prev])
+
+  /** Settling a point left open by an earlier session — history is appended. */
+  const followUp = (v: Visit, reserveId: string, status: FollowUpStatus, dueDate?: string) =>
+    setReserves(prev => prev.map(r => r.id !== reserveId ? r : applyFollowUp(r, {
+      at: new Date().toISOString(), visitId: v.id, visitDate: v.date, status, dueDate,
+    })))
+
   /** Companies concerned by the session, read from the lots actually planned. */
   const companiesOf = (v: Visit) =>
     [...new Set(visitLotIds(v).map(id => lotCompany(lots, id)).filter((c): c is string => !!c))].sort()
@@ -91,7 +121,8 @@ export function Visite() {
     saveCommitments(nextCommitments)
     setCommitments(nextCommitments)
     updateVisit(v.id, prev => ({
-      ...prev, status: 'terminee', snapshot: buildPlanningSnapshot(updated, new Date()), cr: prev.cr ?? emptyCr(),
+      ...prev, status: 'terminee', endedAt: new Date().toISOString(),
+      snapshot: buildPlanningSnapshot(updated, new Date()), cr: prev.cr ?? emptyCr(),
     }))
     logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} terminée — planning mis à jour et figé`)
     setView('cr')
@@ -99,7 +130,7 @@ export function Visite() {
 
   // ── Create ─────────────────────────────────────────────────────────────────
   if (view === 'create') {
-    return <CreateSession onCancel={() => setView('list')} onCreate={v => {
+    return <CreateSession lots={lots} onCancel={() => setView('list')} onCreate={v => {
       setVisits(prev => [v, ...prev]); setActiveId(v.id); setActiveZone(null); setView('session')
       logActivity('visit', `${VISIT_KIND_LABEL[v.kind]} du ${fmtFr(v.date)} démarrée`)
     }} />
@@ -111,17 +142,19 @@ export function Visite() {
     if (zone) {
       const idx = active.zones.findIndex(z => z.refId === activeZone)
       const next = nextZoneRef(active, activeZone)
-      return <ZoneControl
+      const control = <ZoneControl
         zone={zone}
-        visitId={active.id}
         lots={lots}
         commitments={commitments}
         photos={photos.filter(p => p.zoneRefId === zone.refId)}
-        reserves={reserves}
+        carriedPoints={carriedOverPoints(reserves, zone.refId, active.id)}
+        visitReserves={reservesForVisit(reserves, active.id)}
         readOnly={active.status !== 'en_cours'}
         isLast={next === null}
+        previousOf={taskId => previousObservation(visits, active, taskId)}
         onUpdateZone={fn => updateZone(zone.refId, fn)}
-        onAddReserve={r => setReserves(prev => [r, ...prev])}
+        onAddRemark={r => addRemark(active, zone, r)}
+        onFollowUp={(id, status, dueDate) => followUp(active, id, status, dueDate)}
         onAddPhoto={(lotId, taskId, file) => addPhoto(zone, lotId, taskId, file)}
         onUpdatePhoto={updatePhoto}
         onRemovePhoto={removePhoto}
@@ -132,6 +165,7 @@ export function Visite() {
           setActiveZone(next)
         }}
       />
+      return <><TourBar visit={active} zoneRef={activeZone} />{control}</>
     }
   }
 
@@ -141,8 +175,11 @@ export function Visite() {
     const visitReserves = reservesForVisit(reserves, active.id).filter(r => r.status === 'open')
     const buildings = [...new Set(active.zones.map(z => z.buildingId))]
     const remaining = remainingToControl(active)
+    const pendingElsewhere = active.zones.reduce((n, z) => n + carriedOverPoints(reserves, z.refId, active.id).length, 0)
 
     return (
+      <>
+      {active.status === 'en_cours' && <TourBar visit={active} zoneRef={null} />}
       <div style={{ padding: '12px', paddingBottom: '90px' }}>
         <button onClick={() => setView('list')} style={{ ...linkBtn, marginBottom: '8px' }}>← Toutes les sessions</button>
 
@@ -152,6 +189,7 @@ export function Visite() {
         </div>
         <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
           {active.title ?? VISIT_KIND_LABEL[active.kind]} • {counts.total} zones • {active.participants.length} présents
+          {active.startedAt && <> • démarrée à {fmtTime(active.startedAt)}</>}
         </div>
 
         <div style={{ display: 'flex', gap: '14px', marginBottom: '16px' }}>
@@ -185,6 +223,7 @@ export function Visite() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {zones.map(z => {
                   const m = ZONE_META[zoneState(z)]
+                  const carried = carriedOverPoints(reserves, z.refId, active.id).length
                   return (
                     <button key={z.refId} onClick={() => setActiveZone(z.refId)} style={zoneRow}>
                       <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
@@ -192,6 +231,11 @@ export function Visite() {
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
                         <div style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
                       </div>
+                      {carried > 0 && (
+                        <span title={`${carried} point(s) non levé(s)`} style={{ ...badge, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <AlertTriangle size={10} />{carried}
+                        </span>
+                      )}
                       <span style={{ ...badge, background: m.bg, color: m.fg }}>{m.label}</span>
                       <ChevronRight size={14} color="var(--muted)" />
                     </button>
@@ -204,19 +248,29 @@ export function Visite() {
 
         {visitReserves.length > 0 && (
           <>
-            <div style={sectionLabel}>À revoir ({visitReserves.length})</div>
+            <div style={sectionLabel}>Relevé de la session ({visitReserves.length})</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
               {visitReserves.map(r => (
                 <button key={r.id} onClick={() => setActiveZone(r.logementId)} style={{ ...zoneRow, alignItems: 'flex-start' }}>
-                  <AlertTriangle size={14} color="#f59e0b" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  {reserveKind(r) === 'observation'
+                    ? <Eye size={14} color="#5b7183" style={{ marginTop: '2px', flexShrink: 0 }} />
+                    : <Flag size={14} color="#b45309" style={{ marginTop: '2px', flexShrink: 0 }} />}
                   <span style={{ flex: 1, textAlign: 'left', fontSize: '12px' }}>
                     <strong style={{ color: 'var(--navy)' }}>{r.number}</strong> {r.description}
                     <span style={{ color: 'var(--muted)' }}> · {r.logementId} · {lotLabel(lots, r.lotId)}</span>
+                    {r.dueDate && <span style={{ color: '#b45309' }}> · échéance {fmtFr(r.dueDate)}</span>}
                   </span>
                 </button>
               ))}
             </div>
           </>
+        )}
+
+        {pendingElsewhere > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: '12px', color: '#b45309', marginBottom: '16px' }}>
+            <AlertTriangle size={14} />
+            {pendingElsewhere} point{pendingElsewhere > 1 ? 's' : ''} des visites précédentes reste{pendingElsewhere > 1 ? 'nt' : ''} à statuer — ils apparaissent dans les logements concernés.
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
@@ -243,6 +297,7 @@ export function Visite() {
           </button>
         )}
       </div>
+      </>
     )
   }
 
@@ -295,8 +350,10 @@ export function Visite() {
   if (view === 'report' && active) {
     return <Report
       visit={active}
+      visits={visits}
       lots={lots}
       reserves={reservesForVisit(reserves, active.id)}
+      allReserves={reserves}
       photos={photos}
       commitments={commitments}
       companies={companiesOf(active)}
@@ -344,14 +401,23 @@ export function Visite() {
 // Create
 // ═══════════════════════════════════════════════════════════════════════════
 
-function CreateSession({ onCancel, onCreate }: { onCancel: () => void; onCreate: (v: Visit) => void }) {
+function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCancel: () => void; onCreate: (v: Visit) => void }) {
   const [kind, setKind] = useState<VisitKind>('visite')
   const [date, setDate] = useState(todayIso())
   const [title, setTitle] = useState('')
+  const [brief, setBrief] = useState('')
   const [participants, setParticipants] = useState<Participant[]>([])
   const [pName, setPName] = useState('')
   const [pRole, setPRole] = useState<Role>('MOE')
+  const [companies, setCompanies] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set(ZONE_REFS.map(r => r.refId)))
+
+  const allCompanies = [...new Set(lots.map(l => l.company))].sort()
+  const toggleCompany = (c: string) => setCompanies(prev => {
+    const n = new Set(prev)
+    if (n.has(c)) n.delete(c); else n.add(c)
+    return n
+  })
 
   const buildings = [...new Set(ZONE_REFS.map(r => r.buildingId))]
   const toggle = (refId: string) => setSelected(prev => {
@@ -376,7 +442,11 @@ function CreateSession({ onCancel, onCreate }: { onCancel: () => void; onCreate:
 
   const create = () => {
     const refs: ZoneRef[] = ZONE_REFS.filter(r => selected.has(r.refId))
-    onCreate(newVisit(kind, date, participants, buildZonesFromPlanning(getGanttTasks(), refs), title))
+    onCreate(newVisit({
+      kind, date, participants, title, brief,
+      companiesPresent: [...companies],
+      zones: buildZonesFromPlanning(getGanttTasks(), refs),
+    }))
   }
 
   return (
@@ -385,10 +455,10 @@ function CreateSession({ onCancel, onCreate }: { onCancel: () => void; onCreate:
       <h2 style={{ margin: '0 0 16px' }}>Nouvelle session</h2>
 
       <Field label="Type de session">
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {(['visite', 'reunion'] as VisitKind[]).map(k => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {(['visite', 'reunion', 'technique', 'opl'] as VisitKind[]).map(k => (
             <button key={k} onClick={() => setKind(k)} style={{
-              flex: 1, padding: '14px 10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
+              padding: '14px 10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: 700,
               border: kind === k ? `2px solid ${KIND_META[k].fg}` : '1px solid var(--line)',
               background: kind === k ? KIND_META[k].bg : '#fff',
               color: kind === k ? KIND_META[k].fg : 'var(--muted)',
@@ -424,6 +494,27 @@ function CreateSession({ onCancel, onCreate }: { onCancel: () => void; onCreate:
         </div>
       </Field>
 
+      <Field label={`Entreprises présentes (${companies.size})`}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {allCompanies.map(c => (
+            <button key={c} onClick={() => toggleCompany(c)} style={{
+              padding: '9px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+              border: companies.has(c) ? '2px solid #02457A' : '1px solid var(--line)',
+              background: companies.has(c) ? 'var(--sky-soft)' : '#fff',
+              color: companies.has(c) ? '#02457A' : 'var(--muted)',
+            }}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Observations générales (facultatif)">
+        <textarea value={brief} onChange={e => setBrief(e.target.value)}
+          placeholder="Contexte, météo, accès, points à aborder…"
+          style={{ ...input, width: '100%', minHeight: '56px', resize: 'vertical' }} />
+      </Field>
+
       <Field label={`Zones à parcourir (${selected.size})`}>
         {buildings.map(bid => {
           const refs = ZONE_REFS.filter(r => r.buildingId === bid)
@@ -447,8 +538,11 @@ function CreateSession({ onCancel, onCreate }: { onCancel: () => void; onCreate:
       </Field>
 
       <button onClick={create} disabled={selected.size === 0} style={{ ...bigBtn, opacity: selected.size === 0 ? 0.5 : 1 }}>
-        Démarrer →
+        Démarrer la visite →
       </button>
+      <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '-12px', textAlign: 'center' }}>
+        L'heure de début est enregistrée automatiquement.
+      </p>
     </div>
   )
 }
@@ -484,9 +578,12 @@ function CrEditor(props: {
         <h2 style={{ margin: '0 0 2px' }}>Compte rendu — {fmtFr(visit.date)}</h2>
         <span style={{ ...badge, background: STATUS_META[visit.status].bg, color: STATUS_META[visit.status].fg }}>{STATUS_META[visit.status].label}</span>
       </div>
-      <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 14px' }}>
+      <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 6px' }}>
         {VISIT_KIND_LABEL[visit.kind]} — {locked ? 'document diffusé, verrouillé.' : 'brouillon éditable, relisez puis validez avant diffusion.'}
       </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
+        <Clock size={12} /> {fmtTime(visit.startedAt)} → {fmtTime(visit.endedAt)} · {fmtDuration(visitStats(visit, reserves, photos.length).durationMin)}
+      </div>
 
       {locked && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: '#ede9fe', color: '#6d28d9', fontSize: '12px', fontWeight: 600, marginBottom: '14px' }}>
@@ -533,13 +630,19 @@ function CrEditor(props: {
         )}
       </Field>
 
-      <Field label={`Points à revoir (${reserves.length})`}>
-        {reserves.length === 0 && <Empty>Aucun point à revoir.</Empty>}
+      <Field label={`Relevé de la session (${reserves.length})`}>
+        {reserves.length === 0 && <Empty>Aucune observation ni action.</Empty>}
         {reserves.map(r => (
           <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: '12px' }}>
-            <span style={{ ...badge, background: PRIORITY_META[r.priority].bg, color: PRIORITY_META[r.priority].fg }}>{PRIORITY_META[r.priority].label}</span>
+            {reserveKind(r) === 'observation'
+              ? <Eye size={13} color="#5b7183" style={{ flexShrink: 0 }} />
+              : <Flag size={13} color="#b45309" style={{ flexShrink: 0 }} />}
             <span style={{ flex: 1 }}><strong style={{ color: 'var(--navy)' }}>{r.number}</strong> {r.description}
               <span style={{ color: 'var(--muted)' }}> · {r.logementId} · {lotLabel(lots, r.lotId)}</span></span>
+            {r.dueDate && <span style={{ fontSize: '10px', color: '#b45309' }}>{fmtFr(r.dueDate)}</span>}
+            {reserveKind(r) === 'action' && (
+              <span style={{ ...badge, background: PRIORITY_META[r.priority].bg, color: PRIORITY_META[r.priority].fg }}>{PRIORITY_META[r.priority].label}</span>
+            )}
           </div>
         ))}
       </Field>
@@ -598,10 +701,12 @@ function CrEditor(props: {
 // Report (rendered from the frozen snapshot)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function Report({ visit, lots, reserves, photos, commitments, companies, onBack }: {
+function Report({ visit, visits, lots, reserves, allReserves, photos, commitments, companies, onBack }: {
   visit: Visit
+  visits: Visit[]
   lots: LotContact[]
   reserves: Reserve[]
+  allReserves: Reserve[]
   photos: VisitPhoto[]
   commitments: DateCommitment[]
   companies: string[]
@@ -609,10 +714,16 @@ function Report({ visit, lots, reserves, photos, commitments, companies, onBack 
 }) {
   const snap = visit.snapshot
   const cr = visit.cr ?? emptyCr()
-  const openReserves = reserves.filter(r => r.status === 'open')
   const crPhotos = photos.filter(p => p.includeInCr)
   const general = generalNotes(visit)
   const sessionCommitments = commitments.filter(c => c.visitId === visit.id)
+  const stats = visitStats(visit, allReserves, crPhotos.length)
+  const changes = visitChanges(visit, visits, allReserves)
+  const observations = reserves.filter(r => reserveKind(r) === 'observation')
+  const actions = reserves.filter(r => reserveKind(r) === 'action')
+  const gaps = visit.zones.flatMap(z => z.tasks
+    .filter(t => { const g = progressGap(t); return g !== null && g !== 0 })
+    .map(t => ({ zone: z.label, task: t, gap: progressGap(t)! })))
   let s = 0  // dynamic section numbering — conditional sections never leave gaps
 
   return (
@@ -633,15 +744,56 @@ function Report({ visit, lots, reserves, photos, commitments, companies, onBack 
           </div>
         </div>
 
+        <RSection title={`${++s}. Informations générales`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px', fontSize: '11px' }}>
+            <RFact label="Horaires" value={`${fmtTime(visit.startedAt)} → ${fmtTime(visit.endedAt)}`} />
+            <RFact label="Durée" value={fmtDuration(stats.durationMin)} />
+            <RFact label="Bâtiments" value={String(stats.buildings)} />
+            <RFact label="Logements" value={String(stats.logements)} />
+            <RFact label="Tâches contrôlées" value={String(stats.tasksChecked)} />
+            <RFact label="Observations" value={String(stats.observations)} />
+            <RFact label="Actions" value={String(stats.actions)} />
+            <RFact label="Photos" value={String(stats.photos)} />
+          </div>
+        </RSection>
+
         <RSection title={`${++s}. Intervenants présents`}>
           {visit.participants.length === 0 ? <p style={pStyle}>—</p> : (
             <ul style={{ margin: 0, paddingLeft: '18px' }}>
               {visit.participants.map(p => <li key={p.id} style={{ fontSize: '12px', marginBottom: '2px' }}><strong>{p.role}</strong> — {p.name}</li>)}
             </ul>
           )}
+          {visit.companiesPresent && visit.companiesPresent.length > 0 && (
+            <p style={{ ...pStyle, marginTop: '6px' }}><strong>Entreprises présentes :</strong> {visit.companiesPresent.join(', ')}</p>
+          )}
         </RSection>
 
-        {cr.synthese && <RSection title={`${++s}. Synthèse`}><p style={pStyle}>{cr.synthese}</p></RSection>}
+        {(cr.synthese || visit.brief) && (
+          <RSection title={`${++s}. Synthèse`}>
+            {visit.brief && <p style={{ ...pStyle, marginBottom: '6px', fontStyle: 'italic' }}>{visit.brief}</p>}
+            {cr.synthese && <p style={pStyle}>{cr.synthese}</p>}
+          </RSection>
+        )}
+
+        {changes.length > 0 && (
+          <RSection title={`${++s}. Ce qui a changé depuis la dernière visite`}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              {changes.map((c, i) => {
+                const m = CHANGE_META[c.kind]
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px' }}>
+                    <span style={{ ...badge, background: m.bg, color: m.fg, flexShrink: 0 }}>{m.label}</span>
+                    <span style={{ flex: 1 }}>
+                      {c.label}
+                      {c.zone && <span style={{ color: '#9bb0c2' }}> · {c.zone}</span>}
+                      {c.detail && <span style={{ color: '#5b7183' }}> — {c.detail}</span>}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </RSection>
+        )}
 
         <RSection title={`${++s}. Relevé d'avancement par zone`}>
           <table style={tableStyle}>
@@ -706,17 +858,55 @@ function Report({ visit, lots, reserves, photos, commitments, companies, onBack 
           </RSection>
         )}
 
-        <RSection title={`${++s}. Points à revoir / réserves`}>
-          {openReserves.length === 0 ? <p style={pStyle}>Aucun point à revoir ouvert.</p> : (
+        {gaps.length > 0 && (
+          <RSection title={`${++s}. Écarts planning / constat`}>
             <table style={tableStyle}>
-              <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Description</th><th style={thStyle}>Lot</th><th style={thStyle}>Priorité</th></tr></thead>
+              <thead><tr><th style={thStyle}>Zone</th><th style={thStyle}>Tâche</th><th style={thStyle}>Prévu</th><th style={thStyle}>Constaté</th><th style={thStyle}>Écart</th></tr></thead>
               <tbody>
-                {openReserves.map(r => (
+                {gaps.map(g => (
+                  <tr key={`${g.zone}-${g.task.taskId}`}>
+                    <td style={tdStyle}>{g.zone}</td>
+                    <td style={tdStyle}>{g.task.title}</td>
+                    <td style={tdStyle}>{g.task.plannedProgress}%</td>
+                    <td style={tdStyle}>{g.task.progress}%</td>
+                    <td style={{ ...tdStyle, color: g.gap < 0 ? '#dc2626' : '#15803d', fontWeight: 700 }}>{g.gap > 0 ? `+${g.gap}` : g.gap} pts</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </RSection>
+        )}
+
+        {observations.length > 0 && (
+          <RSection title={`${++s}. Observations`}>
+            <table style={tableStyle}>
+              <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Constat</th><th style={thStyle}>Lot</th></tr></thead>
+              <tbody>
+                {observations.map(r => (
                   <tr key={r.id}>
                     <td style={tdStyle}>{r.number}</td>
                     <td style={tdStyle}>{r.logementId}</td>
                     <td style={tdStyle}>{r.description}</td>
                     <td style={tdStyle}>{lotLabel(lots, r.lotId)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </RSection>
+        )}
+
+        <RSection title={`${++s}. Actions à réaliser`}>
+          {actions.length === 0 ? <p style={pStyle}>Aucune action ouverte issue de cette session.</p> : (
+            <table style={tableStyle}>
+              <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Action</th><th style={thStyle}>Entreprise</th><th style={thStyle}>Échéance</th><th style={thStyle}>Priorité</th></tr></thead>
+              <tbody>
+                {actions.map(r => (
+                  <tr key={r.id}>
+                    <td style={tdStyle}>{r.number}</td>
+                    <td style={tdStyle}>{r.logementId}</td>
+                    <td style={tdStyle}>{r.description}</td>
+                    <td style={tdStyle}>{r.company ?? lotCompany(lots, r.lotId) ?? '—'}</td>
+                    <td style={tdStyle}>{fmtFr(r.dueDate)}</td>
                     <td style={tdStyle}>{PRIORITY_META[r.priority].label}</td>
                   </tr>
                 ))}
@@ -775,6 +965,49 @@ const RSection = ({ title, children }: { title: string; children: React.ReactNod
   <div style={{ marginBottom: '18px' }}>
     <h2 style={{ fontSize: '14px', color: '#02457A', borderBottom: '1px solid #e4ecf2', paddingBottom: '4px', marginBottom: '8px' }}>{title}</h2>
     {children}
+  </div>
+)
+
+/** Permanent, discreet reminder of where the tour stands. */
+function TourBar({ visit, zoneRef }: { visit: Visit; zoneRef: string | null }) {
+  const zones = visit.zones
+  const idx = zoneRef ? zones.findIndex(z => z.refId === zoneRef) : -1
+  const current = idx >= 0 ? zones[idx] : null
+  const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
+  const controlled = checks.filter(t => t.state !== 'not_checked').length
+  const closed = zones.filter(z => z.closedAt).length
+
+  return (
+    <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#02457A', color: '#fff', padding: '7px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', fontWeight: 600 }}>
+        {current && <span>{current.buildingLabel} · {current.label}</span>}
+        <span style={{ opacity: .85 }}>Logements {closed}/{zones.length}</span>
+        <span style={{ opacity: .85 }}>Tâches {controlled}/{checks.length}</span>
+        <div style={{ flex: 1 }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: .85 }}>
+          <Clock size={11} /> {fmtTime(visit.startedAt)}
+        </span>
+      </div>
+      <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,.25)', marginTop: '5px', overflow: 'hidden' }}>
+        <div style={{ width: `${checks.length ? Math.round((controlled / checks.length) * 100) : 0}%`, height: '100%', background: '#7ad3ff' }} />
+      </div>
+    </div>
+  )
+}
+
+const CHANGE_META: Record<ChangeKind, { label: string; bg: string; fg: string }> = {
+  lifted: { label: 'Levé', bg: '#dcfce7', fg: '#15803d' },
+  still_open: { label: 'Non levé', bg: '#fee2e2', fg: '#b91c1c' },
+  rescheduled: { label: 'Échéance reportée', bg: '#fef3c7', fg: '#b45309' },
+  new: { label: 'Nouveau', bg: '#e0f2fe', fg: '#0369a1' },
+  progress_up: { label: 'Avancement', bg: '#dcfce7', fg: '#15803d' },
+  progress_down: { label: 'Retard constaté', bg: '#fee2e2', fg: '#b91c1c' },
+}
+
+const RFact = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#9bb0c2', fontWeight: 700 }}>{label}</div>
+    <div style={{ fontSize: '13px', fontWeight: 700, color: '#02457A' }}>{value}</div>
   </div>
 )
 

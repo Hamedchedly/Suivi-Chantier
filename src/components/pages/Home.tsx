@@ -1,11 +1,18 @@
-import { Play, AlertTriangle, CalendarClock, MapPin } from 'lucide-react'
+import {
+  Play, AlertTriangle, CalendarClock, MapPin, ClipboardCheck, Clock,
+  BarChart3, Flag, Building2, FileText, FolderOpen, ChevronRight,
+} from 'lucide-react'
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
 import type { Page } from '../../App'
-import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations } from '../../lib/repo'
+import {
+  getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getVisits, getCommitments,
+} from '../../lib/repo'
 import {
   overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
 } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
+import { isOverdue, reserveKind } from '../../lib/reserves'
+import { VISIT_KIND_LABEL, visitWorksProgress, progressGap } from '../../lib/visits'
 import { LOGEMENTS } from '../../data/zones'
 
 interface HomeProps {
@@ -13,6 +20,9 @@ interface HomeProps {
 }
 
 const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.label ?? id : '')
+const fmtFr = (iso: string) => { const [y, m, d] = iso.split('-'); return d ? `${d}/${m}/${y}` : iso }
+const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : null
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}` }
 
 export function Home({ onNavigate }: HomeProps) {
   const today = new Date()
@@ -28,6 +38,23 @@ export function Home({ onNavigate }: HomeProps) {
   const highReserves = openReserves.filter(r => r.priority === 'high')
   const pf = projectFinance(getMarches(), getAvenants(), getSituations())
   const lotsOnTrack = lots.filter(l => !l.late).length
+
+  // ── Visit pilot: what the last tour found, and what is still owed ─────────
+  const now = todayIso()
+  const visits = getVisits()
+  const running = visits.find(v => v.status === 'en_cours')
+  const lastClosed = visits.filter(v => v.status !== 'en_cours').sort((a, b) => b.date.localeCompare(a.date))[0]
+  const commitments = getCommitments()
+  const overdueActions = openReserves.filter(r => reserveKind(r) === 'action' && isOverdue(r, now))
+  const brokenCommitments = commitments.filter(c => (c.outcome ?? 'pending') !== 'kept' && c.promisedEnd < now)
+  const toCheck = openReserves.filter(r => r.visitId)
+
+  const observedGaps = lastClosed
+    ? lastClosed.zones.flatMap(z => z.tasks.map(progressGap)).filter((g): g is number => g !== null)
+    : []
+  const avgGap = observedGaps.length
+    ? Math.round(observedGaps.reduce((s, g) => s + g, 0) / observedGaps.length)
+    : null
 
   const risks = [
     ...late.map(t => ({ key: `late-${t.id}`, label: `${t.title} en retard`, sub: `échéance ${t.planned_end.toLocaleDateString('fr')}` })),
@@ -66,10 +93,62 @@ export function Home({ onNavigate }: HomeProps) {
         <KPICard label="Réserves" value={openReserves.length} variant={openReserves.length > 0 ? 'warn' : undefined} />
       </div>
 
-      <button className="btn-primary" onClick={() => onNavigate('cr')}>
-        <Play size={16} />
-        Nouvelle visite de chantier
-      </button>
+      {/* Visites — pilotage */}
+      <section>
+        <h2 className="section-title"><ClipboardCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Visites</h2>
+
+        {running ? (
+          <button onClick={() => onNavigate('visite')} style={{ ...rowCard, borderLeft: '3px solid var(--navy-2)', marginBottom: '8px' }}>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
+                {VISIT_KIND_LABEL[running.kind]} en cours
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                <Clock size={11} />
+                {fmtTime(running.startedAt) ? `démarrée à ${fmtTime(running.startedAt)} • ` : ''}{fmtFr(running.date)}
+              </div>
+            </div>
+            <ChevronRight size={15} color="var(--muted)" />
+          </button>
+        ) : lastClosed ? (
+          <button onClick={() => onNavigate('visite')} style={{ ...rowCard, marginBottom: '8px' }}>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
+                Dernière visite — {fmtFr(lastClosed.date)}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                Travaux constatés {visitWorksProgress(lastClosed)}%
+                {avgGap !== null && avgGap !== 0 && (
+                  <span style={{ color: avgGap < 0 ? 'var(--bad)' : 'var(--ok)', fontWeight: 700 }}>
+                    {' '}• écart {avgGap > 0 ? `+${avgGap}` : avgGap} pts vs planning
+                  </span>
+                )}
+              </div>
+            </div>
+            <ChevronRight size={15} color="var(--muted)" />
+          </button>
+        ) : null}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '10px' }}>
+          <AlertCount n={overdueActions.length} label="actions en retard" tone="bad" onClick={() => onNavigate('cr')} />
+          <AlertCount n={brokenCommitments.length} label="engagements non tenus" tone="warn" onClick={() => onNavigate('visite')} />
+          <AlertCount n={toCheck.length} label="points à vérifier" tone="mid" onClick={() => onNavigate('cr')} />
+        </div>
+
+        <button className="btn-primary" onClick={() => onNavigate('visite')}>
+          <Play size={16} />
+          {running ? 'Reprendre la visite' : 'Nouvelle visite de chantier'}
+        </button>
+      </section>
+
+      {/* Raccourcis */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: '8px', marginBottom: '20px' }}>
+        <Shortcut icon={<BarChart3 size={16} />} label="Planning" onClick={() => onNavigate('gantt')} />
+        <Shortcut icon={<Flag size={16} />} label="Actions" onClick={() => onNavigate('cr')} />
+        <Shortcut icon={<Building2 size={16} />} label="Entreprises" onClick={() => onNavigate('config')} />
+        <Shortcut icon={<FileText size={16} />} label="Rapports" onClick={() => onNavigate('rapports')} />
+        <Shortcut icon={<FolderOpen size={16} />} label="Finances" onClick={() => onNavigate('finances')} />
+      </div>
 
       {/* À faire aujourd'hui */}
       <section>
@@ -149,6 +228,26 @@ function HeroStat({ label, value, sub, tone }: { label: string; value: string; s
         {value}{sub && <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--muted)', marginLeft: '5px' }}>{sub}</span>}
       </span>
     </div>
+  )
+}
+
+function AlertCount({ n, label, tone, onClick }: { n: number; label: string; tone: 'bad' | 'warn' | 'mid'; onClick: () => void }) {
+  const color = n === 0 ? 'var(--muted)' : tone === 'bad' ? '#dc2626' : tone === 'warn' ? '#ea580c' : '#b45309'
+  const bg = n === 0 ? '#f8fafc' : tone === 'bad' ? '#fdecec' : tone === 'warn' ? '#fff2e8' : '#fef3c7'
+  return (
+    <button onClick={onClick} style={{ padding: '10px 8px', borderRadius: '10px', border: '1px solid var(--line)', background: bg, cursor: 'pointer', textAlign: 'center' }}>
+      <div style={{ fontSize: '20px', fontWeight: 800, color, lineHeight: 1.1 }}>{n}</div>
+      <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '3px' }}>{label}</div>
+    </button>
+  )
+}
+
+function Shortcut({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '12px 6px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+      {icon}
+      {label}
+    </button>
   )
 }
 

@@ -172,7 +172,8 @@ const DEFAULT_VISITS: VisitSession[] = [(() => {
     ],
     zones,
     notes: [],
-    createdAt: '2026-09-09T09:00:00.000Z',
+    startedAt: '2026-09-09T07:12:00.000Z',
+    createdAt: '2026-09-09T07:12:00.000Z',
   }
 })()]
 

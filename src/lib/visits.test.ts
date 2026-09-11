@@ -6,8 +6,10 @@ import {
   visitCounts, visitControlProgress, visitWorksProgress, remainingToControl,
   visitLotIds, nextZoneRef, notesForCompany, generalNotes,
   applyVisitToPlanning, commitmentsFromVisit, buildPlanningSnapshot, newVisit,
+  progressGap, previousObservation, visitStats, visitChanges,
 } from './visits'
 import type { GanttTask } from '../types/gantt'
+import type { Reserve } from './reserves'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +44,7 @@ const zone = (over: Partial<VisitZone> & { refId: string }): VisitZone => ({
 })
 
 const visit = (zones: VisitZone[], over: Partial<Visit> = {}): Visit => ({
-  ...newVisit('visite', '2026-09-11', [], zones), ...over,
+  ...newVisit({ kind: 'visite', date: '2026-09-11', participants: [], zones }), ...over,
 })
 
 // ── Building zones from the planning ─────────────────────────────────────────
@@ -282,8 +284,112 @@ describe('buildPlanningSnapshot', () => {
 })
 
 describe('newVisit', () => {
-  it('opens an "en cours" session of the requested kind', () => {
-    const v = newVisit('reunion', '2026-09-11', [], [], '  Hebdo  ')
+  it('opens an "en cours" session of the requested kind and stamps the start', () => {
+    const v = newVisit({ kind: 'reunion', date: '2026-09-11', participants: [], zones: [], title: '  Hebdo  ' })
     expect(v).toMatchObject({ kind: 'reunion', status: 'en_cours', title: 'Hebdo', notes: [] })
+    expect(v.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+  it('keeps optional context only when provided', () => {
+    const v = newVisit({ kind: 'opl', date: '2026-09-11', participants: [], zones: [], brief: '   ' })
+    expect(v.brief).toBeUndefined()
+    expect(v.companiesPresent).toBeUndefined()
+  })
+})
+
+// ── Planning vs observed, and comparison with earlier sessions ───────────────
+
+describe('progressGap', () => {
+  it('measures observed minus planned, in points', () => {
+    expect(progressGap(check({ taskId: 'a', lotId: 'L05', progress: 65, plannedProgress: 80 }))).toBe(-15)
+    expect(progressGap(check({ taskId: 'a', lotId: 'L05', progress: 90, plannedProgress: 80 }))).toBe(10)
+  })
+  it('is null when either side is missing', () => {
+    expect(progressGap(check({ taskId: 'a', lotId: 'L05', progress: 50 }))).toBeNull()
+    expect(progressGap(check({ taskId: 'a', lotId: 'L05', plannedProgress: 50 }))).toBeNull()
+  })
+})
+
+describe('previousObservation', () => {
+  const older = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T1', lotId: 'L05', state: 'ok', progress: 70, promisedEnd: '2026-09-10' })] })],
+    { id: 'V1', date: '2026-09-04', status: 'diffuse' })
+  const current = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T1', lotId: 'L05', state: 'ok', progress: 100 })] })],
+    { id: 'V2', date: '2026-09-11' })
+
+  it('finds what the last closed session observed', () => {
+    expect(previousObservation([older, current], current, 'T1')).toMatchObject({ date: '2026-09-04', progress: 70, promisedEnd: '2026-09-10' })
+  })
+  it('ignores sessions still running', () => {
+    const running = { ...older, status: 'en_cours' as const }
+    expect(previousObservation([running, current], current, 'T1')).toBeUndefined()
+  })
+  it('ignores tasks that were never controlled', () => {
+    expect(previousObservation([older, current], current, 'T-other')).toBeUndefined()
+  })
+})
+
+describe('visitChanges', () => {
+  const older = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T1', lotId: 'L05', state: 'ok', progress: 70 })] })],
+    { id: 'V1', date: '2026-09-04', status: 'diffuse' })
+  const current = visit([zone({ refId: 'A-101', label: 'Logt A-101', tasks: [check({ taskId: 'T1', lotId: 'L05', title: 'Menuiseries', state: 'ok', progress: 100 })] })],
+    { id: 'V2', date: '2026-09-11' })
+
+  const base = (over: Partial<Reserve> & { id: string }): Reserve => ({
+    number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'Joint',
+    priority: 'medium', status: 'open', createdAt: '', ...over,
+  })
+
+  it('reports a point lifted by this session', () => {
+    const r = base({ id: '1', visitId: 'V1', follow: [{ at: '', visitId: 'V2', visitDate: '2026-09-11', status: 'done' }] })
+    expect(visitChanges(current, [older, current], [r])).toContainEqual(
+      expect.objectContaining({ kind: 'lifted', label: 'R-001 — Joint' }),
+    )
+  })
+
+  it('reports a point still open and one rescheduled', () => {
+    const still = base({ id: '1', visitId: 'V1', follow: [{ at: '', visitId: 'V2', visitDate: '2026-09-11', status: 'not_done' }] })
+    const moved = base({ id: '2', number: 'R-002', visitId: 'V1', follow: [{ at: '', visitId: 'V2', visitDate: '2026-09-11', status: 'rescheduled', dueDate: '2026-09-18' }] })
+    const out = visitChanges(current, [older, current], [still, moved])
+    expect(out).toContainEqual(expect.objectContaining({ kind: 'still_open', detail: 'non réalisé' }))
+    expect(out).toContainEqual(expect.objectContaining({ kind: 'rescheduled', detail: 'nouvelle échéance 2026-09-18' }))
+  })
+
+  it('reports points newly raised by this session', () => {
+    const fresh = base({ id: '3', number: 'R-003', visitId: 'V2', dueDate: '2026-09-20' })
+    expect(visitChanges(current, [older, current], [fresh])).toContainEqual(
+      expect.objectContaining({ kind: 'new', detail: 'échéance 2026-09-20' }),
+    )
+  })
+
+  it('reports how the works moved since the previous session', () => {
+    expect(visitChanges(current, [older, current], [])).toContainEqual(
+      expect.objectContaining({ kind: 'progress_up', label: 'Menuiseries', detail: '70% → 100% (+30 pts)' }),
+    )
+  })
+
+  it('stays silent when nothing moved', () => {
+    const flat = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T1', lotId: 'L05', state: 'ok', progress: 70 })] })],
+      { id: 'V2', date: '2026-09-11' })
+    expect(visitChanges(flat, [older, flat], [])).toEqual([])
+  })
+})
+
+describe('visitStats', () => {
+  const reserves: Reserve[] = [
+    { id: 'r1', number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'x', priority: 'medium', status: 'open', createdAt: '', visitId: 'VS', kind: 'observation' },
+    { id: 'r2', number: 'R-002', lotId: 'L05', logementId: 'A-101', description: 'y', priority: 'high', status: 'open', createdAt: '', visitId: 'VS', kind: 'action' },
+  ]
+  const v = visit([
+    zone({ refId: 'A-101', closedAt: 'x', tasks: [check({ taskId: 'a', lotId: 'L05', state: 'ok', progress: 100, promisedEnd: '2026-09-20' })] }),
+    zone({ refId: 'B-201', buildingId: 'BAT-B', tasks: [check({ taskId: 'b', lotId: 'L06' })] }),
+  ], { id: 'VS', startedAt: '2026-09-11T09:00:00.000Z', endedAt: '2026-09-11T10:30:00.000Z' })
+
+  it('summarises the tour for the CR header', () => {
+    expect(visitStats(v, reserves, 4)).toMatchObject({
+      durationMin: 90, buildings: 1, logements: 1, tasksChecked: 1,
+      observations: 1, actions: 1, photos: 4, commitments: 1,
+    })
+  })
+  it('leaves the duration unknown while the session is open', () => {
+    expect(visitStats({ ...v, endedAt: undefined }, reserves, 0).durationMin).toBeNull()
   })
 })

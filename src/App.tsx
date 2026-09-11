@@ -58,7 +58,7 @@ export default function App() {
           {currentPage === 'visite'   && <Visite />}
           {currentPage === 'cr'       && <CR />}
           {currentPage === 'finances' && <Finances />}
-          {currentPage === 'rapports' && <Reports />}
+          {currentPage === 'rapports' && <Reports onNavigate={go} />}
           {currentPage === 'alertes'  && <Alertes />}
           {currentPage === 'config'   && <Config />}
         </div>

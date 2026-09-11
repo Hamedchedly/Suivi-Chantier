@@ -1,51 +1,28 @@
-import { Download, Eye, Sparkles, Share2, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
-import { CRReport } from './CRReport'
+import { Share2, Copy, Check, ClipboardCheck, ChevronRight, Calendar } from 'lucide-react'
 import { Documents } from './Documents'
 import { buildSnapshot, buildShareUrl } from '../../lib/share'
+import { getVisits } from '../../lib/repo'
+import { VISIT_KIND_LABEL } from '../../lib/visits'
+import type { Page } from '../layout/navConfig'
 
-interface Report {
-  id: string
-  number: number
-  date: Date
-  author: string
-  status: 'draft' | 'sent'
-  items: number
+// Comptes rendus are produced by the Visite module — a CR always comes from a
+// real session. This page lists them and carries the read-only MOA share link.
+
+const STATUS: Record<string, { label: string; bg: string; fg: string }> = {
+  terminee: { label: 'Brouillon', bg: '#f1f5f9', fg: '#475569' },
+  cr_pret: { label: 'CR prêt', bg: '#fef3c7', fg: '#b45309' },
+  diffuse: { label: 'Diffusé', bg: '#dcfce7', fg: '#15803d' },
+  verrouille: { label: 'Verrouillé', bg: '#ede9fe', fg: '#6d28d9' },
 }
 
-const MOCK_REPORTS: Report[] = [
-  {
-    id: 'R001',
-    number: 1,
-    date: new Date('2026-08-28'),
-    author: 'Jean Dupont',
-    status: 'sent',
-    items: 12,
-  },
-  {
-    id: 'R002',
-    number: 2,
-    date: new Date('2026-09-04'),
-    author: 'Marie Martin',
-    status: 'sent',
-    items: 15,
-  },
-  {
-    id: 'R003',
-    number: 3,
-    date: new Date('2026-09-09'),
-    author: 'Jean Dupont',
-    status: 'draft',
-    items: 8,
-  },
-]
+const fmtFr = (iso: string) => { const [y, m, d] = iso.split('-'); return d ? `${d}/${m}/${y}` : iso }
 
-export function Reports() {
-  const [selectedReport, setSelectedReport] = useState<string | null>(null)
-  const [showAutoReport, setShowAutoReport] = useState(false)
+export function Reports({ onNavigate }: { onNavigate?: (p: Page) => void }) {
   const [tab, setTab] = useState<'cr' | 'docs'>('cr')
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const visits = getVisits().filter(v => v.status !== 'en_cours')
 
   const generateShare = async () => {
     const url = buildShareUrl(buildSnapshot())
@@ -57,10 +34,6 @@ export function Reports() {
     } catch {
       // clipboard blocked — the field below lets the user copy manually
     }
-  }
-
-  if (showAutoReport) {
-    return <CRReport number={MOCK_REPORTS.length + 1} onBack={() => setShowAutoReport(false)} />
   }
 
   const segmented = (
@@ -89,16 +62,17 @@ export function Reports() {
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {segmented}
-      {/* Auto-generate CR */}
-      <button
-        onClick={() => setShowAutoReport(true)}
-        style={{ width: '100%', marginBottom: '16px', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #02457A, #018ABE)', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-      >
-        <Sparkles size={17} />
-        Générer le CR automatique
-      </button>
 
-      {/* Share read-only link for MOA */}
+      {onNavigate && (
+        <button
+          onClick={() => onNavigate('visite')}
+          style={{ width: '100%', marginBottom: '16px', padding: '14px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #02457A, #018ABE)', color: '#fff', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <ClipboardCheck size={17} />
+          Produire un CR depuis une visite
+        </button>
+      )}
+
       <button
         onClick={generateShare}
         style={{ width: '100%', marginBottom: shareUrl ? '10px' : '16px', padding: '12px', borderRadius: '12px', border: '1px solid #d1dce5', background: '#fff', color: 'var(--navy)', fontWeight: 600, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
@@ -120,130 +94,39 @@ export function Reports() {
         </div>
       )}
 
-      {/* Reports List */}
+      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '10px' }}>
+        Comptes rendus de visite
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {MOCK_REPORTS.length === 0 ? (
-          <div
-            style={{
-              padding: '20px',
-              textAlign: 'center',
-              color: '#5b7183',
-              fontSize: '13px',
-              borderRadius: '6px',
-              background: '#f9fbfd',
-              border: '1px solid #e4ecf2',
-            }}
-          >
-            Aucun rapport enregistré.
+        {visits.length === 0 ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#5b7183', fontSize: '13px', borderRadius: '8px', background: '#f9fbfd', border: '1px solid #e4ecf2' }}>
+            Aucun CR pour l'instant — terminez une visite pour en produire un.
           </div>
         ) : (
-          MOCK_REPORTS.map(report => (
-            <div
-              key={report.id}
-              onClick={() => setSelectedReport(selectedReport === report.id ? null : report.id)}
-              style={{
-                padding: '12px',
-                borderRadius: '6px',
-                border: '1px solid #e4ecf2',
-                background: selectedReport === report.id ? '#eef2f6' : '#fff',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#02457A', marginBottom: '2px' }}>
-                    CR N°{report.number} — {report.date.toLocaleDateString('fr')}
+          visits.map(v => {
+            const st = STATUS[v.status] ?? STATUS.terminee
+            return (
+              <button
+                key={v.id}
+                onClick={() => onNavigate?.('visite')}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', cursor: onNavigate ? 'pointer' : 'default', textAlign: 'left', width: '100%' }}
+              >
+                <Calendar size={17} color="var(--muted)" style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#02457A' }}>
+                    {VISIT_KIND_LABEL[v.kind]} — {fmtFr(v.date)}
                   </div>
                   <div style={{ fontSize: '11px', color: '#5b7183' }}>
-                    Par {report.author} • {report.items} photos/observations
+                    {v.title ? `${v.title} • ` : ''}{v.zones.length} zones • {v.participants.length} participants
                   </div>
                 </div>
-                <div
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    background: report.status === 'sent' ? '#dcfce7' : '#fef3c7',
-                    color: report.status === 'sent' ? '#15803d' : '#b45309',
-                  }}
-                >
-                  {report.status === 'sent' ? 'Envoyé' : 'Brouillon'}
-                </div>
-              </div>
-
-              {/* Expanded content */}
-              {selectedReport === report.id && (
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #d1dce5' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        border: 'none',
-                        background: '#02457A',
-                        color: 'white',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Eye size={14} />
-                      Consulter
-                    </button>
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        border: '1px solid #d1dce5',
-                        background: 'white',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Download size={14} />
-                      Télécharger
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+                <span style={{ padding: '4px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: st.bg, color: st.fg }}>{st.label}</span>
+                {onNavigate && <ChevronRight size={14} color="var(--muted)" />}
+              </button>
+            )
+          })
         )}
       </div>
-
-      {/* New Report Button */}
-      <button
-        style={{
-          marginTop: '16px',
-          width: '100%',
-          padding: '12px',
-          borderRadius: '6px',
-          border: 'none',
-          background: '#02457A',
-          color: 'white',
-          fontSize: '13px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          transition: 'background 0.2s',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#001B48')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#02457A')}
-      >
-        + Nouveau rapport
-      </button>
     </div>
   )
 }
