@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
 import { PlanningConfig } from './PlanningConfig'
+import { MonCompte } from './MonCompte'
+import type { User } from '../../lib/auth'
 
-type ConfigTab = 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
+type ConfigTab = 'compte' | 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
 
 interface ProjectConfig {
   name: string
@@ -21,8 +23,14 @@ const MOCK_PROJECT: ProjectConfig = {
   amo: 'Consultant Projet XYZ',
 }
 
-export function Config() {
-  const [activeTab, setActiveTab] = useState<ConfigTab>('project')
+interface ConfigProps {
+  users: User[]
+  currentUser: User
+  onUsersChange: (users: User[]) => void
+}
+
+export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
+  const [activeTab, setActiveTab] = useState<ConfigTab>('compte')
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>(MOCK_PROJECT)
   const [lots, setLots] = useState<LotContact[]>(getLotsConfig)
 
@@ -35,6 +43,7 @@ export function Config() {
   }
 
   const tabs: { id: ConfigTab; label: string }[] = [
+    { id: 'compte', label: 'Mon compte' },
     { id: 'project', label: 'Projet' },
     { id: 'planning', label: 'Planning & congés' },
     { id: 'lots', label: 'Lots & contacts' },
@@ -80,6 +89,10 @@ export function Config() {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 12px', paddingBottom: '80px' }}>
+        {activeTab === 'compte' && (
+          <MonCompte users={users} currentUser={currentUser} onChange={onUsersChange} />
+        )}
+
         {/* Project Tab */}
         {activeTab === 'project' && (
           <div style={{ maxWidth: '600px' }}>

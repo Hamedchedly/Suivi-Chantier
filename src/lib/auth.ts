@@ -22,11 +22,18 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 export interface User {
   id: string
   username: string
+  email?: string
   password: string      // plain text — see the note above
   role: UserRole
   displayName: string
   createdAt: string     // ISO
   disabled?: boolean
+}
+
+/** Loose check — enough to catch a typo, not a validation authority. */
+export function isEmailish(value: string): boolean {
+  const v = value.trim()
+  return v.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 }
 
 export interface Session {
@@ -61,6 +68,7 @@ export function authenticate(users: User[], username: string, password: string):
 export type AuthError =
   | 'username_required' | 'password_required' | 'username_taken'
   | 'last_superadmin' | 'self_delete' | 'not_found'
+  | 'email_invalid' | 'wrong_password' | 'password_mismatch'
 
 export interface Result<T> {
   ok: boolean
@@ -70,22 +78,47 @@ export interface Result<T> {
 
 const superadmins = (users: User[]) => users.filter(u => u.role === 'superadmin' && !u.disabled)
 
-export function createUser(users: User[], input: { username: string; password: string; role: UserRole; displayName?: string }): Result<User[]> {
+export function createUser(users: User[], input: { username: string; password: string; role: UserRole; displayName?: string; email?: string }): Result<User[]> {
   const username = input.username.trim()
+  const email = input.email?.trim()
   if (!username) return { ok: false, users, error: 'username_required' }
   if (!input.password) return { ok: false, users, error: 'password_required' }
+  if (email && !isEmailish(email)) return { ok: false, users, error: 'email_invalid' }
   if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
     return { ok: false, users, error: 'username_taken' }
   }
   const user: User = {
     id: `u${Date.now()}${Math.floor(Math.random() * 1000)}`,
     username,
+    email: email || undefined,
     password: input.password,
     role: input.role,
     displayName: input.displayName?.trim() || username,
     createdAt: new Date().toISOString(),
   }
   return { ok: true, users: [...users, user] }
+}
+
+export function setEmail(users: User[], id: string, email: string): Result<User[]> {
+  if (!findUser(users, id)) return { ok: false, users, error: 'not_found' }
+  const value = email.trim()
+  if (value && !isEmailish(value)) return { ok: false, users, error: 'email_invalid' }
+  return { ok: true, users: users.map(u => u.id === id ? { ...u, email: value || undefined } : u) }
+}
+
+/**
+ * Changing one's own password: the current one must be right and the
+ * confirmation must match — the two mistakes people actually make.
+ */
+export function changeOwnPassword(
+  users: User[], id: string, current: string, next: string, confirm: string,
+): Result<User[]> {
+  const user = findUser(users, id)
+  if (!user) return { ok: false, users, error: 'not_found' }
+  if (user.password !== current) return { ok: false, users, error: 'wrong_password' }
+  if (!next) return { ok: false, users, error: 'password_required' }
+  if (next !== confirm) return { ok: false, users, error: 'password_mismatch' }
+  return { ok: true, users: users.map(u => u.id === id ? { ...u, password: next } : u) }
 }
 
 /** Never let the last active super-admin be deleted, demoted or disabled. */
@@ -127,4 +160,7 @@ export const AUTH_ERROR_LABEL: Record<AuthError, string> = {
   last_superadmin: 'Impossible : ce compte est le dernier super-administrateur actif.',
   self_delete: 'Vous ne pouvez pas supprimer votre propre compte.',
   not_found: 'Compte introuvable.',
+  email_invalid: "Cette adresse e-mail n'est pas valide.",
+  wrong_password: 'Mot de passe actuel incorrect.',
+  password_mismatch: 'Les deux mots de passe ne correspondent pas.',
 }

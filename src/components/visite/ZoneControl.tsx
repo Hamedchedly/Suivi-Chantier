@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import {
-  ChevronRight, ChevronLeft, Camera, Pencil, Trash2, AlertTriangle, Ban, Check,
+  ChevronRight, ChevronLeft, Camera, Pencil, Trash2, Check, Plus,
   Eye, Flag,
 } from 'lucide-react'
 import {
@@ -39,7 +39,6 @@ interface Props {
   readOnly: boolean
   isLast: boolean
   onOpenLot: (lotId: string) => void
-  onUpdateZone: (fn: (z: VisitZone) => VisitZone) => void
   onAddRemark: (r: RemarkInput) => void
   onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
@@ -55,25 +54,25 @@ interface Props {
 /** A logement: its lots as a list, plus everything recorded at zone level. */
 export function ZoneControl(props: Props) {
   const { zone, lots, photos, carriedPoints, visitReserves, readOnly, isLast,
-    onOpenLot, onUpdateZone, onAddRemark, onUpdateRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
+    onOpenLot, onAddRemark, onUpdateRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
     onBack, onPrev, onCloseZone } = props
 
   const groups = lotGroups(zone)
   const st = ZONE_META[zoneState(zone)]
   const zoneRemarks = visitReserves.filter(r => r.logementId === zone.refId)
 
-  const setOverride = (o: 'to_review' | 'blocked') =>
-    onUpdateZone(z => ({ ...z, override: z.override === o ? null : o }))
-
   return (
     <div style={{ padding: '12px', paddingBottom: '90px' }}>
       <button onClick={onBack} style={{ ...linkBtn, marginBottom: '10px' }}>← Tableau de bord</button>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <h2 style={{ margin: 0 }}>{zone.label}</h2>
-        <span style={{ ...badge, background: st.bg, color: st.fg }}>{st.label}</span>
+      {/* The logement being visited is the anchor of the whole screen */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '4px' }}>
+        <h2 style={{ margin: 0, fontSize: '26px', fontWeight: 800, color: 'var(--navy)', letterSpacing: '-.02em', lineHeight: 1.1 }}>
+          {zone.label}
+        </h2>
+        <span style={{ ...badge, background: st.bg, color: st.fg, fontSize: '11px', padding: '5px 10px' }}>{st.label}</span>
       </div>
-      <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '2px 0 10px' }}>{zone.buildingLabel}</div>
+      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy-2)', margin: '0 0 12px' }}>{zone.buildingLabel}</div>
 
       <div style={{ display: 'flex', gap: '14px', marginBottom: '16px' }}>
         <div style={{ flex: 1 }}>
@@ -121,19 +120,6 @@ export function ZoneControl(props: Props) {
         })}
       </div>
 
-      {!readOnly && (
-        <div style={{ display: 'flex', gap: '6px', marginTop: '16px' }}>
-          <button onClick={() => setOverride('to_review')}
-            style={zonePill(zone.override === 'to_review', '#b45309', '#fef3c7')}>
-            <AlertTriangle size={14} /> Zone à revoir
-          </button>
-          <button onClick={() => setOverride('blocked')}
-            style={zonePill(zone.override === 'blocked', '#b91c1c', '#fee2e2')}>
-            <Ban size={14} /> Zone bloquée
-          </button>
-        </div>
-      )}
-
       {zoneRemarks.length > 0 && (
         <div style={{ marginTop: '16px' }}>
           <div style={sectionLabel}>Relevé de cette visite ({zoneRemarks.length})</div>
@@ -147,7 +133,7 @@ export function ZoneControl(props: Props) {
       )}
 
       {!readOnly && (
-        <ZoneRemarkButtons
+        <ZoneNoteComposer
           lots={lots}
           lotIds={groups.map(g => g.lotId)}
           onAddRemark={onAddRemark}
@@ -173,13 +159,6 @@ export function ZoneControl(props: Props) {
   )
 }
 
-const zonePill = (on: boolean, fg: string, bg: string): React.CSSProperties => ({
-  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-  padding: '12px 6px', borderRadius: '9px',
-  border: on ? `2px solid ${fg}` : '1px solid var(--line)',
-  background: on ? bg : '#fff', color: on ? fg : 'var(--muted)',
-  fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-})
 
 // ── Zone-level remarks (not tied to one task) ────────────────────────────────
 
@@ -228,40 +207,63 @@ const rowIconBtn: React.CSSProperties = {
   border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer', flexShrink: 0,
 }
 
-function ZoneRemarkButtons({ lots, lotIds, onAddRemark }: {
+/**
+ * Notes are the common case, so the field is simply there — no button to press
+ * first. Ticking the box turns the note into an action to carry out.
+ */
+function ZoneNoteComposer({ lots, lotIds, onAddRemark }: {
   lots: LotContact[]; lotIds: string[]; onAddRemark: (r: RemarkInput) => void
 }) {
-  const [panel, setPanel] = useState<null | 'observation' | 'action'>(null)
+  const [text, setText] = useState('')
+  const [isAction, setIsAction] = useState(false)
+  const [due, setDue] = useState('')
   const [lot, setLot] = useState(lotIds[0] ?? lots[0]?.id ?? '')
   const choices = lotIds.length ? lotIds : lots.map(l => l.id)
 
-  return (
-    <div style={{ marginTop: '16px' }}>
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <button onClick={() => setPanel(p => p === 'observation' ? null : 'observation')} style={{ ...ghostBtn, flex: 1, justifyContent: 'center', padding: '12px' }}>
-          <Eye size={15} /> Observation
-        </button>
-        <button onClick={() => setPanel(p => p === 'action' ? null : 'action')} style={{ ...ghostBtn, flex: 1, justifyContent: 'center', padding: '12px' }}>
-          <Flag size={15} /> Action
-        </button>
-      </div>
+  const submit = () => {
+    if (!text.trim()) return
+    onAddRemark({
+      kind: isAction ? 'action' : 'observation',
+      description: text.trim(),
+      lotId: lot,
+      dueDate: isAction ? (due || undefined) : undefined,
+      priority: isAction ? 'medium' : 'low',
+    })
+    setText(''); setDue(''); setIsAction(false)
+  }
 
-      {panel && (
-        <>
-          <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, width: '100%', marginTop: '8px' }}>
+  return (
+    <div style={{ marginTop: '18px' }}>
+      <div style={sectionLabel}>Note sur le logement</div>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder="Constat, remarque, point à signaler…"
+        style={{ ...input, width: '100%', minHeight: '64px', resize: 'vertical', marginBottom: '8px' }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12px', color: isAction ? '#b45309' : 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
+          <input type="checkbox" checked={isAction} onChange={e => setIsAction(e.target.checked)}
+            style={{ width: '17px', height: '17px' }} />
+          <Flag size={13} /> Action à réaliser
+        </label>
+        {choices.length > 1 && (
+          <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, flex: '1 1 130px', padding: '7px 9px', fontSize: '12px' }}>
             {choices.map(id => <option key={id} value={id}>{id} — {lotLabel(lots, id)}</option>)}
           </select>
-          <RemarkForm
-            kind={panel}
-            company={lotCompany(lots, lot)}
-            onSubmit={(description, dueDate, priority) => {
-              onAddRemark({ kind: panel, description, lotId: lot, dueDate, priority: priority ?? 'low' })
-              setPanel(null)
-            }}
-            onCancel={() => setPanel(null)}
-          />
-        </>
+        )}
+      </div>
+
+      {isAction && (
+        <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
+          style={{ ...input, width: '100%', marginBottom: '8px' }} />
       )}
+
+      <button disabled={!text.trim()} onClick={submit}
+        style={{ ...bigBtnInline, width: '100%', background: isAction ? '#b45309' : 'var(--navy)', opacity: text.trim() ? 1 : 0.5 }}>
+        <Plus size={16} /> Ajouter {isAction ? "l'action" : 'la note'}
+      </button>
     </div>
   )
 }

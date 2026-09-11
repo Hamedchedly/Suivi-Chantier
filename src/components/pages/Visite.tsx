@@ -198,6 +198,11 @@ export function Visite() {
     const zone = active.zones.find(z => z.refId === view.ref)
     const lotTasks = zone?.tasks.filter(t => t.lotId === view.lotId) ?? []
     if (zone) {
+      // Neighbouring lots, so the tour can run lot after lot without detour.
+      const order = [...new Set(zone.tasks.map(t => t.lotId))]
+      const at = order.indexOf(view.lotId)
+      const asRef = (id?: string) => id ? { lotId: id, label: lotLabel(lots, id) } : null
+      const neighbours = { prev: asRef(order[at - 1]), next: asRef(order[at + 1]) }
       return (
         <>
           <TourBar visit={active} zoneRef={zone.refId} lotId={view.lotId} />
@@ -220,6 +225,9 @@ export function Visite() {
             onRemoveRemark={removeRemark}
             onAddPhoto={(lotId, taskId, file) => addPhoto(zone, lotId, taskId, file)}
             onBack={back}
+            prevLot={neighbours.prev}
+            nextLot={neighbours.next}
+            onGoToLot={id => swap({ v: 'lot', ref: zone.refId, lotId: id })}
           />
         </>
       )
@@ -244,7 +252,6 @@ export function Visite() {
             readOnly={active.status !== 'en_cours'}
             isLast={next === null}
             onOpenLot={lotId => push({ v: 'lot', ref: zone.refId, lotId })}
-            onUpdateZone={fn => updateZone(zone.refId, fn)}
             onAddRemark={r => addRemark(active, zone, r)}
             onUpdateRemark={updateRemark}
             onRemoveRemark={removeRemark}

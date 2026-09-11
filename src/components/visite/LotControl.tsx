@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import {
-  ArrowLeft, Camera, Plus, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw,
+  ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
+  X, ChevronRight, ChevronLeft, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
@@ -14,7 +14,7 @@ import { weekToFriday, weekLabel, dateToWeek } from '../../lib/weeks'
 import type { LotContact } from '../../lib/repo'
 import {
   ZONE_META, lotLabel, lotCompany, fmtFr, taskTitle,
-  badge, input, linkBtn, ghostBtn, bigBtnInline,
+  badge, input, linkBtn, ghostBtn, navBtn, bigBtnInline,
 } from './visiteStyles'
 import { Bar, Empty } from './visiteBits'
 import type { RemarkInput } from './ZoneControl'
@@ -46,11 +46,16 @@ interface Props {
   onRemoveRemark: (id: string) => void
   onAddPhoto: (lotId: string, taskId: string, file: File) => void
   onBack: () => void
+  /** Move straight to the neighbouring lot without going back to the list. */
+  prevLot: { lotId: string; label: string } | null
+  nextLot: { lotId: string; label: string } | null
+  onGoToLot: (lotId: string) => void
 }
 
 export function LotControl(props: Props) {
   const { zone, lotId, tasks, lots, commitments, photos, reserves, blockerOptions,
-    readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack } = props
+    readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack,
+    prevLot, nextLot, onGoToLot } = props
 
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksWorksProgress(tasks)
@@ -102,9 +107,31 @@ export function LotControl(props: Props) {
         />
       ))}
 
-      <button onClick={onBack} style={{ ...bigBtnInline, width: '100%', marginTop: '18px', padding: '14px', background: 'var(--navy)' }}>
-        <Check size={17} /> Revenir aux lots
-      </button>
+      {/* Walk the lots without going back to the list each time */}
+      <div style={{ marginTop: '20px' }}>
+        {nextLot && (
+          <button onClick={() => onGoToLot(nextLot.lotId)}
+            style={{ ...bigBtnInline, width: '100%', padding: '15px', background: 'var(--ok)', marginBottom: '8px' }}>
+            <span style={{ flex: 1, textAlign: 'left' }}>
+              <span style={{ display: 'block', fontSize: '10px', opacity: .85, fontWeight: 600 }}>Lot suivant</span>
+              {nextLot.lotId} — {lotLabel(lots, nextLot.lotId)}
+            </span>
+            <ChevronRight size={18} />
+          </button>
+        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {prevLot && (
+            <button onClick={() => onGoToLot(prevLot.lotId)}
+              style={{ ...navBtn, flex: 1, padding: '13px' }}>
+              <ChevronLeft size={16} /> {prevLot.lotId}
+            </button>
+          )}
+          <button onClick={onBack} title="Tous les lots du logement"
+            style={{ ...navBtn, flex: prevLot ? '0 0 auto' : 1, padding: '13px 16px' }}>
+            <LayoutList size={16} /> Tous les lots
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -158,6 +185,18 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
+        {!readOnly && (
+          <>
+            <button onClick={() => setPanel(p => p === 'engagement' ? null : 'engagement')}
+              title="Engagement de l'entreprise" style={miniBtn('#6d28d9', !!task.promisedWeek)}>
+              <Handshake size={15} />
+            </button>
+            <button onClick={() => onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' })}
+              title={isNa ? 'Rendre applicable' : 'Marquer non applicable'} style={miniBtn('#64748b', isNa)}>
+              <CircleSlash size={15} />
+            </button>
+          </>
+        )}
         {!isNa && <strong style={{ fontSize: '19px', color: 'var(--navy)' }}>{actual}%</strong>}
       </div>
 
@@ -256,37 +295,20 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) onAddPhoto(f); if (fileRef.current) fileRef.current.value = ''; setPanel(null) }} />
 
+          {/* Three things to declare, reachable in one tap each */}
           {panel === null && (
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={() => setPanel('menu')} style={{ ...addBtn, flex: 1 }}>
-                <Plus size={17} /> Ajouter
+              <button onClick={() => fileRef.current?.click()} style={actBtn('#02457A')}>
+                <Camera size={16} /> Photo
               </button>
-              <button onClick={() => setPanel('blockers')} title="Signaler une tâche bloquante"
-                style={{ ...addBtn, flex: '0 0 auto', padding: '12px 15px', borderColor: blockers.length ? '#b91c1c' : '#e2b4b4', color: '#b91c1c' }}>
-                <Ban size={17} />
+              <button onClick={() => setPanel('action')} style={actBtn('#b45309')}>
+                <Flag size={16} /> Alerte
+              </button>
+              <button onClick={() => setPanel('blockers')}
+                style={actBtn(blockers.length ? '#b91c1c' : '#94a3b8', blockers.length > 0)}>
+                <Ban size={16} /> Blocage
               </button>
             </div>
-          )}
-
-          {panel === 'menu' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-              <button onClick={() => fileRef.current?.click()} style={menuBtn('#02457A')}><Camera size={16} /> Photo</button>
-              <button onClick={() => setPanel('observation')} style={menuBtn('#5b7183')}><Eye size={16} /> Observation</button>
-              <button onClick={() => setPanel('action')} style={menuBtn('#b45309')}><Flag size={16} /> Action</button>
-              <button onClick={() => setPanel('engagement')} style={menuBtn('#6d28d9')}><Handshake size={16} /> Engagement</button>
-              <button onClick={() => { onPatch({ state: 'na' }); setPanel(null) }} style={menuBtn('#64748b')}>
-                <CircleSlash size={16} /> Non applicable
-              </button>
-              <button onClick={() => setPanel(null)} style={menuBtn('#94a3b8')}><X size={15} /> Fermer</button>
-            </div>
-          )}
-
-          {panel === 'observation' && (
-            <RemarkForm
-              kind="observation"
-              onSubmit={(description) => { onAddRemark({ kind: 'observation', description, lotId: task.lotId, taskId: task.taskId, priority: 'low' }); setPanel(null) }}
-              onCancel={() => setPanel('menu')}
-            />
           )}
 
           {panel === 'action' && (
@@ -294,7 +316,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               kind="action"
               company={lotCompany(lots, task.lotId)}
               onSubmit={(description, dueDate, priority) => { onAddRemark({ kind: 'action', description, lotId: task.lotId, taskId: task.taskId, dueDate, priority: priority ?? 'medium' }); setPanel(null) }}
-              onCancel={() => setPanel('menu')}
+              onCancel={() => setPanel(null)}
             />
           )}
 
@@ -463,9 +485,16 @@ function BlockerPicker({ options, lots, selected, onChange, onClose }: {
         </>
       )}
 
-      <button onClick={onClose} style={{ ...bigBtnInline, width: '100%', marginTop: '10px', background: 'var(--navy)', padding: '11px' }}>
-        Terminé
-      </button>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        {selected.length > 0 && (
+          <button onClick={() => onChange([])} style={{ ...navBtn, flex: '0 0 auto', padding: '11px 14px', color: '#b91c1c', borderColor: '#f5c2c2' }}>
+            Tout retirer
+          </button>
+        )}
+        <button onClick={onClose} style={{ ...bigBtnInline, flex: 1, background: 'var(--navy)', padding: '11px' }}>
+          Terminé
+        </button>
+      </div>
     </div>
   )
 }
@@ -506,16 +535,21 @@ function EngagementForm({ company, label, week, hasOne, onSubmit, onClear, onCan
 
 const panelBox: React.CSSProperties = { marginTop: '4px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }
 
-const addBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-  padding: '12px', borderRadius: '10px', border: '1px dashed #9bb0c2', background: '#fff',
-  color: 'var(--navy)', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
-}
-
-const menuBtn = (fg: string): React.CSSProperties => ({
-  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '14px 10px',
-  borderRadius: '10px', border: `1px solid ${fg}33`, background: `${fg}0f`, color: fg,
+const actBtn = (fg: string, on = false): React.CSSProperties => ({
+  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+  padding: '13px 8px', borderRadius: '10px',
+  border: on ? `2px solid ${fg}` : `1px solid ${fg}33`,
+  background: on ? `${fg}1a` : `${fg}0f`, color: fg,
   fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+})
+
+/** Secondary, rarer actions live beside the title rather than in the main row. */
+const miniBtn = (fg: string, on = false): React.CSSProperties => ({
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: '30px', height: '30px', borderRadius: '8px',
+  border: on ? `2px solid ${fg}` : '1px solid var(--line)',
+  background: on ? `${fg}1a` : '#fff', color: on ? fg : 'var(--muted)',
+  cursor: 'pointer', flexShrink: 0,
 })
 
 const iconBtn: React.CSSProperties = {

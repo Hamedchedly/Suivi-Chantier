@@ -119,13 +119,11 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const curWeekLeftPx = Math.max(0, curWeekStartDay) * dayWidthPx
   const curWeekWidthPx = (Math.min(daysInRange, curWeekStartDay + 7) - Math.max(0, curWeekStartDay)) * dayWidthPx
 
-  // Grille de fond : week-ends grisés (jours 5-6 de chaque semaine, la timeline
-  // étant calée sur le lundi) + séparateur de semaine.
+  // The chantier is read week by week: one column per week, no weekend banding.
+  // Days still drive the geometry so bars keep landing on the right date.
   const weekPx = 7 * dayWidthPx
-  const gridBackground = [
-    `repeating-linear-gradient(to right, transparent 0, transparent ${5 * dayWidthPx}px, rgba(91,113,131,.07) ${5 * dayWidthPx}px, rgba(91,113,131,.07) ${weekPx}px)`,
-    `repeating-linear-gradient(to right, #e9eff4 0, #e9eff4 1px, transparent 1px, transparent ${weekPx}px)`,
-  ].join(', ')
+  const gridBackground =
+    `repeating-linear-gradient(to right, #e9eff4 0, #e9eff4 1px, transparent 1px, transparent ${weekPx}px)`
 
   // Holiday / non-working bands (hatched grey columns)
   const holidayBands = (viewState.holidays ?? [])
@@ -296,7 +294,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             ))}
             {/* Current-week highlight band */}
             {curWeekVisible && (
-              <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.10)', borderLeft: '1px solid rgba(1,138,190,.35)', borderRight: '1px solid rgba(1,138,190,.35)', zIndex: 0, pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.16)', borderLeft: '2px solid rgba(1,138,190,.55)', borderRight: '2px solid rgba(1,138,190,.55)', zIndex: 0, pointerEvents: 'none' }} />
             )}
             {/* Today marker — solid red line */}
             {todayVisible && (
@@ -377,7 +375,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx, position: 'relative' }}>
                 {/* Current-week highlight in header */}
                 {curWeekVisible && (
-                  <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.10)', borderLeft: '1px solid rgba(1,138,190,.35)', borderRight: '1px solid rgba(1,138,190,.35)', zIndex: 0, pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.16)', borderLeft: '2px solid rgba(1,138,190,.55)', borderRight: '2px solid rgba(1,138,190,.55)', zIndex: 0, pointerEvents: 'none' }} />
                 )}
                 {/* Today triangle marker */}
                 {todayVisible && (

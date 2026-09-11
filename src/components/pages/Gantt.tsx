@@ -83,7 +83,11 @@ export function Gantt() {
   const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
   const [depsVisible, setDepsVisible] = useState(true)
   const [highlightCritical, setHighlightCritical] = useState(false)
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  // Lots open on arrival: the planning is read at task level, and a lot is
+  // collapsed by tapping it rather than expanded one by one.
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
+    () => new Set(getGanttTasks().filter(t => t.children?.length).map(t => t.id)),
+  )
   const [detailTask, setDetailTask] = useState<GanttTask | null>(null)
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const holidays = useMemo(() => getHolidays(), [])

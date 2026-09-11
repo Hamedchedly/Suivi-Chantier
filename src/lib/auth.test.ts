@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   User, authenticate, isSuperadmin, canEditLocked,
-  createUser, deleteUser, setRole, setDisabled, setPassword,
+  createUser, deleteUser, setRole, setDisabled, setPassword, setEmail, changeOwnPassword,
 } from './auth'
 
 const u = (over: Partial<User> & { id: string; username: string }): User => ({
@@ -90,6 +90,38 @@ describe('deleteUser', () => {
     const r = deleteUser(base, 'u1', 'u2')
     expect(r.ok).toBe(true)
     expect(r.users.map(x => x.id)).toEqual(['u2'])
+  })
+})
+
+describe('email', () => {
+  it('accepts a plausible address and clears an empty one', () => {
+    expect(setEmail(base, 'u1', ' moe@bureau.fr ').users[0].email).toBe('moe@bureau.fr')
+    expect(setEmail(base, 'u1', '').users[0].email).toBeUndefined()
+  })
+  it('rejects a malformed address', () => {
+    expect(setEmail(base, 'u1', 'pas-une-adresse').error).toBe('email_invalid')
+    expect(createUser(base, { username: 'x', password: 'p', role: 'user', email: 'a@b' }).error).toBe('email_invalid')
+  })
+  it('stores the address given at creation', () => {
+    const r = createUser(base, { username: 'moe', password: 'p', role: 'user', email: 'moe@bureau.fr' })
+    expect(r.users[2].email).toBe('moe@bureau.fr')
+  })
+})
+
+describe('changeOwnPassword', () => {
+  it('changes it when the current one is right and both match', () => {
+    const r = changeOwnPassword(base, 'u1', 'user', 'neuf', 'neuf')
+    expect(r.ok).toBe(true)
+    expect(authenticate(r.users, 'user', 'neuf')?.id).toBe('u1')
+  })
+  it('refuses a wrong current password', () => {
+    expect(changeOwnPassword(base, 'u1', 'faux', 'neuf', 'neuf').error).toBe('wrong_password')
+  })
+  it('refuses when the confirmation differs', () => {
+    expect(changeOwnPassword(base, 'u1', 'user', 'neuf', 'autre').error).toBe('password_mismatch')
+  })
+  it('refuses an empty new password', () => {
+    expect(changeOwnPassword(base, 'u1', 'user', '', '').error).toBe('password_required')
   })
 })
 

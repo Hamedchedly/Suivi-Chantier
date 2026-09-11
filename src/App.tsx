@@ -159,7 +159,7 @@ export default function App() {
           {currentPage === 'finances' && <Finances />}
           {currentPage === 'rapports' && <Reports onNavigate={go} />}
           {currentPage === 'alertes'  && <Alertes />}
-          {currentPage === 'config'   && <Config />}
+          {currentPage === 'config'   && <Config users={users} currentUser={currentUser} onUsersChange={setUsers} />}
         </div>
       </div>
 

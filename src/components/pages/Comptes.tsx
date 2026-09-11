@@ -58,8 +58,8 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
       {creating && (
         <CreateForm
           onCancel={() => setCreating(false)}
-          onCreate={(username, password, role, displayName) => {
-            const r = createUser(users, { username, password, role, displayName })
+          onCreate={(username, password, role, displayName, email) => {
+            const r = createUser(users, { username, password, role, displayName, email })
             if (r.ok) setCreating(false)
             apply(r, `Compte « ${username} » créé (${ROLE_LABEL[role]})`)
           }}
@@ -82,7 +82,7 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
                     {u.displayName} {isMe && <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--muted)' }}>— vous</span>}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                    identifiant <code>{u.username}</code>
+                    identifiant <code>{u.username}</code>{u.email ? ` · ${u.email}` : ''}
                   </div>
                 </div>
                 <span style={{ ...badge, background: admin ? '#ede9fe' : '#eef2f6', color: admin ? '#6d28d9' : '#5b7183' }}>
@@ -132,10 +132,11 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
 
 function CreateForm({ onCancel, onCreate }: {
   onCancel: () => void
-  onCreate: (username: string, password: string, role: UserRole, displayName: string) => void
+  onCreate: (username: string, password: string, role: UserRole, displayName: string, email: string) => void
 }) {
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('user')
 
@@ -145,6 +146,9 @@ function CreateForm({ onCancel, onCreate }: {
       <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Identifiant" autoCapitalize="none"
         style={{ ...input, width: '100%', marginBottom: '8px' }} />
       <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Nom affiché (facultatif)"
+        style={{ ...input, width: '100%', marginBottom: '8px' }} />
+      <input value={email} onChange={e => setEmail(e.target.value)} type="email" autoCapitalize="none"
+        placeholder="Adresse e-mail (facultatif)"
         style={{ ...input, width: '100%', marginBottom: '8px' }} />
       <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe" type="text"
         style={{ ...input, width: '100%', marginBottom: '8px' }} />
@@ -160,7 +164,7 @@ function CreateForm({ onCancel, onCreate }: {
       </div>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
         <button onClick={onCancel} style={linkBtn}>Annuler</button>
-        <button onClick={() => onCreate(username, password, role, displayName)}
+        <button onClick={() => onCreate(username, password, role, displayName, email)}
           style={{ ...bigBtnInline, background: 'var(--navy)', padding: '10px 15px', fontSize: '13px' }}>
           Créer
         </button>

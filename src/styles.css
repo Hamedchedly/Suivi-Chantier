@@ -171,7 +171,10 @@ legend { color: var(--navy); font-weight: 700; font-size: .9rem; padding: 0 6px 
 .tree .row { margin-top: 6px }
 
 /* ════════ NEW V5 REDESIGN ════════ */
-body { max-width: 100%; padding-bottom: 100px }
+/* No padding here: .app-wrapper owns the viewport height and .app-body does the
+   scrolling. A padding on body made the whole document taller than the screen,
+   so the page itself scrolled and dragged the topbar out of view. */
+body { max-width: 100% }
 
 /* KPI Grid */
 .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px }
