@@ -28,7 +28,9 @@ import { DEFAULT_DPGF } from '../data/dpgfMock'
 import { ActivityEvent, ActivityType, pushEvent } from './activity'
 import { Meeting } from './meetings'
 import { DEFAULT_MEETINGS } from '../data/meetingsMock'
-import { Visit as VisitSession, makeZone, type VisitZone, type TaskState } from './visits'
+import { Visit as VisitSession, buildZonesFromPlanning, type ZoneRef, type TaskState } from './visits'
+import { DateCommitment } from './commitments'
+import { LOGEMENTS } from '../data/zones'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -48,7 +50,8 @@ const KEYS = {
   ganttPrefs: 'sc-gantt-prefs-v1',
   activity: 'sc-activity-v1',
   meetings: 'sc-meetings-v1',
-  visits2: 'sc-visits2-v1',
+  visits: 'sc-visits-v3',
+  commitments: 'sc-commitments-v1',
 } as const
 
 const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
@@ -132,45 +135,63 @@ export function saveReserves(reserves: Reserve[]): void {
   saveState(KEYS.reserves, reserves)
 }
 
-// ── Visites (session globale — nouveau modèle) ───────────────────────────────
-// Supabase mapping (future): visits + visit_zones + visit_task_checks (+ the
-// reserves tagged with visit_id for the "à revoir" points).
+// ── Visites / réunions de chantier (session globale) ─────────────────────────
+// Supabase mapping (future): visits + visit_zones + visit_task_checks +
+// visit_notes (+ the reserves tagged with visit_id for the "à revoir" points).
 
-const VISIT_LOTS = ['L05', 'L06', 'L07', 'L08']
+/** Every logement/commun of the catalog, selectable when opening a session. */
+export const ZONE_REFS: ZoneRef[] = LOGEMENTS.map(l => ({
+  refId: l.id,
+  label: l.label,
+  kind: l.zoneId === 'COMMUNS' ? 'commun' : 'logement',
+  buildingId: l.zoneId,
+  buildingLabel: l.zoneLabel,
+}))
 
-const _seedZone = (refId: string, label: string, kind: VisitZone['kind'], states: Partial<Record<string, TaskState>>, override?: 'to_review' | 'blocked'): VisitZone => {
-  const z = makeZone(refId, label, kind, VISIT_LOTS)
-  z.tasks = z.tasks.map(t => ({ ...t, state: states[t.lotId] ?? 'not_checked' }))
-  if (override) z.override = override
-  return z
-}
-
-const DEFAULT_VISITS2: VisitSession[] = [
-  {
+/** Demo session: A-101 fully controlled, A-102 half done, B-201 with a reprise. */
+const DEFAULT_VISITS: VisitSession[] = [(() => {
+  const seeded: Record<string, Record<string, { state: TaskState; progress?: number }>> = {
+    'A-101': { L05: { state: 'ok', progress: 100 }, L06: { state: 'ok', progress: 100 }, L07: { state: 'ok', progress: 100 }, L08: { state: 'ok', progress: 90 } },
+    'A-102': { L05: { state: 'ok', progress: 100 }, L06: { state: 'ok', progress: 70 } },
+    'B-201': { L05: { state: 'ok', progress: 60 }, L07: { state: 'to_review', progress: 20 } },
+  }
+  const zones = buildZonesFromPlanning(GANTT_TASKS, ZONE_REFS).map(z => {
+    const s = seeded[z.refId]
+    if (!s) return z
+    return { ...z, tasks: z.tasks.map(t => (s[t.lotId] ? { ...t, ...s[t.lotId] } : t)) }
+  })
+  return {
     id: 'VS-DEMO',
+    kind: 'visite' as const,
     date: '2026-09-09',
     title: 'Visite hebdomadaire',
-    status: 'en_cours',
+    status: 'en_cours' as const,
     participants: [
-      { id: 'p1', name: 'Jean Dupont', role: 'MOE' },
-      { id: 'p2', name: 'Marie Martin', role: 'MOA' },
+      { id: 'p1', name: 'Jean Dupont', role: 'MOE' as const },
+      { id: 'p2', name: 'Marie Martin', role: 'MOA' as const },
     ],
-    zones: [
-      _seedZone('A-101', 'Logt A-101', 'logement', { L05: 'ok', L06: 'ok', L07: 'ok', L08: 'ok' }),
-      _seedZone('A-102', 'Logt A-102', 'logement', { L05: 'ok', L06: 'ok' }),
-      _seedZone('B-201', 'Logt B-201', 'logement', { L07: 'to_review', L05: 'ok' }),
-      _seedZone('COM', 'Parties communes', 'commun', {}),
-    ],
+    zones,
+    notes: [],
     createdAt: '2026-09-09T09:00:00.000Z',
-  },
-]
+  }
+})()]
 
-export function getVisits2(): VisitSession[] {
-  return loadState<VisitSession[]>(KEYS.visits2, DEFAULT_VISITS2)
+export function getVisits(): VisitSession[] {
+  return loadState<VisitSession[]>(KEYS.visits, DEFAULT_VISITS)
 }
 
-export function saveVisits2(visits: VisitSession[]): void {
-  saveState(KEYS.visits2, visits)
+export function saveVisits(visits: VisitSession[]): void {
+  saveState(KEYS.visits, visits)
+}
+
+// ── Engagements de dates pris par les entreprises ───────────────────────────
+
+export function getCommitments(): DateCommitment[] {
+  return loadState<DateCommitment[]>(KEYS.commitments, [])
+}
+
+export function saveCommitments(c: DateCommitment[]): void {
+  saveState(KEYS.commitments, c)
 }
 
 // ── Lots configuration ───────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getReserves, getVisits2, getLotsConfig, getGanttTasks, getLotProgress } from './repo'
+import { getReserves, getVisits, getLotsConfig, getGanttTasks, getLotProgress } from './repo'
 
 // In the node test environment there is no localStorage, so loadState falls back
 // to the seed defaults. These tests lock in the repository's default data + wiring.
@@ -11,11 +11,16 @@ describe('repo default seeds (no localStorage → fallback)', () => {
     expect(r[0].number).toMatch(/^R-\d{3}$/)
   })
 
-  it('getVisits2 returns the seed visit session with zones', () => {
-    const v = getVisits2()
+  it('getVisits seeds a session whose zones carry real planning tasks', () => {
+    const v = getVisits()
     expect(v.length).toBeGreaterThanOrEqual(1)
-    expect(v[0].zones.length).toBeGreaterThan(0)
-    expect(v[0].zones[0].tasks.length).toBeGreaterThan(0)
+    expect(v[0].kind).toBe('visite')
+    const zone = v[0].zones.find(z => z.refId === 'A-101')!
+    expect(zone.buildingLabel).toBe('Bâtiment A')
+    // checks point at real Gantt leaves and carry their contractual date
+    expect(zone.tasks.length).toBeGreaterThan(0)
+    expect(zone.tasks[0].taskId).toMatch(/^T-/)
+    expect(zone.tasks[0].baselineEnd).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('getLotsConfig returns 4 lots with contact fields', () => {

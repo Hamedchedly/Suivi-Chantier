@@ -17,6 +17,7 @@ export interface VisitPhoto {
   zoneRefId: string
   zoneLabel: string
   lotId?: string
+  taskId?: string        // set when the photo documents one precise planning task
   reserveId?: string
   caption?: string
   original: string       // dataURL, downscaled (~1600px)
