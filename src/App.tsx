@@ -21,7 +21,7 @@ const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   home:     { title: 'Gambetta — Réhabilitation', sub: 'GAM-2026-001 • 111 Rue Gambetta, Reims' },
   gantt:    { title: 'Planning', sub: 'Déplacez les barres pour modifier les dates' },
   visite:   { title: 'Visite de chantier', sub: 'Session de contrôle terrain' },
-  cr:       { title: 'Comptes Rendus', sub: 'Visites de chantier' },
+  cr:       { title: 'Réserves & réunions', sub: 'Réserves de chantier & relevés de réunions' },
   finances: { title: 'Finances', sub: 'Marchés, avenants & situations' },
   config:   { title: 'Configuration', sub: 'Paramètres du projet' },
   rapports: { title: 'Rapports', sub: 'CRs envoyés et brouillons' },

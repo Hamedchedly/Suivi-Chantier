@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getReserves, getVisits, getLotsConfig, getGanttTasks, getLotProgress } from './repo'
+import { getReserves, getVisits2, getLotsConfig, getGanttTasks, getLotProgress } from './repo'
 
 // In the node test environment there is no localStorage, so loadState falls back
 // to the seed defaults. These tests lock in the repository's default data + wiring.
@@ -11,10 +11,11 @@ describe('repo default seeds (no localStorage → fallback)', () => {
     expect(r[0].number).toMatch(/^R-\d{3}$/)
   })
 
-  it('getVisits returns seed visits', () => {
-    const v = getVisits()
-    expect(v.length).toBeGreaterThanOrEqual(3)
-    expect(v.every(x => x.status === 'brouillon' || x.status === 'envoyé')).toBe(true)
+  it('getVisits2 returns the seed visit session with zones', () => {
+    const v = getVisits2()
+    expect(v.length).toBeGreaterThanOrEqual(1)
+    expect(v[0].zones.length).toBeGreaterThan(0)
+    expect(v[0].zones[0].tasks.length).toBeGreaterThan(0)
   })
 
   it('getLotsConfig returns 4 lots with contact fields', () => {

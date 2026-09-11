@@ -9,7 +9,7 @@
 // Supabase mapping (for the future backend sprint), project "Suivi-Chantier":
 //   getGanttTasks / saveGanttTasks   ↔ public.tasks (+ schedule_items, progress_entries)
 //   getReserves    / saveReserves    ↔ public.observations (type = reserve) or a reserves table
-//   getVisits      / saveVisits      ↔ public.visits (+ visit_attendees)
+//   getVisits2     / saveVisits2     ↔ public.visits (+ visit_zones, visit_task_checks)
 //   getLotsConfig  / saveLotsConfig  ↔ public.lots (+ lot_assignments, companies)
 // Each of those tables is RLS-protected via is_operation_member(operation_id),
 // so a Supabase implementation must run as an authenticated user.
@@ -35,7 +35,6 @@ import { loadState, saveState } from './storage'
 const KEYS = {
   gantt: 'sc-gantt-v2',
   reserves: 'sc-reserves-v1',
-  visits: 'sc-visits-v1',
   lotsConfig: 'sc-lots-config-v1',
   marches: 'sc-marches-v1',
   avenants: 'sc-avenants-v1',
@@ -82,15 +81,6 @@ const DEFAULT_HOLIDAYS: Holiday[] = [
 
 // ── Entity types owned by the repository ────────────────────────────────────
 
-export interface Visit {
-  id: string
-  date: string // ISO (yyyy-mm-dd)
-  presences: string[]
-  zones: string[]
-  lots: number
-  status: 'brouillon' | 'envoyé'
-}
-
 export interface LotContact {
   id: string
   name: string
@@ -101,12 +91,6 @@ export interface LotContact {
 }
 
 // ── Default seeds (used until the user creates their own data) ───────────────
-
-const DEFAULT_VISITS: Visit[] = [
-  { id: 'V003', date: '2026-09-09', presences: [], zones: [], lots: 4, status: 'brouillon' },
-  { id: 'V002', date: '2026-09-04', presences: [], zones: [], lots: 5, status: 'envoyé' },
-  { id: 'V001', date: '2026-08-28', presences: [], zones: [], lots: 5, status: 'envoyé' },
-]
 
 const DEFAULT_LOTS: LotContact[] = [
   { id: 'L05', name: 'LOT 05 - Menuiseries int. / Isolation', company: 'SMP Aménagement', contactName: 'Jean Dupont', email: 'j.dupont@smp.fr', phone: '06 12 34 56 78' },
@@ -138,12 +122,6 @@ export function getLotProgress(): Record<string, number> {
   return out
 }
 
-/** Push field-measured progress back onto the planning's parent lot tasks. */
-export function setLotProgress(progress: Record<string, number>): void {
-  const updated = getGanttTasks().map(t => (t.lot_id in progress ? { ...t, progress: progress[t.lot_id] } : t))
-  saveGanttTasks(updated)
-}
-
 // ── Reserves ─────────────────────────────────────────────────────────────────
 
 export function getReserves(): Reserve[] {
@@ -152,16 +130,6 @@ export function getReserves(): Reserve[] {
 
 export function saveReserves(reserves: Reserve[]): void {
   saveState(KEYS.reserves, reserves)
-}
-
-// ── Visits ───────────────────────────────────────────────────────────────────
-
-export function getVisits(): Visit[] {
-  return loadState<Visit[]>(KEYS.visits, DEFAULT_VISITS)
-}
-
-export function saveVisits(visits: Visit[]): void {
-  saveState(KEYS.visits, visits)
 }
 
 // ── Visites (session globale — nouveau modèle) ───────────────────────────────

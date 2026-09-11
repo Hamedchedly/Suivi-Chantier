@@ -15,7 +15,7 @@ export const PRIMARY_NAV = [
 ]
 
 export const GESTION_ITEMS = [
-  { id: 'cr' as Page, label: 'Comptes rendus', desc: 'Visites & réserves', icon: ClipboardList },
+  { id: 'cr' as Page, label: 'Réserves & réunions', desc: 'Réserves de chantier & relevés de réunions', icon: ClipboardList },
   { id: 'finances' as Page, label: 'Finances', desc: 'Marchés, avenants, situations', icon: Euro },
   { id: 'rapports' as Page, label: 'Rapports & documents', desc: 'CR auto, RFI, visas, GED', icon: FileText },
 ]
