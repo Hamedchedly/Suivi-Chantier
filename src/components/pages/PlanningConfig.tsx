@@ -1,8 +1,12 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Flag, X } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { getGanttTasks, saveGanttTasks, getHolidays, saveHolidays, Holiday } from '../../lib/repo'
 import { endDrift, startDrift } from '../../lib/actualDates'
+import {
+  PlanningError, PLANNING_ERROR_LABEL, createLot, createTask, renameTask,
+  setTaskDates, removeTask,
+} from '../../lib/planning'
 
 const iso = (d: Date) => {
   const x = new Date(d); x.setHours(0, 0, 0, 0)
@@ -10,16 +14,6 @@ const iso = (d: Date) => {
 }
 const parse = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr-FR') : '—')
-const days = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86400000) + 1
-
-// Recursively set a field on the matching task.
-function updateTask(list: GanttTask[], id: string, patch: Partial<GanttTask>): GanttTask[] {
-  return list.map(t => {
-    if (t.id === id) return { ...t, ...patch }
-    if (t.children?.length) return { ...t, children: updateTask(t.children, id, patch) }
-    return t
-  })
-}
 
 /** Écart en jours, rendu lisible : « +7 j », « −3 j », « à l'heure ». */
 function DriftCell({ value }: { value: number | null }) {
@@ -33,9 +27,19 @@ function DriftCell({ value }: { value: number | null }) {
   )
 }
 
+interface DraftTask { title: string; start: string; duration: string; milestone: boolean }
+const emptyDraft = (): DraftTask => ({ title: '', start: iso(new Date()), duration: '5', milestone: false })
+
 export function PlanningConfig() {
   const [tasks, setTasks] = useState<GanttTask[]>(getGanttTasks)
   const [holidays, setHolidays] = useState<Holiday[]>(getHolidays)
+
+  // Création de lot
+  const [lotForm, setLotForm] = useState<{ code: string; title: string } | null>(null)
+  // Création de tâche, par lot (id du lot → brouillon ouvert)
+  const [taskDraft, setTaskDraft] = useState<{ lotId: string; draft: DraftTask } | null>(null)
+  const [error, setError] = useState<PlanningError | null>(null)
+  const [confirm, setConfirm] = useState<string | null>(null)
 
   useEffect(() => { saveGanttTasks(tasks) }, [tasks])
   useEffect(() => { saveHolidays(holidays) }, [holidays])
@@ -45,22 +49,37 @@ export function PlanningConfig() {
   const projStart = new Date(Math.min(...(starts.length ? starts : [Date.now()])))
   const weekOf = (d: Date) => Math.floor((d.getTime() - projStart.getTime()) / (7 * 86400000))
 
-  /**
-   * Le prévisionnel EST le contractuel : une seule paire de dates à saisir.
-   * Déplacer le début conserve la durée ; changer la fin recalcule la durée.
-   */
-  const setPlannedStart = (t: GanttTask, value: string) => {
-    if (!value) return
-    const start = parse(value)
-    const end = new Date(start.getTime() + (t.planned_duration - 1) * 86400000)
-    setTasks(prev => updateTask(prev, t.id, { planned_start: start, planned_end: end }))
+  const apply = (res: ReturnType<typeof createLot>) => {
+    if (!res.ok) { setError(res.error ?? null); return false }
+    setTasks(res.tasks); setError(null); return true
   }
-  const setPlannedEnd = (t: GanttTask, value: string) => {
-    if (!value) return
-    const end = parse(value)
-    if (end.getTime() < t.planned_start.getTime()) return   // fin avant début : ignoré
-    setTasks(prev => updateTask(prev, t.id, { planned_end: end, planned_duration: days(t.planned_start, end) }))
+
+  const submitLot = () => {
+    if (!lotForm) return
+    if (apply(createLot(tasks, lotForm))) setLotForm(null)
   }
+
+  const submitTask = () => {
+    if (!taskDraft) return
+    const { lotId, draft } = taskDraft
+    const res = createTask(tasks, lotId, {
+      title: draft.title,
+      start: parse(draft.start),
+      duration: Math.max(1, parseInt(draft.duration, 10) || 1),
+      is_milestone: draft.milestone,
+    })
+    if (apply(res)) setTaskDraft({ lotId, draft: emptyDraft() })   // reste ouvert pour enchaîner
+  }
+
+  const setStart = (id: string, value: string) => {
+    if (value) setTasks(prev => setTaskDates(prev, id, { start: parse(value) }).tasks)
+  }
+  const setEnd = (id: string, value: string) => {
+    if (value) setTasks(prev => setTaskDates(prev, id, { end: parse(value) }).tasks)
+  }
+  const rename = (id: string, title: string) =>
+    setTasks(prev => { const r = renameTask(prev, id, title); return r.ok ? r.tasks : prev })
+  const remove = (id: string) => { setTasks(prev => removeTask(prev, id).tasks); setConfirm(null) }
 
   const addHoliday = () => {
     const s = new Date(); s.setHours(0, 0, 0, 0)
@@ -74,7 +93,7 @@ export function PlanningConfig() {
   const leaves = tasks.flatMap(lot => (lot.children ?? []).map(t => ({ lot, t })))
 
   return (
-    <div style={{ maxWidth: '980px' }}>
+    <div style={{ maxWidth: '1040px' }}>
       {/* Congés */}
       <div style={{ marginBottom: '22px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -96,29 +115,53 @@ export function PlanningConfig() {
         ))}
       </div>
 
-      {/* Dates contractuelles — saisie en tableau */}
+      {/* Planning : lots, tâches et dates contractuelles */}
       <div>
-        <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: 'var(--navy)' }}>Dates contractuelles</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', gap: '8px', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--navy)' }}>Planning — lots &amp; tâches</h3>
+          {!lotForm && <button onClick={() => { setLotForm({ code: '', title: '' }); setError(null) }} style={btnSm}><Plus size={14} /> Ajouter un lot</button>}
+        </div>
         <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
           La date contractuelle est la date prévisionnelle : une seule saisie par tâche.
           Les dates <strong>réelles</strong> ne se saisissent pas — elles se calent automatiquement sur
           l'avancement constaté en visite. Semaine de démarrage = S0.
         </p>
 
-        {leaves.length === 0 && (
-          <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '18px', border: '1px dashed var(--line)', borderRadius: '10px' }}>
-            Aucune tâche au planning. Importez ou créez votre planning pour saisir les dates.
+        {/* Formulaire nouveau lot */}
+        {lotForm && (
+          <div style={formBox}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+              <strong style={{ flex: 1, fontSize: '13px', color: 'var(--navy)' }}>Nouveau lot</strong>
+              <button onClick={() => { setLotForm(null); setError(null) }} style={iconBtn}><X size={15} /></button>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input autoFocus value={lotForm.code} placeholder="Code (ex. L01)"
+                onChange={e => setLotForm({ ...lotForm, code: e.target.value })}
+                style={{ ...inp, flex: '0 1 120px' }} />
+              <input value={lotForm.title} placeholder="Intitulé du lot (ex. Démolition / Structure)"
+                onChange={e => setLotForm({ ...lotForm, title: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Enter') submitLot() }}
+                style={{ ...inp, flex: '2 1 240px' }} />
+              <button onClick={submitLot} style={primaryBtn}>Créer le lot</button>
+            </div>
+            {error && <div style={errMsg}>{PLANNING_ERROR_LABEL[error]}</div>}
           </div>
         )}
 
-        {leaves.length > 0 && (
+        {tasks.length === 0 && !lotForm && (
+          <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '18px', border: '1px dashed var(--line)', borderRadius: '10px' }}>
+            Aucun lot. Ajoutez un lot, puis ses tâches, pour construire le planning.
+          </div>
+        )}
+
+        {tasks.length > 0 && (
           // Le tableau défile horizontalement sur mobile plutôt que de se replier
           // en une pile d'étiquettes : les colonnes restent comparables.
           <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px', background: '#fff' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '760px', fontSize: '12px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '860px', fontSize: '12px' }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, textAlign: 'left', minWidth: '190px' }}>Tâche</th>
+                  <th style={{ ...th, textAlign: 'left', minWidth: '210px' }}>Tâche</th>
                   <th style={th}>Semaines</th>
                   <th style={th}>Début contractuel</th>
                   <th style={th}>Fin contractuelle</th>
@@ -127,6 +170,7 @@ export function PlanningConfig() {
                   <th style={th}>Début réel</th>
                   <th style={th}>Fin réelle</th>
                   <th style={th}>Écart fin</th>
+                  <th style={th}></th>
                 </tr>
               </thead>
               <tbody>
@@ -134,24 +178,43 @@ export function PlanningConfig() {
                   <Fragment key={lot.id}>
                     <tr>
                       <td colSpan={9} style={{ padding: '9px 10px', background: 'var(--sky-soft)', fontWeight: 700, color: 'var(--navy)', borderTop: '1px solid var(--line)' }}>
-                        {lot.title}
+                        {lot.lot_id ? <span style={{ color: 'var(--accent)' }}>{lot.lot_id} · </span> : null}{lot.title}
+                      </td>
+                      <td style={{ padding: '6px 8px', background: 'var(--sky-soft)', borderTop: '1px solid var(--line)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => { setTaskDraft({ lotId: lot.id, draft: emptyDraft() }); setError(null) }} style={miniBtn} title="Ajouter une tâche"><Plus size={13} /></button>
+                        <button onClick={() => setConfirm(lot.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer le lot"><Trash2 size={13} /></button>
                       </td>
                     </tr>
+
+                    {confirm === lot.id && (
+                      <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec' }}>
+                        <span style={{ fontSize: '11px', color: '#7a1c13', marginRight: '10px' }}>
+                          Supprimer le lot « {lot.title} » et ses {(lot.children ?? []).length} tâche(s) ?
+                        </span>
+                        <button onClick={() => remove(lot.id)} style={dangerBtn}>Supprimer</button>
+                        <button onClick={() => setConfirm(null)} style={ghostBtn}>Annuler</button>
+                      </td></tr>
+                    )}
+
                     {(lot.children ?? []).map(t => (
                       <tr key={t.id}>
                         <td style={{ ...td, textAlign: 'left' }}>
-                          {t.title}{t.is_milestone ? ' ◆' : ''}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            {t.is_milestone && <Flag size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+                            <input value={t.title} onChange={e => rename(t.id, e.target.value)}
+                              style={{ ...cellInput, width: '100%', minWidth: '150px', border: '1px solid transparent', background: 'transparent' }}
+                              onFocus={e => (e.currentTarget.style.border = '1px solid var(--line)')}
+                              onBlur={e => (e.currentTarget.style.border = '1px solid transparent')} />
+                          </div>
                         </td>
                         <td style={{ ...td, color: 'var(--accent)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                           S{weekOf(t.planned_start)}–S{weekOf(t.planned_end)}
                         </td>
                         <td style={td}>
-                          <input type="date" value={iso(t.planned_start)}
-                            onChange={e => setPlannedStart(t, e.target.value)} style={cellInput} />
+                          <input type="date" value={iso(t.planned_start)} onChange={e => setStart(t.id, e.target.value)} style={cellInput} />
                         </td>
                         <td style={td}>
-                          <input type="date" value={iso(t.planned_end)}
-                            onChange={e => setPlannedEnd(t, e.target.value)} style={cellInput} />
+                          <input type="date" value={iso(t.planned_end)} onChange={e => setEnd(t.id, e.target.value)} style={cellInput} />
                         </td>
                         <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.planned_duration} j</td>
                         <td style={{ ...td, fontWeight: 600 }}>{t.progress}%</td>
@@ -163,24 +226,73 @@ export function PlanningConfig() {
                         </td>
                         <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.actual_end)}</td>
                         <td style={td}><DriftCell value={endDrift(t)} /></td>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                          <button onClick={() => setConfirm(t.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer la tâche"><Trash2 size={13} /></button>
+                        </td>
                       </tr>
                     ))}
+
+                    {confirm && (lot.children ?? []).some(c => c.id === confirm) && (
+                      <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec' }}>
+                        <span style={{ fontSize: '11px', color: '#7a1c13', marginRight: '10px' }}>Supprimer cette tâche ?</span>
+                        <button onClick={() => remove(confirm)} style={dangerBtn}>Supprimer</button>
+                        <button onClick={() => setConfirm(null)} style={ghostBtn}>Annuler</button>
+                      </td></tr>
+                    )}
+
+                    {/* Ligne de saisie d'une nouvelle tâche */}
+                    {taskDraft?.lotId === lot.id && (
+                      <tr>
+                        <td colSpan={10} style={{ padding: '10px', background: '#f8fafc', borderBottom: '1px solid var(--line)' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input autoFocus value={taskDraft.draft.title} placeholder="Intitulé de la tâche"
+                              onChange={e => setTaskDraft({ lotId: lot.id, draft: { ...taskDraft.draft, title: e.target.value } })}
+                              onKeyDown={e => { if (e.key === 'Enter') submitTask() }}
+                              style={{ ...inp, flex: '2 1 200px' }} />
+                            <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Début</label>
+                            <input type="date" value={taskDraft.draft.start}
+                              onChange={e => setTaskDraft({ lotId: lot.id, draft: { ...taskDraft.draft, start: e.target.value } })} style={inp} />
+                            <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Durée (j)</label>
+                            <input type="number" min={1} value={taskDraft.draft.duration}
+                              onChange={e => setTaskDraft({ lotId: lot.id, draft: { ...taskDraft.draft, duration: e.target.value } })}
+                              style={{ ...inp, width: '64px' }} />
+                            <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={taskDraft.draft.milestone}
+                                onChange={e => setTaskDraft({ lotId: lot.id, draft: { ...taskDraft.draft, milestone: e.target.checked } })} />
+                              Jalon
+                            </label>
+                            <button onClick={submitTask} style={primaryBtn}>Ajouter</button>
+                            <button onClick={() => setTaskDraft(null)} style={ghostBtn}>Fermer</button>
+                          </div>
+                          {error && taskDraft?.lotId === lot.id && <div style={errMsg}>{PLANNING_ERROR_LABEL[error]}</div>}
+                        </td>
+                      </tr>
+                    )}
                   </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '10px' }}>
-          Les modifications sont enregistrées automatiquement.
-        </div>
+        {leaves.length > 0 && (
+          <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '10px' }}>
+            Les modifications sont enregistrées automatiquement.
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-const inp: React.CSSProperties = { padding: '7px 9px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', boxSizing: 'border-box' }
+const inp: React.CSSProperties = { padding: '7px 9px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'inherit' }
 const btnSm: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--navy)', cursor: 'pointer' }
+const miniBtn: React.CSSProperties = { border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '4px 5px' }
+const primaryBtn: React.CSSProperties = { padding: '7px 13px', borderRadius: '7px', border: 'none', background: 'var(--accent)', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }
+const dangerBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: '7px', border: 'none', background: '#b42318', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer', marginRight: '6px' }
+const ghostBtn: React.CSSProperties = { padding: '6px 10px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', cursor: 'pointer' }
+const iconBtn: React.CSSProperties = { border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px' }
+const formBox: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', marginBottom: '12px', background: '#fff' }
+const errMsg: React.CSSProperties = { fontSize: '12px', color: '#b42318', marginTop: '8px' }
 const th: React.CSSProperties = { padding: '9px 10px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--muted)', background: '#f8fafc', borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap', position: 'sticky', top: 0 }
 const td: React.CSSProperties = { padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid var(--line)', color: 'var(--ink)' }
-const cellInput: React.CSSProperties = { padding: '5px 7px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', boxSizing: 'border-box', width: '140px' }
+const cellInput: React.CSSProperties = { padding: '5px 7px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', boxSizing: 'border-box', width: '140px', fontFamily: 'inherit' }
