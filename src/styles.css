@@ -270,6 +270,45 @@ section { margin-bottom: 24px }
 .account { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: #cfe0ee; font-size: .78rem; white-space: nowrap }
 .account-email { max-width: 180px; overflow: hidden; text-overflow: ellipsis }
 .account-out { background: rgba(255, 255, 255, .14); border: 0; color: #fff; border-radius: 20px; padding: 5px 12px; font-size: .8rem; cursor: pointer }
+/* ── Visite: stacked progress slider ──────────────────────────────────────────
+   One bar carries three readings: what was planned, what is observed, and the
+   gap between them. The track gradient is set inline per task; here we only
+   make the native control look like that bar and give it a thumb big enough
+   for a gloved finger. */
+.task-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  border-radius: 10px;
+  background: #eef2f6;
+  outline: none;
+  cursor: pointer;
+  display: block;
+}
+.task-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #02457A;
+  box-shadow: 0 1px 4px rgba(2, 27, 72, .35);
+  cursor: grab;
+}
+.task-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #02457A;
+  box-shadow: 0 1px 4px rgba(2, 27, 72, .35);
+  cursor: grab;
+}
+.task-slider:disabled { cursor: default }
+.task-slider:disabled::-webkit-slider-thumb { display: none }
+
 /* ── Desktop layout overrides (must come after all base rules) ────────────── */
 @media (min-width: 1024px) {
   .app-wrapper { flex-direction: row }

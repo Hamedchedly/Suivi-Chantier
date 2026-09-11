@@ -6,7 +6,7 @@ import {
   visitCounts, visitControlProgress, visitWorksProgress, remainingToControl,
   visitLotIds, nextZoneRef, notesForCompany, generalNotes,
   applyVisitToPlanning, commitmentsFromVisit, buildPlanningSnapshot, newVisit,
-  progressGap, previousObservation, visitStats, visitChanges, visitKindLabel,
+  progressGap, previousObservation, visitStats, visitChanges, visitKindLabel, stateAfterEdit,
 } from './visits'
 import type { GanttTask } from '../types/gantt'
 import type { Reserve } from './reserves'
@@ -313,6 +313,21 @@ describe('progressGap', () => {
   it('is null when either side is missing', () => {
     expect(progressGap(check({ taskId: 'a', lotId: 'L05', progress: 50 }))).toBeNull()
     expect(progressGap(check({ taskId: 'a', lotId: 'L05', plannedProgress: 50 }))).toBeNull()
+  })
+})
+
+describe('stateAfterEdit', () => {
+  it('blocks a task as soon as a blocker is named', () => {
+    expect(stateAfterEdit({ state: 'ok', progress: 50, blockedBy: ['T-07'] })).toBe('blocked')
+  })
+  it('falls back to controlled once the blockers are cleared', () => {
+    expect(stateAfterEdit({ state: 'blocked', progress: 50, blockedBy: [] })).toBe('ok')
+  })
+  it('stays uninspected when no progress was ever entered', () => {
+    expect(stateAfterEdit({ state: 'blocked', progress: undefined, blockedBy: [] })).toBe('not_checked')
+  })
+  it('keeps an explicit non-applicable', () => {
+    expect(stateAfterEdit({ state: 'na', progress: undefined, blockedBy: [] })).toBe('na')
   })
 })
 

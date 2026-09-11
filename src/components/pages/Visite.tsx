@@ -128,6 +128,12 @@ export function Visite() {
       company: lotCompany(lots, r.lotId),
     }, ...prev])
 
+  const updateRemark = (id: string, patch: Partial<Reserve>) =>
+    setReserves(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+
+  const removeRemark = (id: string) =>
+    setReserves(prev => prev.filter(r => r.id !== id))
+
   /** Settling a point left open by an earlier session — history is appended. */
   const followUp = (v: Visit, reserveId: string, status: FollowUpStatus, dueDate?: string) =>
     setReserves(prev => prev.map(r => r.id !== reserveId ? r : applyFollowUp(r, {
@@ -200,6 +206,8 @@ export function Visite() {
               ...z, tasks: z.tasks.map(t => t.taskId === taskId ? { ...t, ...patch } : t),
             }))}
             onAddRemark={r => addRemark(active, zone, r)}
+            onUpdateRemark={updateRemark}
+            onRemoveRemark={removeRemark}
             onAddPhoto={(lotId, taskId, file) => addPhoto(zone, lotId, taskId, file)}
             onBack={back}
           />
@@ -228,6 +236,7 @@ export function Visite() {
             onOpenLot={lotId => push({ v: 'lot', ref: zone.refId, lotId })}
             onUpdateZone={fn => updateZone(zone.refId, fn)}
             onAddRemark={r => addRemark(active, zone, r)}
+            onRemoveRemark={removeRemark}
             onFollowUp={(id, status, dueDate) => followUp(active, id, status, dueDate)}
             onAddPhoto={(lotId, file) => addPhoto(zone, lotId, undefined, file)}
             onUpdatePhoto={updatePhoto}

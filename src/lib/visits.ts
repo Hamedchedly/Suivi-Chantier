@@ -97,6 +97,17 @@ export function progressGap(c: VisitTaskCheck): number | null {
   return c.progress - c.plannedProgress
 }
 
+/**
+ * The state now follows what the user actually did rather than a separate row
+ * of buttons: naming a blocker blocks the task, moving the slider marks it
+ * inspected. An explicit "non applicable" set earlier is preserved.
+ */
+export function stateAfterEdit(c: Pick<VisitTaskCheck, 'state' | 'progress' | 'blockedBy'>): TaskState {
+  if (c.blockedBy && c.blockedBy.length > 0) return 'blocked'
+  if (c.state === 'na') return 'na'
+  return c.progress === undefined ? 'not_checked' : 'ok'
+}
+
 export interface VisitZone {
   refId: string            // catalog id (logement / zone)
   label: string

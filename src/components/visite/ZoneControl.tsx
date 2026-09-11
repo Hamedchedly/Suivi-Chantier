@@ -40,6 +40,7 @@ interface Props {
   onOpenLot: (lotId: string) => void
   onUpdateZone: (fn: (z: VisitZone) => VisitZone) => void
   onAddRemark: (r: RemarkInput) => void
+  onRemoveRemark: (id: string) => void
   onFollowUp: (reserveId: string, status: FollowUpStatus, dueDate?: string) => void
   onAddPhoto: (lotId: string | undefined, file: File) => void
   onUpdatePhoto: (p: VisitPhoto) => void
@@ -52,7 +53,7 @@ interface Props {
 /** A logement: its lots as a list, plus everything recorded at zone level. */
 export function ZoneControl(props: Props) {
   const { zone, lots, photos, carriedPoints, visitReserves, readOnly, isLast,
-    onOpenLot, onUpdateZone, onAddRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
+    onOpenLot, onUpdateZone, onAddRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
     onBack, onPrev, onCloseZone } = props
 
   const groups = lotGroups(zone)
@@ -140,6 +141,13 @@ export function ZoneControl(props: Props) {
                 {reserveKind(r) === 'observation' ? <Eye size={13} color="#5b7183" /> : <Flag size={13} color="#b45309" />}
                 <span style={{ flex: 1 }}>{r.description}</span>
                 {r.dueDate && <span style={{ fontSize: '10px', color: '#b45309' }}>{fmtFr(r.dueDate)}</span>}
+                {!readOnly && (
+                  <button onClick={() => { if (window.confirm('Supprimer cette remarque ?')) onRemoveRemark(r.id) }}
+                    title="Supprimer"
+                    style={{ display: 'flex', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '2px' }}>
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

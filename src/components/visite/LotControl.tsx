@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react'
 import {
-  ArrowLeft, Camera, Plus, CheckCircle2, AlertTriangle, Circle, Ban, Check,
-  Eye, Flag, Handshake, ArrowUp, ArrowDown, Search, X, CalendarRange,
+  ArrowLeft, Camera, Plus, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
+  X, ChevronRight, Pencil, Trash2, CalendarRange, CalendarClock,
 } from 'lucide-react'
 import {
-  VisitZone, VisitTaskCheck, TaskState, PreviousObservation,
-  tasksState, tasksWorksProgress, progressGap,
+  VisitZone, VisitTaskCheck, PreviousObservation,
+  tasksState, tasksWorksProgress, progressGap, stateAfterEdit,
 } from '../../lib/visits'
 import { DateCommitment, latestCommitment, isBroken } from '../../lib/commitments'
 import { Reserve, ReservePriority, reserveKind } from '../../lib/reserves'
@@ -13,7 +13,7 @@ import { VisitPhoto } from '../../lib/photoStore'
 import { weekToFriday, weekLabel, dateToWeek } from '../../lib/weeks'
 import type { LotContact } from '../../lib/repo'
 import {
-  ZONE_META, PRIORITY_META, lotLabel, lotCompany, fmtFr, taskTitle,
+  ZONE_META, lotLabel, lotCompany, fmtFr, taskTitle,
   badge, input, linkBtn, bigBtnInline,
 } from './visiteStyles'
 import { Bar, Empty } from './visiteBits'
@@ -41,13 +41,15 @@ interface Props {
   previousOf: (taskId: string) => PreviousObservation | undefined
   onPatchTask: (taskId: string, patch: Partial<VisitTaskCheck>) => void
   onAddRemark: (r: RemarkInput) => void
+  onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
+  onRemoveRemark: (id: string) => void
   onAddPhoto: (lotId: string, taskId: string, file: File) => void
   onBack: () => void
 }
 
 export function LotControl(props: Props) {
   const { zone, lotId, tasks, lots, commitments, photos, reserves, blockerOptions,
-    readOnly, previousOf, onPatchTask, onAddRemark, onAddPhoto, onBack } = props
+    readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack } = props
 
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksWorksProgress(tasks)
@@ -94,6 +96,8 @@ export function LotControl(props: Props) {
           onPatch={patch => onPatchTask(t.taskId, patch)}
           onAddPhoto={file => onAddPhoto(t.lotId, t.taskId, file)}
           onAddRemark={onAddRemark}
+          onUpdateRemark={onUpdateRemark}
+          onRemoveRemark={onRemoveRemark}
         />
       ))}
 
@@ -106,16 +110,9 @@ export function LotControl(props: Props) {
 
 // ── One task ─────────────────────────────────────────────────────────────────
 
-const STATE_OPTS: { s: TaskState; label: string; icon: React.ReactNode; fg: string; bg: string }[] = [
-  { s: 'ok', label: 'OK', icon: <CheckCircle2 size={14} />, fg: '#15803d', bg: '#dcfce7' },
-  { s: 'to_review', label: 'À revoir', icon: <AlertTriangle size={14} />, fg: '#b45309', bg: '#fef3c7' },
-  { s: 'blocked', label: 'Bloqué', icon: <Ban size={14} />, fg: '#b91c1c', bg: '#fee2e2' },
-  { s: 'na', label: 'N/A', icon: <Circle size={14} />, fg: '#64748b', bg: '#f1f5f9' },
-]
-
 type Panel = null | 'menu' | 'observation' | 'action' | 'engagement' | 'blockers'
 
-function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark }: {
+function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark }: {
   task: VisitTaskCheck
   zone: VisitZone
   lots: LotContact[]
@@ -128,6 +125,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onPatch: (patch: Partial<VisitTaskCheck>) => void
   onAddPhoto: (file: File) => void
   onAddRemark: (r: RemarkInput) => void
+  onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
+  onRemoveRemark: (id: string) => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -136,15 +135,20 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
   const blockers = task.blockedBy ?? []
 
-  const setProgress = (progress: number) =>
-    onPatch({ progress, ...(task.state === 'not_checked' ? { state: 'ok' as TaskState } : {}) })
+  const actual = task.progress ?? 0
+  const planned = task.plannedProgress ?? actual
+  const lo = Math.min(planned, actual)
+  const hi = Math.max(planned, actual)
+  const ahead = actual >= planned
+  // One bar, three readings: done, the gap to plan, and what is left.
+  const gapColor = ahead ? '#16a34a' : '#f59e0b'
+  const track = `linear-gradient(to right, #02457A 0%, #02457A ${lo}%, ${gapColor} ${lo}%, ${gapColor} ${hi}%, #dbe5ec ${hi}%, #dbe5ec 100%)`
 
-  const setState = (s: TaskState) => {
-    const next = task.state === s ? 'not_checked' : s
-    onPatch({ state: next })
-    // Marking a task blocked immediately asks WHAT is blocking it.
-    if (next === 'blocked') setPanel('blockers')
-  }
+  const patchProgress = (progress: number) =>
+    onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
+
+  const patchBlockers = (blockedBy: string[]) =>
+    onPatch({ blockedBy: blockedBy.length ? blockedBy : undefined, state: stateAfterEdit({ ...task, blockedBy }) })
 
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: '12px', background: '#fff', padding: '14px', marginBottom: '10px' }}>
@@ -152,55 +156,39 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
-        <strong style={{ fontSize: '17px', color: 'var(--navy)' }}>{task.progress ?? 0}%</strong>
+        <strong style={{ fontSize: '19px', color: 'var(--navy)' }}>{actual}%</strong>
       </div>
 
-      {!readOnly ? (
-        <input type="range" min={0} max={100} step={5} value={task.progress ?? 0}
-          onChange={e => setProgress(Number(e.target.value))}
-          style={{ width: '100%', accentColor: '#02457A', height: '30px', marginBottom: '10px' }} />
-      ) : (
-        <div style={{ marginBottom: '10px' }}><Bar value={task.progress ?? 0} /></div>
-      )}
+      <input
+        className="task-slider"
+        type="range" min={0} max={100} step={5}
+        value={actual}
+        disabled={readOnly}
+        onChange={e => patchProgress(Number(e.target.value))}
+        style={{ background: track }}
+      />
 
-      {!readOnly && (
-        <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-          {STATE_OPTS.map(o => (
-            <button key={o.s} onClick={() => setState(o.s)}
-              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '11px 4px', borderRadius: '8px', border: task.state === o.s ? `2px solid ${o.fg}` : '1px solid var(--line)', background: task.state === o.s ? o.bg : '#fff', color: task.state === o.s ? o.fg : 'var(--muted)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
-              {o.icon} {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Context line: planning vs observed, movement, dates */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10px', color: 'var(--muted)', marginBottom: '8px' }}>
-        {task.plannedProgress !== undefined && <span>Prévu <strong style={{ color: 'var(--ink)' }}>{task.plannedProgress}%</strong></span>}
+      {/* The bar carries the plan; only the gap itself needs spelling out */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10px', marginTop: '6px', marginBottom: '10px' }}>
         {gap !== null && gap !== 0 && (
-          <span style={{ color: gap < 0 ? '#dc2626' : '#15803d', fontWeight: 700 }}>Écart {gap > 0 ? `+${gap}` : gap} pts</span>
-        )}
-        {previous && (
-          <span>
-            Visite {fmtFr(previous.date)} <strong style={{ color: 'var(--ink)' }}>{previous.progress ?? 0}%</strong>
-            {delta !== null && delta !== 0 && (
-              <strong style={{ color: delta > 0 ? '#15803d' : '#dc2626', marginLeft: '3px' }}>
-                {delta > 0 ? <ArrowUp size={10} style={{ verticalAlign: '-1px' }} /> : <ArrowDown size={10} style={{ verticalAlign: '-1px' }} />}
-                {delta > 0 ? `+${delta}` : delta}
-              </strong>
-            )}
+          <span style={{ color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 700 }}>
+            {gap < 0 ? `${-gap} pts de retard` : `${gap} pts d'avance`} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>sur le prévu ({planned}%)</span>
           </span>
         )}
-        <span>Planning <strong style={{ color: 'var(--ink)' }}>{fmtFr(task.plannedEnd)}</strong></span>
-        {commitment && (
-          <span style={{ color: broken ? '#dc2626' : '#5b7183' }}>
-            Promis {fmtFr(commitment.promisedEnd)}{broken ? ' — non tenu' : ''}
+        {gap === 0 && <span style={{ color: '#15803d', fontWeight: 700 }}>conforme au prévu</span>}
+        {delta !== null && delta !== 0 && (
+          <span style={{ color: 'var(--muted)' }}>
+            depuis le {fmtFr(previous!.date)}
+            <strong style={{ color: delta > 0 ? '#15803d' : '#dc2626', marginLeft: '3px' }}>
+              {delta > 0 ? <ArrowUp size={10} style={{ verticalAlign: '-1px' }} /> : <ArrowDown size={10} style={{ verticalAlign: '-1px' }} />}
+              {delta > 0 ? `+${delta}` : delta}
+            </strong>
           </span>
         )}
       </div>
 
-      {/* What was recorded on this task */}
-      {(task.promisedWeek || blockers.length > 0 || remarks.length > 0 || photoCount > 0 || task.comment) && (
+      {/* Recorded on this task */}
+      {(task.promisedWeek || blockers.length > 0 || photoCount > 0) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}>
           {task.promisedWeek && (
             <span style={{ ...badge, background: '#ede9fe', color: '#6d28d9' }}>
@@ -208,30 +196,40 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               {task.promisedLabel ? `${task.promisedLabel} — ` : ''}{weekLabel(task.promisedWeek)}
             </span>
           )}
-          {blockers.length > 0 && (
-            <span style={{ ...badge, background: '#fee2e2', color: '#b91c1c' }}>
-              <Ban size={10} style={{ verticalAlign: '-1px', marginRight: '3px' }} />
-              Bloqué par {blockers.length}
-            </span>
-          )}
           {photoCount > 0 && <span style={{ ...badge, background: '#eef2f6', color: '#02457A' }}>{photoCount} photo{photoCount > 1 ? 's' : ''}</span>}
-          {remarks.map(r => (
-            <span key={r.id} style={{ ...badge, background: reserveKind(r) === 'observation' ? '#eef2f6' : '#fef3c7', color: reserveKind(r) === 'observation' ? '#5b7183' : '#b45309' }}>
-              {reserveKind(r) === 'observation' ? <Eye size={10} style={{ verticalAlign: '-1px', marginRight: '3px' }} /> : <Flag size={10} style={{ verticalAlign: '-1px', marginRight: '3px' }} />}
-              {r.number}
-            </span>
-          ))}
+          {commitment && broken && <span style={{ ...badge, background: '#fdecec', color: '#dc2626' }}>promesse du {fmtFr(commitment.visitDate)} non tenue</span>}
         </div>
       )}
 
       {blockers.length > 0 && (
-        <div style={{ fontSize: '11px', color: '#b91c1c', marginBottom: '10px' }}>
+        <div style={{ borderRadius: '8px', background: '#fff7f7', border: '1px solid #fca5a5', padding: '8px 10px', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#b91c1c', marginBottom: '4px' }}>
+            <Ban size={12} /> Bloquée par {blockers.length} tâche{blockers.length > 1 ? 's' : ''}
+          </div>
           {blockers.map(id => {
             const o = blockerOptions.find(x => x.id === id)
-            if (!o) return <div key={id}>• {id}</div>
-            const who = lotCompany(lots, o.lotId) ?? o.company
-            return <div key={id}>• {o.lotId} — {o.title}{who ? ` (${who})` : ''}</div>
+            const who = o ? lotCompany(lots, o.lotId) ?? o.company : undefined
+            return (
+              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#7f1d1d' }}>
+                <span style={{ flex: 1 }}>{o ? `${o.lotId} — ${o.title}${who ? ` (${who})` : ''}` : id}</span>
+                {!readOnly && (
+                  <button onClick={() => patchBlockers(blockers.filter(x => x !== id))} title="Retirer"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', padding: '2px' }}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )
           })}
+        </div>
+      )}
+
+      {/* Remarks raised on this task — editable and removable */}
+      {remarks.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+          {remarks.map(r => (
+            <RemarkRow key={r.id} remark={r} readOnly={readOnly} onUpdate={onUpdateRemark} onRemove={onRemoveRemark} />
+          ))}
         </div>
       )}
 
@@ -241,9 +239,15 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             onChange={e => { const f = e.target.files?.[0]; if (f) onAddPhoto(f); if (fileRef.current) fileRef.current.value = ''; setPanel(null) }} />
 
           {panel === null && (
-            <button onClick={() => setPanel('menu')} style={addBtn}>
-              <Plus size={18} /> Ajouter
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={() => setPanel('menu')} style={{ ...addBtn, flex: 1 }}>
+                <Plus size={17} /> Ajouter
+              </button>
+              <button onClick={() => setPanel('blockers')} title="Signaler une tâche bloquante"
+                style={{ ...addBtn, flex: '0 0 auto', padding: '12px 15px', borderColor: blockers.length ? '#b91c1c' : '#e2b4b4', color: '#b91c1c' }}>
+                <Ban size={17} />
+              </button>
+            </div>
           )}
 
           {panel === 'menu' && (
@@ -257,19 +261,18 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           )}
 
           {panel === 'observation' && (
-            <QuickText
-              placeholder="Constat — ex. joint fissuré autour de la menuiserie"
-              submitLabel="Ajouter l'observation"
-              color="#5b7183"
-              onSubmit={description => { onAddRemark({ kind: 'observation', description, lotId: task.lotId, taskId: task.taskId, priority: 'low' }); setPanel(null) }}
+            <RemarkForm
+              kind="observation"
+              onSubmit={(description) => { onAddRemark({ kind: 'observation', description, lotId: task.lotId, taskId: task.taskId, priority: 'low' }); setPanel(null) }}
               onCancel={() => setPanel('menu')}
             />
           )}
 
           {panel === 'action' && (
-            <ActionForm
+            <RemarkForm
+              kind="action"
               company={lotCompany(lots, task.lotId)}
-              onSubmit={(description, dueDate, priority) => { onAddRemark({ kind: 'action', description, lotId: task.lotId, taskId: task.taskId, dueDate, priority }); setPanel(null) }}
+              onSubmit={(description, dueDate, priority) => { onAddRemark({ kind: 'action', description, lotId: task.lotId, taskId: task.taskId, dueDate, priority: priority ?? 'medium' }); setPanel(null) }}
               onCancel={() => setPanel('menu')}
             />
           )}
@@ -287,6 +290,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 })
                 setPanel(null)
               }}
+              onClear={() => { onPatch({ promisedLabel: undefined, promisedWeek: undefined, promisedEnd: undefined }); setPanel(null) }}
+              hasOne={!!task.promisedWeek}
               onCancel={() => setPanel('menu')}
             />
           )}
@@ -296,7 +301,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               options={blockerOptions}
               lots={lots}
               selected={blockers}
-              onToggle={id => onPatch({ blockedBy: blockers.includes(id) ? blockers.filter(x => x !== id) : [...blockers, id] })}
+              onChange={patchBlockers}
               onClose={() => setPanel(null)}
             />
           )}
@@ -317,158 +322,214 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   )
 }
 
-// ── Blocking tasks: search by entreprise / lot ──────────────────────────────
+// ── A remark, editable in place ──────────────────────────────────────────────
 
-function BlockerPicker({ options, lots, selected, onToggle, onClose }: {
+function RemarkRow({ remark, readOnly, onUpdate, onRemove }: {
+  remark: Reserve
+  readOnly: boolean
+  onUpdate: (id: string, patch: Partial<Reserve>) => void
+  onRemove: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const isAction = reserveKind(remark) === 'action'
+  const tint = isAction ? { bg: '#fffbeb', border: '#fcd34d', fg: '#b45309' } : { bg: '#f8fafc', border: 'var(--line)', fg: '#5b7183' }
+
+  if (editing) {
+    return (
+      <RemarkForm
+        kind={isAction ? 'action' : 'observation'}
+        initial={{ description: remark.description, dueDate: remark.dueDate, priority: remark.priority }}
+        onSubmit={(description, dueDate, priority) => {
+          onUpdate(remark.id, { description, dueDate, ...(priority ? { priority } : {}) })
+          setEditing(false)
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', padding: '8px 10px', borderRadius: '8px', background: tint.bg, border: `1px solid ${tint.border}` }}>
+      {isAction ? <Flag size={13} color={tint.fg} style={{ marginTop: '1px', flexShrink: 0 }} /> : <Eye size={13} color={tint.fg} style={{ marginTop: '1px', flexShrink: 0 }} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '12px', color: 'var(--ink)' }}>{remark.description}</div>
+        <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+          {remark.number}{remark.dueDate ? ` · échéance ${fmtFr(remark.dueDate)}` : ''}
+        </div>
+      </div>
+      {!readOnly && (
+        <>
+          <button onClick={() => setEditing(true)} title="Modifier" style={iconBtn}><Pencil size={13} /></button>
+          <button onClick={() => { if (window.confirm('Supprimer cette remarque ?')) onRemove(remark.id) }} title="Supprimer" style={iconBtn}><Trash2 size={13} /></button>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** One form for both observations and actions, new or being edited. */
+function RemarkForm({ kind, company, initial, onSubmit, onCancel }: {
+  kind: 'observation' | 'action'
+  company?: string
+  initial?: { description: string; dueDate?: string; priority?: ReservePriority }
+  onSubmit: (description: string, dueDate: string | undefined, priority: ReservePriority | undefined) => void
+  onCancel: () => void
+}) {
+  const [text, setText] = useState(initial?.description ?? '')
+  const [due, setDue] = useState(initial?.dueDate ?? '')
+  const [priority, setPriority] = useState<ReservePriority>(initial?.priority ?? 'medium')
+  const isAction = kind === 'action'
+
+  return (
+    <div style={{ ...panelBox, borderColor: isAction ? '#fcd34d' : 'var(--line)', background: isAction ? '#fffbeb' : '#f8fafc' }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: isAction ? '#b45309' : '#5b7183', marginBottom: '7px' }}>
+        {isAction ? `Action à réaliser${company ? ` — ${company}` : ''}` : 'Observation'}
+      </div>
+      <textarea autoFocus value={text} onChange={e => setText(e.target.value)}
+        placeholder={isAction ? 'ex. Reprendre le joint avant la prochaine visite' : 'ex. Joint fissuré autour de la menuiserie'}
+        style={{ ...input, width: '100%', minHeight: '56px', resize: 'vertical', marginBottom: '8px' }} />
+
+      {isAction && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <CalendarClock size={14} color="var(--muted)" />
+            <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
+              style={{ ...input, flex: 1, padding: '8px 9px' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+            {(['low', 'medium', 'high'] as ReservePriority[]).map(p => {
+              const meta = { low: { l: 'Faible', c: '#5b7183' }, medium: { l: 'Moyenne', c: '#b45309' }, high: { l: 'Haute', c: '#dc2626' } }[p]
+              return (
+                <button key={p} onClick={() => setPriority(p)}
+                  style={{ flex: 1, padding: '9px', borderRadius: '7px', border: priority === p ? `2px solid ${meta.c}` : '1px solid var(--line)', background: priority === p ? '#fff' : '#fff', color: meta.c, fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                  {meta.l}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <button onClick={onCancel} style={linkBtn}>Annuler</button>
+        <button disabled={!text.trim()} onClick={() => onSubmit(text.trim(), due || undefined, isAction ? priority : undefined)}
+          style={{ ...bigBtnInline, background: isAction ? '#b45309' : 'var(--navy)', padding: '10px 15px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Blocking tasks: pick the lot, then its tasks ─────────────────────────────
+
+function BlockerPicker({ options, lots, selected, onChange, onClose }: {
   options: BlockerOption[]
   lots: LotContact[]
   selected: string[]
-  onToggle: (id: string) => void
+  onChange: (ids: string[]) => void
   onClose: () => void
 }) {
-  const [lot, setLot] = useState('')
-  const [company, setCompany] = useState('')
-  const [q, setQ] = useState('')
-
-  // Show the contractual company name (config), not the planning's short code.
-  const nameOf = (o: BlockerOption) => lotCompany(lots, o.lotId) ?? o.company
-  const companies = [...new Set(options.map(nameOf).filter((c): c is string => !!c))].sort()
+  const [lot, setLot] = useState<string | null>(null)
   const lotIds = [...new Set(options.map(o => o.lotId))].sort()
-  const shown = options.filter(o =>
-    (!lot || o.lotId === lot) &&
-    (!company || nameOf(o) === company) &&
-    (!q || o.title.toLowerCase().includes(q.toLowerCase())),
-  ).slice(0, 40)
+
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
 
   return (
     <div style={{ ...panelBox, borderColor: '#fca5a5', background: '#fff7f7' }}>
-      <div style={{ fontSize: '12px', fontWeight: 700, color: '#b91c1c', marginBottom: '8px' }}>
-        Qu'est-ce qui bloque cette tâche ?
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+        <Ban size={14} color="#b91c1c" />
+        <span style={{ flex: 1, fontSize: '12px', fontWeight: 700, color: '#b91c1c' }}>
+          {lot ? `${lot} — choisissez les tâches` : "Quel lot bloque cette tâche ?"}
+        </span>
+        {selected.length > 0 && <span style={{ ...badge, background: '#fee2e2', color: '#b91c1c' }}>{selected.length}</span>}
       </div>
 
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-        <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, flex: 1, padding: '7px 8px', fontSize: '12px' }}>
-          <option value="">Tous les lots</option>
-          {lotIds.map(id => <option key={id} value={id}>{id} — {lotLabel(lots, id)}</option>)}
-        </select>
-        <select value={company} onChange={e => setCompany(e.target.value)} style={{ ...input, flex: 1, padding: '7px 8px', fontSize: '12px' }}>
-          <option value="">Toutes entreprises</option>
-          {companies.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
+      {/* Step 1 — the lot */}
+      {!lot && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          {lotIds.map(id => {
+            const count = options.filter(o => o.lotId === id).length
+            const picked = options.filter(o => o.lotId === id && selected.includes(o.id)).length
+            return (
+              <button key={id} onClick={() => setLot(id)}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 11px', borderRadius: '9px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>{id} — {lotLabel(lots, id)}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--muted)' }}>
+                    {lotCompany(lots, id) ?? '—'} · {count} tâche{count > 1 ? 's' : ''}
+                  </div>
+                </div>
+                {picked > 0 && <span style={{ ...badge, background: '#fee2e2', color: '#b91c1c' }}>{picked}</span>}
+                <ChevronRight size={15} color="var(--muted)" />
+              </button>
+            )
+          })}
+        </div>
+      )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-        <Search size={14} color="var(--muted)" />
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher une tâche…"
-          style={{ ...input, flex: 1, padding: '7px 9px', fontSize: '12px' }} />
-      </div>
+      {/* Step 2 — its tasks, multi-select */}
+      {lot && (
+        <>
+          <button onClick={() => setLot(null)} style={{ ...linkBtn, marginBottom: '8px' }}>
+            <ArrowLeft size={14} /> Tous les lots
+          </button>
+          <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {options.filter(o => o.lotId === lot).map(o => {
+              const on = selected.includes(o.id)
+              return (
+                <button key={o.id} onClick={() => toggle(o.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '11px 10px', borderRadius: '8px', border: on ? '2px solid #b91c1c' : '1px solid var(--line)', background: on ? '#fee2e2' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{
+                    width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0,
+                    border: on ? 'none' : '1.5px solid #cbd5e1', background: on ? '#b91c1c' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {on && <Check size={13} color="#fff" />}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: '12px', color: 'var(--ink)' }}>{o.title}</span>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
 
-      <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {shown.length === 0 && <Empty>Aucune tâche ne correspond.</Empty>}
-        {shown.map(o => {
-          const on = selected.includes(o.id)
-          return (
-            <button key={o.id} onClick={() => onToggle(o.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px', borderRadius: '8px', border: on ? '2px solid #b91c1c' : '1px solid var(--line)', background: on ? '#fee2e2' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
-              {on ? <Check size={14} color="#b91c1c" /> : <Circle size={14} color="var(--muted)" />}
-              <span style={{ flex: 1, minWidth: 0, fontSize: '12px' }}>
-                <strong style={{ color: 'var(--navy)' }}>{o.lotId}</strong> {o.title}
-                {nameOf(o) && <span style={{ color: 'var(--muted)' }}> · {nameOf(o)}</span>}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      <button onClick={onClose} style={{ ...bigBtnInline, width: '100%', marginTop: '8px', background: 'var(--navy)', padding: '10px' }}>
+      <button onClick={onClose} style={{ ...bigBtnInline, width: '100%', marginTop: '10px', background: 'var(--navy)', padding: '11px' }}>
         Terminé
       </button>
     </div>
   )
 }
 
-// ── Inline forms ─────────────────────────────────────────────────────────────
+// ── Engagement ───────────────────────────────────────────────────────────────
 
-function QuickText({ placeholder, submitLabel, color, onSubmit, onCancel }: {
-  placeholder: string; submitLabel: string; color: string
-  onSubmit: (text: string) => void; onCancel: () => void
-}) {
-  const [text, setText] = useState('')
-  return (
-    <div style={panelBox}>
-      <textarea autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={placeholder}
-        style={{ ...input, width: '100%', minHeight: '54px', resize: 'vertical', marginBottom: '8px' }} />
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} style={linkBtn}>Retour</button>
-        <button disabled={!text.trim()} onClick={() => onSubmit(text.trim())}
-          style={{ ...bigBtnInline, background: color, padding: '10px 14px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
-          {submitLabel}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ActionForm({ company, onSubmit, onCancel }: {
-  company?: string
-  onSubmit: (description: string, dueDate: string | undefined, priority: ReservePriority) => void
-  onCancel: () => void
-}) {
-  const [text, setText] = useState('')
-  const [due, setDue] = useState('')
-  const [priority, setPriority] = useState<ReservePriority>('medium')
-  return (
-    <div style={panelBox}>
-      <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-        Action à réaliser{company ? ` — ${company}` : ''}
-      </div>
-      <textarea autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="ex. Reprendre le joint avant la prochaine visite"
-        style={{ ...input, width: '100%', minHeight: '54px', resize: 'vertical', marginBottom: '8px' }} />
-      <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
-        style={{ ...input, width: '100%', marginBottom: '8px' }} />
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-        {(Object.keys(PRIORITY_META) as ReservePriority[]).map(p => (
-          <button key={p} onClick={() => setPriority(p)}
-            style={{ flex: 1, padding: '9px', borderRadius: '7px', border: priority === p ? `2px solid ${PRIORITY_META[p].fg}` : '1px solid var(--line)', background: priority === p ? PRIORITY_META[p].bg : '#fff', color: PRIORITY_META[p].fg, fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
-            {PRIORITY_META[p].label}
-          </button>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} style={linkBtn}>Retour</button>
-        <button disabled={!text.trim()} onClick={() => onSubmit(text.trim(), due || undefined, priority)}
-          style={{ ...bigBtnInline, background: '#b45309', padding: '10px 14px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
-          Créer l'action
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function EngagementForm({ company, label, week, onSubmit, onCancel }: {
-  company?: string; label: string; week: string
+function EngagementForm({ company, label, week, hasOne, onSubmit, onClear, onCancel }: {
+  company?: string; label: string; week: string; hasOne: boolean
   onSubmit: (label: string, week: string) => void
+  onClear: () => void
   onCancel: () => void
 }) {
   const [text, setText] = useState(label)
   const [w, setW] = useState(week)
   return (
-    <div style={panelBox}>
-      <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
+    <div style={{ ...panelBox, borderColor: '#ddd6fe', background: '#faf8ff' }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: '#6d28d9', marginBottom: '7px' }}>
         Engagement{company ? ` de ${company}` : ''} — semaine de fin annoncée
       </div>
       <input autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="ex. Remplacement de la pompe"
         style={{ ...input, width: '100%', marginBottom: '8px' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
         <CalendarRange size={16} color="var(--muted)" />
-        <input type="week" value={w} onChange={e => setW(e.target.value)}
-          style={{ ...input, flex: 1 }} />
+        <input type="week" value={w} onChange={e => setW(e.target.value)} style={{ ...input, flex: 1 }} />
       </div>
       {w && <div style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 600, marginBottom: '8px' }}>Fin annoncée : {weekLabel(w)}</div>}
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button onClick={onCancel} style={linkBtn}>Retour</button>
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+        {hasOne && <button onClick={onClear} style={{ ...linkBtn, color: '#dc2626' }}>Retirer</button>}
+        <button onClick={onCancel} style={linkBtn}>Annuler</button>
         <button disabled={!w} onClick={() => onSubmit(text.trim(), w)}
-          style={{ ...bigBtnInline, background: '#6d28d9', padding: '10px 14px', fontSize: '13px', opacity: w ? 1 : 0.5 }}>
+          style={{ ...bigBtnInline, background: '#6d28d9', padding: '10px 15px', fontSize: '13px', opacity: w ? 1 : 0.5 }}>
           Enregistrer
         </button>
       </div>
@@ -479,8 +540,8 @@ function EngagementForm({ company, label, week, onSubmit, onCancel }: {
 const panelBox: React.CSSProperties = { marginTop: '4px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }
 
 const addBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%',
-  padding: '13px', borderRadius: '10px', border: '1px dashed #9bb0c2', background: '#fff',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+  padding: '12px', borderRadius: '10px', border: '1px dashed #9bb0c2', background: '#fff',
   color: 'var(--navy)', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
 }
 
@@ -489,3 +550,8 @@ const menuBtn = (fg: string): React.CSSProperties => ({
   borderRadius: '10px', border: `1px solid ${fg}33`, background: `${fg}0f`, color: fg,
   fontSize: '13px', fontWeight: 700, cursor: 'pointer',
 })
+
+const iconBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px',
+  borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,.7)', color: 'var(--muted)', cursor: 'pointer', flexShrink: 0,
+}
