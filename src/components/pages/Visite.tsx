@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Plus, Calendar, ChevronRight, ChevronLeft, ArrowLeft, Camera,
+  Plus, Calendar, ChevronRight, ChevronLeft, ArrowLeft, Camera, ImageIcon, Pencil, Trash2,
   CheckCircle2, AlertTriangle, Circle, CircleDot, Ban, Lock, Send, FileText, Printer,
 } from 'lucide-react'
 import { ZONES } from '../../data/zones'
@@ -13,6 +13,9 @@ import { Reserve, ReservePriority, nextReserveNumber } from '../../lib/reserves'
 import {
   getVisits2, saveVisits2, getReserves, saveReserves, getGanttTasks, logActivity,
 } from '../../lib/repo'
+import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
+import { Annotation, summarizeAnnotations } from '../../lib/annotations'
+import { PhotoAnnotator } from '../visite/PhotoAnnotator'
 
 // ── Catalog & lots ───────────────────────────────────────────────────────────
 
@@ -79,6 +82,7 @@ type View = 'list' | 'create' | 'session' | 'cr' | 'report'
 export function Visite() {
   const [visits, setVisits] = useState<Visit[]>(getVisits2)
   const [reserves, setReserves] = useState<Reserve[]>(getReserves)
+  const [photos, setPhotos] = useState<VisitPhoto[]>([])
   const [view, setView] = useState<View>('list')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeZone, setActiveZone] = useState<string | null>(null)
@@ -86,7 +90,23 @@ export function Visite() {
   useEffect(() => { saveVisits2(visits) }, [visits])
   useEffect(() => { saveReserves(reserves) }, [reserves])
 
+  const reloadPhotos = (visitId: string) => { listPhotos(visitId).then(setPhotos).catch(() => setPhotos([])) }
+  useEffect(() => { if (activeId) reloadPhotos(activeId); else setPhotos([]) }, [activeId])
+
   const active = visits.find(v => v.id === activeId) ?? null
+
+  const addPhoto = async (zoneRefId: string, zoneLabel: string, lotId: string | undefined, file: File) => {
+    if (!activeId) return
+    const original = await fileToDataUrl(file)
+    const photo: VisitPhoto = {
+      id: `ph${Date.now()}`, visitId: activeId, zoneRefId, zoneLabel, lotId,
+      original, annotations: [], includeInCr: true, order: photos.length, createdAt: new Date().toISOString(),
+    }
+    await savePhoto(photo)
+    reloadPhotos(activeId)
+  }
+  const updatePhoto = async (photo: VisitPhoto) => { await savePhoto(photo); if (activeId) reloadPhotos(activeId) }
+  const removePhoto = async (id: string) => { await deletePhoto(id); if (activeId) reloadPhotos(activeId) }
 
   const updateVisit = (id: string, patch: Partial<Visit> | ((v: Visit) => Visit)) =>
     setVisits(prev => prev.map(v => v.id !== id ? v : (typeof patch === 'function' ? patch(v) : { ...v, ...patch })))
@@ -111,12 +131,16 @@ export function Visite() {
     return <Session
       visit={active}
       reserves={reserves}
+      photos={photos}
       activeZone={activeZone}
       onSelectZone={setActiveZone}
       onBack={() => setView('list')}
       onUpdate={(fn) => updateVisit(active.id, fn)}
       onAddReserve={(r) => setReserves(prev => [r, ...prev])}
       onToggleReserve={(id) => setReserves(prev => prev.map(r => r.id === id ? { ...r, status: r.status === 'open' ? 'resolved' : 'open' } : r))}
+      onAddPhoto={addPhoto}
+      onUpdatePhoto={updatePhoto}
+      onRemovePhoto={removePhoto}
       onTerminate={() => {
         const snapshot = buildPlanningSnapshot(getGanttTasks(), new Date())
         updateVisit(active.id, v => ({ ...v, status: 'terminee', snapshot, cr: v.cr ?? emptyCr() }))
@@ -130,8 +154,10 @@ export function Visite() {
     return <CrEditor
       visit={active}
       reserves={reservesForVisit(reserves, active.id)}
+      photos={photos}
       onBack={() => setView('list')}
       onUpdate={(fn) => updateVisit(active.id, fn)}
+      onUpdatePhoto={updatePhoto}
       onValidate={() => updateVisit(active.id, { status: 'cr_pret' })}
       onDiffuse={() => { updateVisit(active.id, { status: 'diffuse', diffusedAt: new Date().toISOString() }); logActivity('doc', `CR de la visite du ${fmtFr(active.date)} diffusé`); setView('report') }}
       onReopen={() => updateVisit(active.id, { status: 'terminee' })}
@@ -140,7 +166,7 @@ export function Visite() {
   }
 
   if (view === 'report' && active) {
-    return <Report visit={active} reserves={reservesForVisit(reserves, active.id)} onBack={() => setView(isLocked(active) ? 'list' : 'cr')} />
+    return <Report visit={active} reserves={reservesForVisit(reserves, active.id)} photos={photos} onBack={() => setView(isLocked(active) ? 'list' : 'cr')} />
   }
 
   // ── Default: list ────────────────────────────────────────────────────────────
@@ -263,15 +289,19 @@ function CreateVisit({ onCancel, onCreate }: { onCancel: () => void; onCreate: (
 function Session(props: {
   visit: Visit
   reserves: Reserve[]
+  photos: VisitPhoto[]
   activeZone: string | null
   onSelectZone: (refId: string | null) => void
   onBack: () => void
   onUpdate: (fn: (v: Visit) => Visit) => void
   onAddReserve: (r: Reserve) => void
   onToggleReserve: (id: string) => void
+  onAddPhoto: (zoneRefId: string, zoneLabel: string, lotId: string | undefined, file: File) => void
+  onUpdatePhoto: (photo: VisitPhoto) => void
+  onRemovePhoto: (id: string) => void
   onTerminate: () => void
 }) {
-  const { visit, reserves, activeZone, onSelectZone, onBack, onUpdate, onAddReserve, onToggleReserve, onTerminate } = props
+  const { visit, reserves, photos, activeZone, onSelectZone, onBack, onUpdate, onAddReserve, onToggleReserve, onAddPhoto, onUpdatePhoto, onRemovePhoto, onTerminate } = props
   const counts = visitCounts(visit)
   const pct = visitProgress(visit)
   const visitReserves = reservesForVisit(reserves, visit.id)
@@ -319,6 +349,13 @@ function Session(props: {
         </div>
 
         <ReviewForm zone={current} visitId={visit.id} reserves={reserves} onAdd={onAddReserve} />
+
+        <PhotoSection
+          photos={photos.filter(p => p.zoneRefId === current.refId)}
+          onAdd={(lotId, file) => onAddPhoto(current.refId, current.label, lotId, file)}
+          onUpdate={onUpdatePhoto}
+          onRemove={onRemovePhoto}
+        />
 
         {/* Nav prev / next */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '18px' }}>
@@ -383,6 +420,12 @@ function Session(props: {
           </div>
         </>
       )}
+
+      {/* Photos */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', marginBottom: '16px' }}>
+        <ImageIcon size={16} color="var(--muted)" />
+        <span style={{ fontSize: '13px', color: 'var(--ink)' }}><strong style={{ color: 'var(--navy)' }}>{photos.length}</strong> photo{photos.length > 1 ? 's' : ''} sur la visite</span>
+      </div>
 
       {/* Lots concernés */}
       <div style={sectionLabel}>Lots concernés</div>
@@ -470,6 +513,62 @@ function ReviewForm({ zone, visitId, reserves, onAdd }: { zone: VisitZone; visit
   )
 }
 
+function PhotoSection({ photos, onAdd, onUpdate, onRemove }: {
+  photos: VisitPhoto[]
+  onAdd: (lotId: string | undefined, file: File) => void
+  onUpdate: (p: VisitPhoto) => void
+  onRemove: (id: string) => void
+}) {
+  const [lot, setLot] = useState('')
+  const [editing, setEditing] = useState<VisitPhoto | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) onAdd(lot || undefined, f)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  return (
+    <div style={{ marginTop: '18px' }}>
+      <div style={sectionLabel}>Photos ({photos.length})</div>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+        <select value={lot} onChange={e => setLot(e.target.value)} style={{ ...input, flex: 1 }}>
+          <option value="">Lot (facultatif)</option>
+          {LOTS.map(l => <option key={l.id} value={l.id}>{l.id} — {l.short}</option>)}
+        </select>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pick} style={{ display: 'none' }} />
+        <button onClick={() => fileRef.current?.click()} style={ghostBtn}><Camera size={14} /> Ajouter une photo</button>
+      </div>
+
+      {photos.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: '8px' }}>
+          {photos.map(p => (
+            <div key={p.id} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--line)' }}>
+              <img src={p.annotated ?? p.original} alt="" style={{ width: '100%', height: '96px', objectFit: 'cover', display: 'block' }} />
+              {p.annotations.length > 0 && <span style={{ position: 'absolute', top: '4px', left: '4px', padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: 700, background: 'rgba(2,69,122,.9)', color: '#fff' }}>{p.annotations.length}</span>}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', gap: '2px', padding: '3px', background: 'linear-gradient(transparent, rgba(0,0,0,.55))' }}>
+                <button onClick={() => setEditing(p)} title="Annoter" style={thumbBtn}><Pencil size={13} /></button>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => onRemove(p.id)} title="Supprimer" style={thumbBtn}><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <PhotoAnnotator
+          src={editing.original}
+          initial={editing.annotations}
+          onClose={() => setEditing(null)}
+          onSave={(annotations: Annotation[], annotated: string) => { onUpdate({ ...editing, annotations, annotated: annotations.length ? annotated : undefined }); setEditing(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CR editor (phase B)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -477,14 +576,16 @@ function ReviewForm({ zone, visitId, reserves, onAdd }: { zone: VisitZone; visit
 function CrEditor(props: {
   visit: Visit
   reserves: Reserve[]
+  photos: VisitPhoto[]
   onBack: () => void
   onUpdate: (fn: (v: Visit) => Visit) => void
+  onUpdatePhoto: (p: VisitPhoto) => void
   onValidate: () => void
   onDiffuse: () => void
   onReopen: () => void
   onReport: () => void
 }) {
-  const { visit, reserves, onBack, onUpdate, onValidate, onDiffuse, onReopen, onReport } = props
+  const { visit, reserves, photos, onBack, onUpdate, onUpdatePhoto, onValidate, onDiffuse, onReopen, onReport } = props
   const cr = visit.cr ?? emptyCr()
   const locked = isLocked(visit)
   const setCr = (patch: Partial<typeof cr>) => onUpdate(v => ({ ...v, cr: { ...(v.cr ?? emptyCr()), ...patch } }))
@@ -533,6 +634,25 @@ function CrEditor(props: {
         ))}
       </Field>
 
+      <Field label={`Photos (${photos.length}) — sélection & légendes`}>
+        {photos.length === 0 && <Empty>Aucune photo. Ajoutez-en depuis les zones pendant la visite.</Empty>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {photos.map(p => (
+            <div key={p.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px', borderRadius: '8px', border: '1px solid var(--line)', background: p.includeInCr ? '#fff' : '#f7faf8', opacity: p.includeInCr ? 1 : 0.6 }}>
+              <img src={p.annotated ?? p.original} alt="" style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>{p.zoneLabel}{p.lotId ? ` · ${lotShort(p.lotId)}` : ''} · {summarizeAnnotations(p.annotations)}</div>
+                <input disabled={locked} value={p.caption ?? ''} onChange={e => onUpdatePhoto({ ...p, caption: e.target.value })} placeholder="Légende…" style={{ ...input, width: '100%', padding: '6px 8px' }} />
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', fontSize: '9px', color: 'var(--muted)', cursor: locked ? 'default' : 'pointer' }}>
+                <input type="checkbox" disabled={locked} checked={p.includeInCr} onChange={e => onUpdatePhoto({ ...p, includeInCr: e.target.checked })} />
+                CR
+              </label>
+            </div>
+          ))}
+        </div>
+      </Field>
+
       <Field label="Conclusions">
         <textarea disabled={locked} value={cr.conclusions} onChange={e => setCr({ conclusions: e.target.value })} placeholder="Décisions, actions, points d'attention…" style={{ ...input, width: '100%', minHeight: '60px', resize: 'vertical' }} />
       </Field>
@@ -556,10 +676,12 @@ function CrEditor(props: {
 // Report (phase C — rendered from the frozen snapshot)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function Report({ visit, reserves, onBack }: { visit: Visit; reserves: Reserve[]; onBack: () => void }) {
+function Report({ visit, reserves, photos, onBack }: { visit: Visit; reserves: Reserve[]; photos: VisitPhoto[]; onBack: () => void }) {
   const snap = visit.snapshot
   const cr = visit.cr ?? emptyCr()
   const openReserves = reserves.filter(r => r.status === 'open')
+  const crPhotos = photos.filter(p => p.includeInCr)
+  let s = 0  // dynamic section numbering (conditional sections never leave gaps)
 
   return (
     <div>
@@ -575,7 +697,7 @@ function Report({ visit, reserves, onBack }: { visit: Visit; reserves: Reserve[]
           <div style={{ fontSize: '12px', color: '#5b7183' }}>Gambetta — Réhabilitation • GAM-2026-001{snap ? ` • planning figé le ${new Date(snap.capturedAt).toLocaleDateString('fr')}` : ''}</div>
         </div>
 
-        <RSection title="1. Participants">
+        <RSection title={`${++s}. Participants`}>
           {visit.participants.length === 0 ? <p style={pStyle}>—</p> : (
             <ul style={{ margin: 0, paddingLeft: '18px' }}>
               {visit.participants.map(p => <li key={p.id} style={{ fontSize: '12px', marginBottom: '2px' }}><strong>{p.role}</strong> — {p.name}</li>)}
@@ -583,10 +705,10 @@ function Report({ visit, reserves, onBack }: { visit: Visit; reserves: Reserve[]
           )}
         </RSection>
 
-        {cr.synthese && <RSection title="2. Synthèse"><p style={pStyle}>{cr.synthese}</p></RSection>}
+        {cr.synthese && <RSection title={`${++s}. Synthèse`}><p style={pStyle}>{cr.synthese}</p></RSection>}
 
         {snap && (
-          <RSection title="3. Avancement du planning (figé au jour de la visite)">
+          <RSection title={`${++s}. Avancement du planning (figé au jour de la visite)`}>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '10px' }}>
               <RKpi label="Avancement global" value={`${snap.overall}%`} />
               <RKpi label="Dérive max" value={`+${snap.maxDrift} j`} accent={snap.maxDrift > 0} />
@@ -608,7 +730,7 @@ function Report({ visit, reserves, onBack }: { visit: Visit; reserves: Reserve[]
           </RSection>
         )}
 
-        <RSection title="4. Points à revoir / réserves">
+        <RSection title={`${++s}. Points à revoir / réserves`}>
           {openReserves.length === 0 ? <p style={pStyle}>Aucun point à revoir ouvert.</p> : (
             <table style={tableStyle}>
               <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Description</th><th style={thStyle}>Lot</th><th style={thStyle}>Priorité</th></tr></thead>
@@ -627,8 +749,23 @@ function Report({ visit, reserves, onBack }: { visit: Visit; reserves: Reserve[]
           )}
         </RSection>
 
-        {cr.conclusions && <RSection title="5. Conclusions"><p style={pStyle}>{cr.conclusions}</p></RSection>}
-        {cr.nextMeeting && <RSection title="6. Prochaine réunion"><p style={pStyle}>{cr.nextMeeting}</p></RSection>}
+        {crPhotos.length > 0 && (
+          <RSection title={`${++s}. Reportage photographique`}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px' }}>
+              {crPhotos.map(p => (
+                <figure key={p.id} style={{ margin: 0 }}>
+                  <img src={p.annotated ?? p.original} alt={p.caption ?? ''} style={{ width: '100%', borderRadius: '6px', border: '1px solid #e4ecf2', display: 'block' }} />
+                  <figcaption style={{ fontSize: '11px', color: '#5b7183', marginTop: '4px' }}>
+                    <strong style={{ color: '#02457A' }}>{p.zoneLabel}{p.lotId ? ` · ${lotShort(p.lotId)}` : ''}</strong>{p.caption ? ` — ${p.caption}` : ''}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </RSection>
+        )}
+
+        {cr.conclusions && <RSection title={`${++s}. Conclusions`}><p style={pStyle}>{cr.conclusions}</p></RSection>}
+        {cr.nextMeeting && <RSection title={`${++s}. Prochaine réunion`}><p style={pStyle}>{cr.nextMeeting}</p></RSection>}
 
         <div style={{ marginTop: '24px', paddingTop: '10px', borderTop: '1px solid #e4ecf2', fontSize: '10px', color: '#9bb0c2', textAlign: 'center' }}>
           Suivi-Chantier — CR généré depuis la visite du {fmtFr(visit.date)}
@@ -687,6 +824,7 @@ const input: React.CSSProperties = { padding: '9px 11px', borderRadius: '8px', b
 const ghostBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }
 const linkBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '4px', border: 'none', background: 'none', color: 'var(--navy-2)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }
 const navBtn: React.CSSProperties = { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '11px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }
+const thumbBtn: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '6px', border: 'none', background: 'rgba(255,255,255,.92)', color: '#02457A', cursor: 'pointer' }
 const pill = (on: boolean, fg: string, bg: string): React.CSSProperties => ({ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', padding: '9px 6px', borderRadius: '8px', border: on ? `2px solid ${fg}` : '1px solid var(--line)', background: on ? bg : '#fff', color: on ? fg : 'var(--muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' })
 const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '12px' }
 const thStyle: React.CSSProperties = { textAlign: 'left', padding: '6px 8px', background: '#f8fafc', borderBottom: '1px solid #e4ecf2', color: '#02457A', fontSize: '11px' }
