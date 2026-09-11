@@ -27,6 +27,7 @@ import type { Reserve } from './reserves'
 import type { GanttTask, TaskStatus } from '../types/gantt'
 import type { DateCommitment } from './commitments'
 import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
+import { withActualDates } from './actualDates'
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
@@ -499,9 +500,12 @@ function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatus {
 
 /**
  * Apply what was observed to the planning: progress, status and — when a new
- * end date was promised — planned_end (duration follows). The contractual
- * baseline is never touched. Parent lots are recomputed from their children.
- * Pure: returns a new task tree.
+ * end date was promised — planned_end (duration follows).
+ *
+ * Le prévisionnel EST le contractuel : il ne change que sur une date promise.
+ * Les dates réelles, elles, suivent automatiquement l'avancement constaté à la
+ * date de la session (voir lib/actualDates).
+ * Parent lots are recomputed from their children. Pure: returns a new task tree.
  */
 export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] {
   const byId = new Map<string, VisitTaskCheck>()
@@ -511,6 +515,7 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
   }
   if (byId.size === 0) return tasks
 
+  const observedAt = parseDay(v.date)
   const applyLeaf = (t: GanttTask): GanttTask => {
     const c = byId.get(t.id)
     if (!c) return t
@@ -524,7 +529,8 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
         next.planned_duration = Math.max(1, diffDays(next.planned_start, end) + 1)
       }
     }
-    return next
+    // Le réel se cale sur l'avancement relevé ce jour-là.
+    return isNaN(observedAt.getTime()) ? next : withActualDates(next, observedAt)
   }
 
   const walk = (list: GanttTask[]): GanttTask[] => list.map(t => {

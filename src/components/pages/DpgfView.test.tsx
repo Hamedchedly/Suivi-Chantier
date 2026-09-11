@@ -2,13 +2,16 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { DpgfView } from './DpgfView'
+import { saveDpgf } from '../../lib/repo'
+import { DEFAULT_DPGF } from '../../data/dpgfMock'
 
 const totalText = () => screen.getByText('Total DPGF (HT)').nextElementSibling?.textContent ?? ''
 
+// Un projet démarre vide : le jeu d'essai est semé explicitement par le test.
 describe('<DpgfView /> — quantitatif & forfait', () => {
-  beforeEach(() => { cleanup(); localStorage.clear() })
+  beforeEach(() => { cleanup(); localStorage.clear(); saveDpgf(DEFAULT_DPGF) })
 
-  it('affiche le total et les lots du seed', () => {
+  it('affiche le total et les lots semés', () => {
     render(<DpgfView />)
     expect(screen.getByText('LOT 05 — Menuiseries')).toBeDefined()
     expect(screen.getByText('LOT 07 — CVC')).toBeDefined()

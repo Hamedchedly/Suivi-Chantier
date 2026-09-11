@@ -9,7 +9,7 @@ const day = (iso: string) => new Date(iso + 'T00:00:00')
 
 const leaf = (
   id: string,
-  opts: Partial<GanttTask> & { start: string; end: string; baselineEnd?: string; progress?: number },
+  opts: Partial<GanttTask> & { start: string; end: string; actualEnd?: string; progress?: number },
 ): GanttTask => ({
   id,
   lot_id: opts.lot_id ?? 'L01',
@@ -17,8 +17,7 @@ const leaf = (
   planned_start: day(opts.start),
   planned_end: day(opts.end),
   planned_duration: diffDays(day(opts.end), day(opts.start)),
-  baseline_start: day(opts.start),
-  baseline_end: opts.baselineEnd ? day(opts.baselineEnd) : day(opts.end),
+  actual_end: opts.actualEnd ? day(opts.actualEnd) : undefined,
   progress: opts.progress ?? 0,
   status: (opts.status ?? 'not-started') as TaskStatus,
   priority: 'medium',
@@ -36,11 +35,25 @@ describe('diffDays / driftDays', () => {
   it('counts calendar days between dates', () => {
     expect(diffDays(day('2026-01-10'), day('2026-01-01'))).toBe(9)
   })
-  it('reports slippage when planned end is after baseline', () => {
-    expect(driftDays(leaf('a', { start: '2026-01-01', end: '2026-01-12', baselineEnd: '2026-01-05' }))).toBe(7)
+  it('compte les jours entre la fin réelle et la fin prévue', () => {
+    const t = leaf('a', { start: '2026-01-01', end: '2026-01-05', actualEnd: '2026-01-12', progress: 100 })
+    expect(driftDays(t, day('2026-02-01'))).toBe(7)
   })
-  it('is zero when on baseline', () => {
-    expect(driftDays(leaf('a', { start: '2026-01-01', end: '2026-01-05', baselineEnd: '2026-01-05' }))).toBe(0)
+  it('est nul quand le réel colle au prévisionnel', () => {
+    const t = leaf('a', { start: '2026-01-01', end: '2026-01-05', actualEnd: '2026-01-05', progress: 100 })
+    expect(driftDays(t, day('2026-02-01'))).toBe(0)
+  })
+  it('compte les jours écoulés sur une tâche en retard non terminée', () => {
+    const t = leaf('a', { start: '2026-01-01', end: '2026-01-05', progress: 40 })
+    expect(driftDays(t, day('2026-01-12'))).toBe(7)
+  })
+  it('est nul sur une tâche encore dans les temps', () => {
+    const t = leaf('a', { start: '2026-01-01', end: '2026-01-20', progress: 40 })
+    expect(driftDays(t, day('2026-01-12'))).toBe(0)
+  })
+  it('est nul sur une tâche terminée sans fin réelle enregistrée', () => {
+    const t = leaf('a', { start: '2026-01-01', end: '2026-01-05', progress: 100 })
+    expect(driftDays(t, day('2026-02-01'))).toBe(0)
   })
 })
 
@@ -93,20 +106,21 @@ describe('criticalLeafIds', () => {
 describe('lotSummaries / maxDrift / overallProgress', () => {
   const today = day('2026-01-15')
   const tree = [
+    // « a » est terminée avec 4 jours de retard réel ; « b » est encore dans les temps.
     { ...parent('L1', [
-      leaf('a', { lot_id: 'L1', start: '2026-01-01', end: '2026-01-12', baselineEnd: '2026-01-08', progress: 50 }),
+      leaf('a', { lot_id: 'L1', start: '2026-01-01', end: '2026-01-08', actualEnd: '2026-01-12', progress: 100 }),
       leaf('b', { lot_id: 'L1', start: '2026-01-12', end: '2026-01-20', progress: 0 }),
     ]), lot_id: 'L1' },
   ]
   it('summarises drift and lateness per lot', () => {
     const [s] = lotSummaries(tree, today)
     expect(s.drift).toBe(4)
-    expect(s.late).toBe(true)
+    expect(s.late).toBe(false)   // aucune tâche non terminée n'a dépassé sa fin au 15/01
   })
   it('maxDrift returns worst slippage', () => {
-    expect(maxDrift(tree)).toBe(4)
+    expect(maxDrift(tree, today)).toBe(4)
   })
   it('overallProgress averages leaves', () => {
-    expect(overallProgress(tree)).toBe(25)
+    expect(overallProgress(tree)).toBe(50)   // « a » à 100 %, « b » à 0 %
   })
 })

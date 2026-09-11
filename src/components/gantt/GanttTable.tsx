@@ -246,13 +246,16 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     const dimmed = !!viewState.highlightCritical && !task.is_critical
 
     const bar = geom(task.planned_start, task.planned_end)
-    const base = task.baseline_start && task.baseline_end
-      ? geom(task.baseline_start, task.baseline_end)
+    // Le contractuel EST le prévisionnel : la barre de référence affichée sous
+    // la barre pleine est désormais le RÉEL constaté, quand il existe.
+    const base = task.actual_start
+      ? geom(task.actual_start, task.actual_end ?? task.actual_start)
       : null
 
+    const fr = (d: Date) => d.toLocaleDateString('fr')
     const tooltip = base
-      ? `${task.title} • ${task.progress}%\nContractuel: ${task.baseline_start!.toLocaleDateString('fr')} → ${task.baseline_end!.toLocaleDateString('fr')}\nPlanifié: ${task.planned_start.toLocaleDateString('fr')} → ${task.planned_end.toLocaleDateString('fr')}`
-      : `${task.title} • ${task.progress}%`
+      ? `${task.title} • ${task.progress}%\nContractuel (prévisionnel) : ${fr(task.planned_start)} → ${fr(task.planned_end)}\nRéel : ${fr(task.actual_start!)} → ${task.actual_end ? fr(task.actual_end) : 'en cours'}`
+      : `${task.title} • ${task.progress}%\nContractuel (prévisionnel) : ${fr(task.planned_start)} → ${fr(task.planned_end)}`
 
     return (
       <tr key={task.id} className={`gantt-row${task.is_critical ? ' critical' : ''}${task.is_milestone ? ' milestone' : ''}`}>
@@ -316,8 +319,8 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               />
             ) : (
               <div style={{ opacity: dimmed ? 0.28 : 1 }}>
-                {/* Baseline (contractual) hatched bar */}
-                {base && <div className="gantt-baseline" style={{ left: base.leftPx, width: base.widthPx }} />}
+                {/* Barre du réel constaté, sous la barre du prévisionnel */}
+                {base && <div className="gantt-actual" style={{ left: base.leftPx, width: base.widthPx }} />}
 
                 {/* Left resize handle */}
                 {editable && (

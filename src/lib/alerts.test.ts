@@ -75,9 +75,11 @@ describe('actions: resolved & flagged', () => {
   const tasks = [parent('L05', [leaf('t', { start: '2026-01-01', end: '2026-01-05', progress: 10, status: 'blocked' })])]
 
   it('marks resolved and keeps it out of active', () => {
+    // La tâche déclenche aussi une alerte de dérive (10 jours au-delà de sa fin) :
+    // on vérifie le sort de l'alerte résolue, pas le nombre total d'alertes.
     const alerts = buildAlerts(tasks, [], today, { 'blocked-t': { resolved: true } })
-    expect(alerts[0].resolved).toBe(true)
-    expect(activeAlerts(alerts)).toHaveLength(0)
+    expect(alerts.find(a => a.id === 'blocked-t')?.resolved).toBe(true)
+    expect(activeAlerts(alerts).some(a => a.id === 'blocked-t')).toBe(false)
   })
 
   it('flags for meeting and sorts flagged first', () => {

@@ -1,44 +1,54 @@
 import { describe, expect, it } from 'vitest'
-import { getReserves, getVisits, getLotsConfig, getGanttTasks, getLotProgress } from './repo'
+import {
+  getReserves, getVisits, getLotsConfig, getGanttTasks, getLotProgress,
+  getZoneRefs, getProjects, getCurrentProjectId, getUsers, getGanttPrefs,
+} from './repo'
 
 // In the node test environment there is no localStorage, so loadState falls back
-// to the seed defaults. These tests lock in the repository's default data + wiring.
+// to the defaults. These tests lock in that a fresh install — and every newly
+// created project — starts completely empty, and that only the pieces which are
+// genuinely global (accounts, preferences) carry a built-in value.
 
-describe('repo default seeds (no localStorage → fallback)', () => {
-  it('getReserves returns the seed reserves', () => {
-    const r = getReserves()
-    expect(r.length).toBeGreaterThanOrEqual(3)
-    expect(r[0].number).toMatch(/^R-\d{3}$/)
+describe('repo : un projet neuf démarre vide', () => {
+  it('aucune réserve', () => {
+    expect(getReserves()).toEqual([])
   })
 
-  it('getVisits seeds a session whose zones carry real planning tasks', () => {
-    const v = getVisits()
-    expect(v.length).toBeGreaterThanOrEqual(1)
-    expect(v[0].kind).toBe('visite')
-    const zone = v[0].zones.find(z => z.refId === 'A-101')!
-    expect(zone.buildingLabel).toBe('Bâtiment A')
-    // checks point at real Gantt leaves and carry their contractual date
-    expect(zone.tasks.length).toBeGreaterThan(0)
-    expect(zone.tasks[0].taskId).toMatch(/^T-/)
-    expect(zone.tasks[0].baselineEnd).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  it('aucune visite ni réunion', () => {
+    expect(getVisits()).toEqual([])
   })
 
-  it('getLotsConfig returns 4 lots with contact fields', () => {
-    const lots = getLotsConfig()
-    expect(lots).toHaveLength(4)
-    expect(lots.every(l => l.company && l.email.includes('@'))).toBe(true)
+  it('aucun lot configuré', () => {
+    expect(getLotsConfig()).toEqual([])
   })
 
-  it('getGanttTasks returns the planning with real Date fields', () => {
-    const tasks = getGanttTasks()
-    expect(tasks.length).toBeGreaterThan(0)
-    expect(tasks[0].planned_start instanceof Date).toBe(true)
+  it('aucune zone au catalogue', () => {
+    expect(getZoneRefs()).toEqual([])
   })
 
-  it('getLotProgress maps every top-level lot to a number', () => {
-    const p = getLotProgress()
-    const ids = Object.keys(p)
-    expect(ids).toContain('L05')
-    expect(typeof p['L05']).toBe('number')
+  it('aucune tâche de planning, donc aucun avancement par lot', () => {
+    expect(getGanttTasks()).toEqual([])
+    expect(getLotProgress()).toEqual({})
+  })
+})
+
+describe('repo : registre des projets', () => {
+  it('démarre sans aucun projet', () => {
+    expect(getProjects()).toEqual([])
+  })
+
+  it('ne désigne aucun projet actif tant qu’il n’en existe pas', () => {
+    expect(getCurrentProjectId()).toBeNull()
+  })
+})
+
+describe('repo : données globales conservées', () => {
+  it('fournit les deux comptes de démarrage', () => {
+    const users = getUsers()
+    expect(users.map(u => u.username).sort()).toEqual(['superadmin', 'user'])
+  })
+
+  it('fournit les préférences de planning par défaut', () => {
+    expect(getGanttPrefs()).toEqual({ zoom: 1, group: 'lot', autoSchedule: true })
   })
 })

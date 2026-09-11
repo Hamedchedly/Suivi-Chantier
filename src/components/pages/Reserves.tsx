@@ -1,20 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
-import { Plus, Camera, Check, X, MapPin } from 'lucide-react'
-import { LOGEMENTS } from '../../data/zones'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Plus, Camera, Check, X, MapPin, ListChecks } from 'lucide-react'
 import {
   Reserve, ReservePriority, nextReserveNumber, filterReserves, countOpen,
 } from '../../lib/reserves'
-import { getReserves, saveReserves, logActivity } from '../../lib/repo'
-
-const LOTS = [
-  { id: 'L05', name: 'LOT 05 - Menuiseries' },
-  { id: 'L06', name: 'LOT 06 - Électricité' },
-  { id: 'L07', name: 'LOT 07 - CVC' },
-  { id: 'L08', name: 'LOT 08 - Embellissements' },
-]
-
-const lotName = (id: string) => LOTS.find(l => l.id === id)?.name ?? id
-const logementLabel = (id: string) => LOGEMENTS.find(l => l.id === id)?.label ?? id
+import { getReserves, saveReserves, logActivity, getLotsConfig, getZoneRefs } from '../../lib/repo'
+import { SelectionBar } from '../common/SelectionBar'
+import { EMPTY_SELECTION, Selection, toggle, toggleAll, prune, removeSelected } from '../../lib/selection'
 
 const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {
   low: { label: 'Faible', bg: '#eef2f6', fg: '#5b7183' },
@@ -53,9 +44,20 @@ export function Reserves() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'resolved'>('all')
   const [filterLot, setFilterLot] = useState<string | null>(null)
 
+  // Mode sélection : cocher plusieurs réserves pour les supprimer d'un coup.
+  const [picking, setPicking] = useState(false)
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Lots et zones du projet actif (vides tant que l'opération n'est pas décrite).
+  const lots = useMemo(() => getLotsConfig(), [])
+  const zones = useMemo(() => getZoneRefs(), [])
+  const lotName = (id: string) => lots.find(l => l.id === id)?.name ?? id
+  const logementLabel = (id: string) => zones.find(z => z.refId === id)?.label ?? id
+
   // draft
-  const [dLot, setDLot] = useState('L05')
-  const [dLogement, setDLogement] = useState('A-101')
+  const [dLot, setDLot] = useState(() => getLotsConfig()[0]?.id ?? '')
+  const [dLogement, setDLogement] = useState(() => getZoneRefs()[0]?.refId ?? '')
   const [dDesc, setDDesc] = useState('')
   const [dPriority, setDPriority] = useState<ReservePriority>('medium')
   const [dPhoto, setDPhoto] = useState<string | undefined>()
@@ -66,6 +68,16 @@ export function Reserves() {
   }, [reserves])
 
   const visible = filterReserves(reserves, { status: filterStatus, lotId: filterLot })
+  const visibleIds = visible.map(r => r.id)
+
+  const leavePicking = () => { setPicking(false); setSelection(EMPTY_SELECTION); setConfirmDelete(false) }
+
+  const deleteSelected = () => {
+    const removed = reserves.filter(r => selection.has(r.id))
+    setReserves(prev => removeSelected(prev, selection))
+    removed.forEach(r => logActivity('reserve', `Réserve ${r.number} supprimée`))
+    leavePicking()
+  }
 
   const addReserve = () => {
     if (!dDesc.trim()) return
@@ -109,23 +121,61 @@ export function Reserves() {
         <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
           {openCount} réserve{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''} / {reserves.length}
         </div>
-        <button
-          onClick={() => setShowForm(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--navy)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-        >
-          <Plus size={16} /> Réserve
-        </button>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {!picking && reserves.length > 0 && (
+            <button
+              onClick={() => { setPicking(true); setShowForm(false) }}
+              title="Sélectionner des réserves"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+            >
+              <ListChecks size={16} /> Sélectionner
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--navy)', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >
+            <Plus size={16} /> Réserve
+          </button>
+        </div>
       </div>
+
+      <SelectionBar
+        active={picking}
+        selection={selection}
+        visibleIds={visibleIds}
+        noun="réserve"
+        feminine
+        onToggleAll={() => setSelection(s => toggleAll(s, visibleIds))}
+        onDelete={() => setConfirmDelete(true)}
+        onCancel={leavePicking}
+      />
+
+      {confirmDelete && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
+          <span style={{ flex: 1, fontSize: '12px', color: '#7a1c13', minWidth: '160px' }}>
+            Supprimer définitivement {prune(selection, visibleIds).size} réserve(s) ? Cette action est irréversible.
+          </span>
+          <button onClick={deleteSelected} style={{ padding: '7px 13px', borderRadius: '8px', border: 'none', background: '#b42318', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+            Supprimer
+          </button>
+          <button onClick={() => setConfirmDelete(false)} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Add form */}
       {showForm && (
         <div style={{ border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', marginBottom: '12px', background: '#fff' }}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <select value={dLot} onChange={e => setDLot(e.target.value)} style={selStyle}>
-              {LOTS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              {lots.length === 0 && <option value="">Aucun lot configuré</option>}
+              {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <select value={dLogement} onChange={e => setDLogement(e.target.value)} style={selStyle}>
-              {LOGEMENTS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+              {zones.length === 0 && <option value="">Aucune zone configurée</option>}
+              {zones.map(z => <option key={z.refId} value={z.refId}>{z.label}</option>)}
             </select>
           </div>
           <textarea
@@ -171,7 +221,7 @@ export function Reserves() {
         ))}
         <div style={{ width: '1px', background: 'var(--line)', margin: '0 2px' }} />
         <button onClick={() => setFilterLot(null)} style={chip(!filterLot)}>Tous lots</button>
-        {LOTS.map(l => (
+        {lots.map(l => (
           <button key={l.id} onClick={() => setFilterLot(l.id)} style={chip(filterLot === l.id)}>{l.id}</button>
         ))}
       </div>
@@ -185,9 +235,22 @@ export function Reserves() {
         )}
         {visible.map(r => {
           const pm = PRIORITY_META[r.priority]
+          const checked = selection.has(r.id)
           return (
-            <div key={r.id} style={{ border: '1px solid var(--line)', borderRadius: '10px', padding: '12px', background: r.status === 'resolved' ? '#f7faf8' : '#fff', opacity: r.status === 'resolved' ? 0.75 : 1 }}>
+            <div key={r.id}
+              onClick={picking ? () => setSelection(s => toggle(s, r.id)) : undefined}
+              style={{
+                border: checked ? '2px solid var(--accent)' : '1px solid var(--line)',
+                borderRadius: '10px', padding: '12px',
+                background: r.status === 'resolved' ? '#f7faf8' : '#fff',
+                opacity: r.status === 'resolved' ? 0.75 : 1,
+                cursor: picking ? 'pointer' : 'default',
+              }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px' }}>
+                {picking && (
+                  <input type="checkbox" checked={checked} readOnly aria-label={`Sélectionner ${r.number}`}
+                    style={{ width: '17px', height: '17px', marginTop: '2px', flexShrink: 0, accentColor: 'var(--accent)' }} />
+                )}
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                     <strong style={{ color: 'var(--navy)', fontSize: '13px' }}>{r.number}</strong>
@@ -201,12 +264,14 @@ export function Reserves() {
                 </div>
                 {r.photo && <img src={r.photo} alt="réserve" style={{ width: '52px', height: '52px', objectFit: 'cover', borderRadius: '6px' }} />}
               </div>
-              <button
-                onClick={() => toggleStatus(r.id)}
-                style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: r.status === 'open' ? 'var(--ok)' : 'var(--muted)', cursor: 'pointer' }}
-              >
-                {r.status === 'open' ? <><Check size={13} /> Marquer levée</> : <><X size={13} /> Rouvrir</>}
-              </button>
+              {!picking && (
+                <button
+                  onClick={() => toggleStatus(r.id)}
+                  style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: r.status === 'open' ? 'var(--ok)' : 'var(--muted)', cursor: 'pointer' }}
+                >
+                  {r.status === 'open' ? <><Check size={13} /> Marquer levée</> : <><X size={13} /> Rouvrir</>}
+                </button>
+              )}
             </div>
           )
         })}

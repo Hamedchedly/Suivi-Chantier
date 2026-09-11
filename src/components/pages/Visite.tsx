@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock, X,
   CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag, ShieldCheck,
+  ListChecks,
 } from 'lucide-react'
 import {
   Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant,
@@ -21,8 +22,12 @@ import type { RemarkInput } from '../visite/ZoneControl'
 import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
   getCommitments, saveCommitments, getLotsConfig, getVisitKinds, saveVisitKinds,
-  logActivity, ZONE_REFS, type LotContact,
+  logActivity, getZoneRefs, type LotContact,
 } from '../../lib/repo'
+import { getProjects, getCurrentProjectId } from '../../lib/repo'
+import { findProject, projectLabel, projectSubtitle } from '../../lib/projects'
+import { SelectionBar } from '../common/SelectionBar'
+import { EMPTY_SELECTION, Selection, toggle, toggleAll, removeSelected } from '../../lib/selection'
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
 import { summarizeAnnotations } from '../../lib/annotations'
 import { ZoneControl } from '../visite/ZoneControl'
@@ -42,6 +47,14 @@ const isDiffused = (v: Visit) => v.status === 'diffuse' || v.status === 'verroui
 /** A diffused CR is frozen for everyone but a super-admin. */
 const isLockedFor = (v: Visit, user: User | null) => isDiffused(v) && !canEditLocked(user)
 const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : '—'
+
+/** En-tête des comptes rendus : l'opération active, telle que l'utilisateur l'a nommée. */
+const operationHeading = (): string => {
+  const p = findProject(getProjects(), getCurrentProjectId())
+  if (!p) return 'Opération'
+  const sub = projectSubtitle(p)
+  return sub ? `${projectLabel(p)} • ${sub}` : projectLabel(p)
+}
 const fmtDuration = (min: number | null) => min === null ? '—' : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 
 /**
@@ -73,6 +86,11 @@ export function Visite() {
   const [photos, setPhotos] = useState<VisitPhoto[]>([])
   const [stack, setStack] = useState<View[]>([{ v: 'list' }])
   const [activeId, setActiveId] = useState<string | null>(null)
+
+  // Mode sélection de la liste : cocher des sessions pour les supprimer.
+  const [picking, setPicking] = useState(false)
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const view = stack[stack.length - 1]
   const push = (v: View) => setStack(s => [...s, v])
@@ -466,22 +484,76 @@ export function Visite() {
   }
 
   // ── List ───────────────────────────────────────────────────────────────────
+  const visitIds = visits.map(v => v.id)
+  const leavePicking = () => { setPicking(false); setSelection(EMPTY_SELECTION); setConfirmDelete(false) }
+  const deleteSelectedVisits = () => {
+    const removed = visits.filter(v => selection.has(v.id))
+    setVisits(prev => removeSelected(prev, selection))
+    // Les réserves émises pendant une session supprimée sont détachées, pas effacées :
+    // elles restent des constats de chantier à part entière.
+    setReserves(prev => prev.map(r => (r.visitId && selection.has(r.visitId) ? { ...r, visitId: undefined } : r)))
+    removed.forEach(v => logActivity('visit', `Session du ${fmtFr(v.date)} supprimée`))
+    if (activeId && selection.has(activeId)) setActiveId(null)
+    leavePicking()
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       <button onClick={() => push({ v: 'create' })} style={bigBtn}>
         <Plus size={18} /> Nouvelle visite ou réunion
       </button>
 
-      <div style={sectionLabel}>Sessions</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ ...sectionLabel, flex: 1 }}>Sessions</div>
+        {!picking && visits.length > 0 && (
+          <button onClick={() => setPicking(true)} title="Sélectionner des sessions"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+            <ListChecks size={15} /> Sélectionner
+          </button>
+        )}
+      </div>
+
+      <SelectionBar
+        active={picking}
+        selection={selection}
+        visibleIds={visitIds}
+        noun="session"
+        feminine
+        onToggleAll={() => setSelection(s => toggleAll(s, visitIds))}
+        onDelete={() => setConfirmDelete(true)}
+        onCancel={leavePicking}
+      />
+
+      {confirmDelete && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
+          <span style={{ flex: 1, fontSize: '12px', color: '#7a1c13', minWidth: '160px' }}>
+            Supprimer définitivement {selection.size} session(s), leurs relevés et leurs notes ?
+            Les réserves émises sont conservées.
+          </span>
+          <button onClick={deleteSelectedVisits} style={{ padding: '7px 13px', borderRadius: '8px', border: 'none', background: '#b42318', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+            Supprimer
+          </button>
+          <button onClick={() => setConfirmDelete(false)} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>
+            Annuler
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {visits.length === 0 && <Empty>Aucune session. Démarrez une visite ou une réunion de chantier.</Empty>}
         {visits.map(v => {
           const c = visitCounts(v)
           const st = STATUS_META[v.status]
           const k = kindBadge(v)
+          const checked = selection.has(v.id)
           return (
-            <button key={v.id} onClick={() => openVisit(v)} style={visitCard}>
-              <Calendar size={18} color="var(--muted)" style={{ flexShrink: 0 }} />
+            <button key={v.id}
+              onClick={() => (picking ? setSelection(s => toggle(s, v.id)) : openVisit(v))}
+              style={{ ...visitCard, border: checked ? '2px solid var(--accent)' : visitCard.border }}>
+              {picking
+                ? <input type="checkbox" checked={checked} readOnly aria-label={`Sélectionner la session du ${fmtFr(v.date)}`}
+                    style={{ width: '17px', height: '17px', flexShrink: 0, accentColor: 'var(--accent)' }} />
+                : <Calendar size={18} color="var(--muted)" style={{ flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ ...badge, background: k.bg, color: k.fg }}>{k.label}</span>
@@ -492,7 +564,7 @@ export function Visite() {
                 </div>
               </div>
               <span style={{ ...badge, background: st.bg, color: st.fg }}>{st.label}</span>
-              <ChevronRight size={14} color="var(--muted)" />
+              {!picking && <ChevronRight size={14} color="var(--muted)" />}
             </button>
           )
         })}
@@ -515,10 +587,12 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
   const [guests, setGuests] = useState<Participant[]>([])
   const [guestForm, setGuestForm] = useState<{ name: string; role: Role } | null>(null)
   const [companies, setCompanies] = useState<Set<string>>(new Set())
-  const [selected, setSelected] = useState<Set<string>>(new Set(ZONE_REFS.map(r => r.refId)))
+  // Catalogue des zones du projet actif — vide tant que l'opération n'est pas décrite.
+  const zoneRefs = useMemo(() => getZoneRefs(), [])
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(getZoneRefs().map(r => r.refId)))
 
   const allCompanies = [...new Set(lots.map(l => l.company))].sort()
-  const buildings = [...new Set(ZONE_REFS.map(r => r.buildingId))]
+  const buildings = [...new Set(zoneRefs.map(r => r.buildingId))]
 
   const toggleIn = <T,>(set: Set<T>, value: T) => {
     const n = new Set(set)
@@ -527,7 +601,7 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
   }
 
   const toggleBuilding = (bid: string) => {
-    const refs = ZONE_REFS.filter(r => r.buildingId === bid).map(r => r.refId)
+    const refs = zoneRefs.filter(r => r.buildingId === bid).map(r => r.refId)
     const allOn = refs.every(r => selected.has(r))
     setSelected(prev => {
       const n = new Set(prev)
@@ -556,7 +630,7 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
   }
 
   const create = () => {
-    const refs: ZoneRef[] = ZONE_REFS.filter(r => selected.has(r.refId))
+    const refs: ZoneRef[] = zoneRefs.filter(r => selected.has(r.refId))
     onCreate(newVisit({
       kind, kindLabel: kindLabel ?? undefined, date, participants: guests, brief,
       companiesPresent: [...companies],
@@ -665,8 +739,14 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
       </Field>
 
       <Field label={`Zones à parcourir (${selected.size})`}>
+        {zoneRefs.length === 0 && (
+          <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '8px 0' }}>
+            Aucune zone n'est encore définie pour cette opération. Ajoutez les bâtiments
+            et logements depuis la configuration du projet.
+          </div>
+        )}
         {buildings.map(bid => {
-          const refs = ZONE_REFS.filter(r => r.buildingId === bid)
+          const refs = zoneRefs.filter(r => r.buildingId === bid)
           const allOn = refs.every(r => selected.has(r.refId))
           return (
             <div key={bid} style={{ marginBottom: '12px' }}>
@@ -910,7 +990,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
           </div>
           <h1 style={{ margin: '4px 0', fontSize: '22px', color: '#02457A' }}>{fmtFr(visit.date)}{visit.title ? ` — ${visit.title}` : ''}</h1>
           <div style={{ fontSize: '12px', color: '#5b7183' }}>
-            Gambetta — Réhabilitation • GAM-2026-001{snap ? ` • planning figé le ${new Date(snap.capturedAt).toLocaleDateString('fr')}` : ''}
+            {operationHeading()}{snap ? ` • planning figé le ${new Date(snap.capturedAt).toLocaleDateString('fr')}` : ''}
           </div>
         </div>
 

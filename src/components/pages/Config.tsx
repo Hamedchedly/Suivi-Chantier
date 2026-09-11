@@ -2,36 +2,19 @@ import { useState, useEffect } from 'react'
 import { Download, Upload } from 'lucide-react'
 import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
 import { PlanningConfig } from './PlanningConfig'
-import { MonCompte } from './MonCompte'
-import type { User } from '../../lib/auth'
+import { Project, updateProject } from '../../lib/projects'
 
-type ConfigTab = 'compte' | 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
-
-interface ProjectConfig {
-  name: string
-  address: string
-  moa: string
-  moe: string
-  amo: string
-}
-
-const MOCK_PROJECT: ProjectConfig = {
-  name: 'Gambetta — Réhabilitation',
-  address: '111 Rue Gambetta, 51100 Reims',
-  moa: 'Ville de Reims',
-  moe: 'Bureau d\'Études ABC',
-  amo: 'Consultant Projet XYZ',
-}
+type ConfigTab = 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
 
 interface ConfigProps {
-  users: User[]
-  currentUser: User
-  onUsersChange: (users: User[]) => void
+  /** Opération affichée — null tant qu'aucune n'est ouverte. */
+  project: Project | null
+  projects: Project[]
+  onProjectChange: (projects: Project[]) => void
 }
 
-export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
-  const [activeTab, setActiveTab] = useState<ConfigTab>('compte')
-  const [projectConfig, setProjectConfig] = useState<ProjectConfig>(MOCK_PROJECT)
+export function Config({ project, projects, onProjectChange }: ConfigProps) {
+  const [activeTab, setActiveTab] = useState<ConfigTab>('project')
   const [lots, setLots] = useState<LotContact[]>(getLotsConfig)
 
   useEffect(() => {
@@ -42,8 +25,21 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
     setLots(prev => prev.map(l => (l.id === id ? { ...l, [field]: value } : l)))
   }
 
+  /** Écrit directement dans le registre des opérations : la saisie est persistée. */
+  const patchProject = (field: 'name' | 'address' | 'moa' | 'moe' | 'amo', value: string) => {
+    if (!project) return
+    const res = updateProject(projects, project.id, { [field]: value })
+    if (res.ok) onProjectChange(res.projects)
+  }
+  const projectConfig = {
+    name: project?.name ?? '',
+    address: project?.address ?? '',
+    moa: project?.moa ?? '',
+    moe: project?.moe ?? '',
+    amo: project?.amo ?? '',
+  }
+
   const tabs: { id: ConfigTab; label: string }[] = [
-    { id: 'compte', label: 'Mon compte' },
     { id: 'project', label: 'Projet' },
     { id: 'planning', label: 'Planning & congés' },
     { id: 'lots', label: 'Lots & contacts' },
@@ -89,12 +85,14 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 12px', paddingBottom: '80px' }}>
-        {activeTab === 'compte' && (
-          <MonCompte users={users} currentUser={currentUser} onChange={onUsersChange} />
-        )}
-
         {/* Project Tab */}
-        {activeTab === 'project' && (
+        {activeTab === 'project' && !project && (
+          <div style={{ maxWidth: '600px', color: '#5b7183', fontSize: '13px' }}>
+            Aucune opération n'est ouverte. Créez-en une depuis « Mes opérations »
+            (icône de compte, en haut à droite).
+          </div>
+        )}
+        {activeTab === 'project' && project && (
           <div style={{ maxWidth: '600px' }}>
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
@@ -103,7 +101,7 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               <input
                 type="text"
                 value={projectConfig.name}
-                onChange={e => setProjectConfig({ ...projectConfig, name: e.target.value })}
+                onChange={e => patchProject('name', e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -122,7 +120,7 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               <input
                 type="text"
                 value={projectConfig.address}
-                onChange={e => setProjectConfig({ ...projectConfig, address: e.target.value })}
+                onChange={e => patchProject('address', e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -141,7 +139,7 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               <input
                 type="text"
                 value={projectConfig.moa}
-                onChange={e => setProjectConfig({ ...projectConfig, moa: e.target.value })}
+                onChange={e => patchProject('moa', e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -160,7 +158,7 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               <input
                 type="text"
                 value={projectConfig.moe}
-                onChange={e => setProjectConfig({ ...projectConfig, moe: e.target.value })}
+                onChange={e => patchProject('moe', e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -179,7 +177,7 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               <input
                 type="text"
                 value={projectConfig.amo}
-                onChange={e => setProjectConfig({ ...projectConfig, amo: e.target.value })}
+                onChange={e => patchProject('amo', e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -191,22 +189,9 @@ export function Config({ users, currentUser, onUsersChange }: ConfigProps) {
               />
             </div>
 
-            <button
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: '#02457A',
-                color: 'white',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                marginTop: '12px',
-              }}
-            >
-              Enregistrer
-            </button>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: '#5b7183' }}>
+              Les modifications sont enregistrées au fil de la saisie.
+            </div>
           </div>
         )}
 

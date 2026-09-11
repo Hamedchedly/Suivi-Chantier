@@ -3,7 +3,8 @@ import { GanttTask } from '../types/gantt'
 import { Reserve } from './reserves'
 import { Marche, Avenant, Situation } from './finance'
 import { serialize, deserialize } from './storage'
-import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations } from './repo'
+import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getProjects, getCurrentProjectId } from './repo'
+import { findProject } from './projects'
 
 export interface ShareProject {
   name: string
@@ -22,10 +23,11 @@ export interface Snapshot {
   situations: Situation[]
 }
 
-const PROJECT: ShareProject = {
-  name: 'Gambetta — Réhabilitation',
-  ref: 'GAM-2026-001',
-  address: '111 Rue Gambetta, 51100 Reims',
+/** En-tête du lien partagé : l'opération active, ou un libellé neutre si aucune. */
+function shareProject(): ShareProject {
+  const p = findProject(getProjects(), getCurrentProjectId())
+  if (!p) return { name: 'Opération', ref: '', address: '' }
+  return { name: p.name, ref: p.reference ?? '', address: p.address ?? '' }
 }
 
 /** Gather the MOA-relevant state. Reserve photos are stripped to keep URLs small. */
@@ -33,7 +35,7 @@ export function buildSnapshot(): Snapshot {
   return {
     v: 1,
     createdAt: new Date().toISOString(),
-    project: PROJECT,
+    project: shareProject(),
     tasks: getGanttTasks(),
     reserves: getReserves().map(r => ({ ...r, photo: undefined })),
     marches: getMarches(),

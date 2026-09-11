@@ -30,15 +30,28 @@ export function flattenAll(tasks: GanttTask[], acc: GanttTask[] = []): GanttTask
   return acc
 }
 
-/** Positive = planned finishes later than the contractual baseline (slippage). */
-export function driftDays(task: GanttTask): number {
-  if (!task.baseline_end) return 0
-  return diffDays(task.planned_end, task.baseline_end)
+/**
+ * Écart de fin, en jours. Positif = la tâche se termine plus tard que prévu.
+ *
+ * Le prévisionnel EST le contractuel : la dérive se mesure donc entre le RÉEL
+ * et lui. Tant qu'aucune fin réelle n'est constatée, une tâche déjà en retard
+ * sur sa date de fin dérive d'autant de jours écoulés ; sinon la dérive est nulle
+ * (on ne projette pas de retard sur une tâche encore dans les temps).
+ */
+export function driftDays(task: GanttTask, today: Date = new Date()): number {
+  if (task.actual_end) return diffDays(task.actual_end, task.planned_end)
+  if (task.progress >= 100) return 0
+  const late = diffDays(today, task.planned_end)
+  return late > 0 ? late : 0
 }
 
 /** Worst slippage across all leaf tasks (days). */
-export function maxDrift(tasks: GanttTask[]): number {
-  return flattenLeaves(tasks).reduce((m, t) => Math.max(m, driftDays(t)), 0)
+export function maxDrift(tasks: GanttTask[], today: Date = new Date()): number {
+  // Les jalons marquent une échéance, ils ne portent pas de travail : ils sont
+  // exclus de la dérive comme ils le sont déjà du retard.
+  return flattenLeaves(tasks)
+    .filter(t => !t.is_milestone)
+    .reduce((m, t) => Math.max(m, driftDays(t, today)), 0)
 }
 
 /** A task is late if it should be finished by `today` but isn't complete. */
@@ -77,7 +90,8 @@ export interface LotSummary {
 export function lotSummaries(tasks: GanttTask[], today: Date): LotSummary[] {
   return tasks.map(lot => {
     const leaves = flattenLeaves([lot])
-    const drift = leaves.reduce((m, t) => Math.max(m, driftDays(t)), 0)
+    const drift = leaves.filter(t => !t.is_milestone)
+      .reduce((m, t) => Math.max(m, driftDays(t, today)), 0)
     const late = leaves.some(t => !t.is_milestone && isLate(t, today))
     return { lotId: lot.lot_id, title: lot.title, progress: lot.progress, drift, late }
   })

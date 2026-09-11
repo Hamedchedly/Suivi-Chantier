@@ -26,7 +26,7 @@ export function Login({ users, onSignIn }: { users: User[]; onSignIn: (u: User) 
             Suivi Chantier
           </div>
           <h1 style={{ fontSize: '20px', color: '#02457A', margin: '4px 0 2px' }}>Connexion</h1>
-          <div style={{ fontSize: '12px', color: '#5b7183' }}>Gambetta — Réhabilitation</div>
+          <div style={{ fontSize: '12px', color: '#5b7183' }}>Suivi de chantier</div>
         </div>
 
         <label style={label}>Identifiant</label>

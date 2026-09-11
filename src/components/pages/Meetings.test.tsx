@@ -2,11 +2,14 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { Meetings } from './Meetings'
+import { saveMeetings } from '../../lib/repo'
+import { DEFAULT_MEETINGS } from '../../data/meetingsMock'
 
+// Un projet démarre vide : le jeu d'essai est semé explicitement par le test.
 describe('<Meetings /> — câblage UI', () => {
-  beforeEach(() => { cleanup(); localStorage.clear() })
+  beforeEach(() => { cleanup(); localStorage.clear(); saveMeetings(DEFAULT_MEETINGS) })
 
-  it('affiche les réunions du seed et signale une action en retard', () => {
+  it('affiche les réunions semées et signale une action en retard', () => {
     render(<Meetings />)
     expect(screen.getByText('Réunion de chantier n°12')).toBeDefined()
     expect(screen.getByText('Réunion de chantier n°11')).toBeDefined()

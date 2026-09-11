@@ -68,28 +68,30 @@ export function TaskDetail({ task, onClose, onProgress, onDates, totalFloat }: P
           <Row label="Lot" value={task.lot_id || '—'} />
           <Row label="Logement" value={logementLabel(task.logement_id)} />
           <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
-          <Row label="Contractuel — début" value={fmt(task.baseline_start)} />
-          <Row label="Contractuel — fin" value={fmt(task.baseline_end)} />
+          {/* Le contractuel EST le prévisionnel : une seule paire de dates saisies. */}
           {editable ? (
             <>
               <EditRow
-                label="Planifié — début"
+                label="Contractuel — début"
                 value={isoDate(task.planned_start)}
                 onChange={v => onDates!(task.id, { planned_start: parseDate(v) })}
               />
               <EditRow
-                label="Planifié — fin"
+                label="Contractuel — fin"
                 value={isoDate(task.planned_end)}
                 onChange={v => onDates!(task.id, { planned_end: parseDate(v) })}
               />
             </>
           ) : (
             <>
-              <Row label="Planifié — début" value={fmt(task.planned_start)} />
-              <Row label="Planifié — fin" value={fmt(task.planned_end)} />
+              <Row label="Contractuel — début" value={fmt(task.planned_start)} />
+              <Row label="Contractuel — fin" value={fmt(task.planned_end)} />
             </>
           )}
-          <Row label="Dérive" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
+          {/* Le réel ne se saisit pas : il suit l'avancement constaté. */}
+          <Row label="Réel — début" value={fmt(task.actual_start)} />
+          <Row label="Réel — fin" value={task.actual_end ? fmt(task.actual_end) : (task.actual_start ? 'en cours' : '—')} />
+          <Row label="Écart / contractuel" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
           {totalFloat !== undefined && (
             <Row
               label="Marge totale"

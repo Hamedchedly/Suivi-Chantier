@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
-import { GANTT_TASKS } from '../../data/ganttMockData'
 import { LOGEMENTS } from '../../data/zones'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
 } from '../../lib/repo'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
+import { withActualDates } from '../../lib/actualDates'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
 import GanttTable from '../gantt/GanttTable'
@@ -30,6 +30,14 @@ const updateTaskInList = (list: GanttTask[], id: string, updates: Partial<GanttT
     return t
   })
 
+/** Comme updateTaskInList, mais la mise à jour est calculée depuis la tâche. */
+const mapTaskInList = (list: GanttTask[], id: string, fn: (t: GanttTask) => GanttTask): GanttTask[] =>
+  list.map(t => {
+    if (t.id === id) return fn(t)
+    if (t.children?.length) return { ...t, children: mapTaskInList(t.children, id, fn) }
+    return t
+  })
+
 function makeParent(id: string, title: string, children: GanttTask[]): GanttTask {
   const leaves = children.filter(c => !c.is_milestone)
   const min = (f: (c: GanttTask) => number) => new Date(Math.min(...children.map(f)))
@@ -38,8 +46,6 @@ function makeParent(id: string, title: string, children: GanttTask[]): GanttTask
     id, lot_id: children[0]?.lot_id ?? '', title,
     planned_start: min(c => c.planned_start.getTime()), planned_end: max(c => c.planned_end.getTime()),
     planned_duration: 0,
-    baseline_start: min(c => (c.baseline_start ?? c.planned_start).getTime()),
-    baseline_end: max(c => (c.baseline_end ?? c.planned_end).getTime()),
     progress: leaves.length ? Math.round(leaves.reduce((s, c) => s + c.progress, 0) / leaves.length) : 0,
     status: 'in-progress', priority: 'medium', dependencies: [],
     is_milestone: false, is_critical: children.some(c => c.is_critical), children,
@@ -115,8 +121,16 @@ export function Gantt() {
   }, [group, selectedLots, selectedZones])
 
   const { startDate, endDate } = useMemo(() => {
-    const starts = ganttTasks.flatMap(l => [(l.baseline_start ?? l.planned_start).getTime(), ...(l.children ?? []).map(c => (c.baseline_start ?? c.planned_start).getTime())])
-    const ends = ganttTasks.flatMap(l => [l.planned_end.getTime(), ...(l.children ?? []).flatMap(c => [c.planned_end.getTime(), (c.baseline_end ?? c.planned_end).getTime()])])
+    // La fenêtre couvre le prévisionnel ET le réel constaté, pour que l'écart
+    // reste visible même quand le chantier déborde de son planning.
+    const starts = ganttTasks.flatMap(l => [
+      (l.actual_start ?? l.planned_start).getTime(),
+      ...(l.children ?? []).map(c => (c.actual_start ?? c.planned_start).getTime()),
+    ])
+    const ends = ganttTasks.flatMap(l => [
+      Math.max(l.planned_end.getTime(), l.actual_end?.getTime() ?? 0),
+      ...(l.children ?? []).map(c => Math.max(c.planned_end.getTime(), c.actual_end?.getTime() ?? 0)),
+    ])
     const start = new Date(Math.min(...starts)); start.setHours(0, 0, 0, 0)
     start.setDate(start.getDate() - ((start.getDay() || 7) - 1))
     const end = new Date(Math.max(...ends)); end.setDate(end.getDate() + 14)
@@ -141,11 +155,17 @@ export function Gantt() {
       }
       return replanned
     })
+  /** Saisir un avancement recale aussitôt les dates réelles de la tâche. */
   const handleProgress = (id: string, progress: number) => {
-    setGanttTasks(prev => updateTaskInList(prev, id, { progress }))
-    setDetailTask(t => (t && t.id === id ? { ...t, progress } : t))
+    const today = new Date()
+    setGanttTasks(prev => {
+      const bumped = updateTaskInList(prev, id, { progress })
+      return mapTaskInList(bumped, id, t => withActualDates(t, today))
+    })
+    setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
   }
-  const handleReset = () => setGanttTasks(GANTT_TASKS)
+  /** Vider le planning de l'opération courante (pas de données de démonstration). */
+  const handleReset = () => setGanttTasks([])
 
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },

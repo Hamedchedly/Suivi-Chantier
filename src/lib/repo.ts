@@ -6,39 +6,57 @@
 // enabled — RLS on the live DB requires auth.uid()), swap the bodies below for
 // Supabase queries; call sites (components) do not change.
 //
+// MULTI-PROJETS — un utilisateur suit plusieurs chantiers.
+//   • Les clés GLOBAL sont communes à toute l'installation : comptes, session,
+//     registre des projets, projet actif.
+//   • Toutes les autres données sont CLOISONNÉES par projet : la clé réellement
+//     écrite est `${base}::${projectId}`. Basculer de projet change donc la
+//     totalité des données lues, sans rien déplacer.
+//   • Un projet créé démarre VIDE. Aucune donnée de démonstration n'est semée :
+//     les jeux d'essai de src/data/ ne servent plus qu'aux tests et aux imports.
+//
 // Supabase mapping (for the future backend sprint), project "Suivi-Chantier":
-//   getGanttTasks / saveGanttTasks   ↔ public.tasks (+ schedule_items, progress_entries)
-//   getReserves    / saveReserves    ↔ public.observations (type = reserve) or a reserves table
-//   getVisits2     / saveVisits2     ↔ public.visits (+ visit_zones, visit_task_checks)
-//   getLotsConfig  / saveLotsConfig  ↔ public.lots (+ lot_assignments, companies)
+//   getProjects    / saveProjects     ↔ public.operations
+//   getGanttTasks  / saveGanttTasks   ↔ public.tasks (+ schedule_items, progress_entries)
+//   getReserves    / saveReserves     ↔ public.observations
+//   getVisits      / saveVisits       ↔ public.visits (+ visit_zones, visit_task_checks)
+//   getLotsConfig  / saveLotsConfig   ↔ public.lots (+ lot_assignments, companies)
 // Each of those tables is RLS-protected via is_operation_member(operation_id),
 // so a Supabase implementation must run as an authenticated user.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { GanttTask } from '../types/gantt'
-import { GANTT_TASKS } from '../data/ganttMockData'
 import { Reserve } from './reserves'
 import { Marche, Avenant, Situation } from './finance'
-import { DEFAULT_MARCHES, DEFAULT_AVENANTS, DEFAULT_SITUATIONS } from '../data/financeMock'
 import { Rfi, Visa, Doc } from './admin'
-import { DEFAULT_RFIS, DEFAULT_VISAS, DEFAULT_DOCS } from '../data/adminMock'
 import { AlertActions } from './alerts'
 import { DpgfLine } from './dpgf'
-import { DEFAULT_DPGF } from '../data/dpgfMock'
 import { ActivityEvent, ActivityType, pushEvent } from './activity'
 import { Meeting } from './meetings'
-import { DEFAULT_MEETINGS } from '../data/meetingsMock'
-import { Visit as VisitSession, buildZonesFromPlanning, type ZoneRef, type TaskState } from './visits'
+import { Visit as VisitSession, type ZoneRef } from './visits'
+import { Unit, TaskUnitLink, visitableUnits, buildingOf, unitPath } from './units'
 import { DateCommitment } from './commitments'
 import type { User, Session } from './auth'
-import { LOGEMENTS } from '../data/zones'
+import type { Project } from './projects'
+import { resolveCurrent } from './projects'
 import { loadState, saveState } from './storage'
 
-// Versioned storage keys (bump the suffix when a stored shape changes).
-const KEYS = {
+// ── Clés globales (hors projet) ─────────────────────────────────────────────
+const GLOBAL = {
+  users: 'sc-users-v1',
+  session: 'sc-session-v1',
+  projects: 'sc-projects-v1',
+  currentProject: 'sc-current-project-v1',
+} as const
+
+// ── Clés cloisonnées par projet (suffixées `::<projectId>`) ─────────────────
+// Bump the version suffix when a stored shape changes.
+const SCOPED = {
   gantt: 'sc-gantt-v2',
   reserves: 'sc-reserves-v1',
   lotsConfig: 'sc-lots-config-v1',
+  units: 'sc-units-v1',
+  taskUnits: 'sc-task-units-v1',
   marches: 'sc-marches-v1',
   avenants: 'sc-avenants-v1',
   situations: 'sc-situations-v1',
@@ -54,17 +72,47 @@ const KEYS = {
   visits: 'sc-visits-v3',
   commitments: 'sc-commitments-v1',
   visitKinds: 'sc-visit-kinds-v1',
-  users: 'sc-users-v1',
-  session: 'sc-session-v1',
 } as const
 
-const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
-const _agoH = (h: number) => new Date(_tA.getTime() - h * 3600000).toISOString()
-const DEFAULT_ACTIVITY: ActivityEvent[] = [
-  { id: 's1', at: _agoH(3), type: 'reserve', message: 'Réserve R-002 créée — fuite raccord CVC (Logt B-201)' },
-  { id: 's2', at: _agoH(26), type: 'finance', message: 'Avenant validé — Modification réseau CVC RDC (+15 000 €)' },
-  { id: 's3', at: _agoH(50), type: 'visit', message: 'Visite du 04/09/2026 enregistrée' },
-]
+/** Projet sans identifiant : les lectures tombent sur les valeurs par défaut. */
+const NO_PROJECT = '-'
+
+/** Clé effective d'une donnée métier pour le projet actif. */
+function k(base: string): string {
+  return `${base}::${getCurrentProjectId() ?? NO_PROJECT}`
+}
+
+// ── Registre des projets ────────────────────────────────────────────────────
+
+export function getProjects(): Project[] {
+  return loadState<Project[]>(GLOBAL.projects, [])
+}
+
+export function saveProjects(projects: Project[]): void {
+  saveState(GLOBAL.projects, projects)
+}
+
+/**
+ * Projet actif. Toujours cohérent avec le registre : si le projet mémorisé a été
+ * supprimé, on retombe sur le premier disponible (et null s'il n'y en a plus).
+ */
+export function getCurrentProjectId(): string | null {
+  const stored = loadState<string | null>(GLOBAL.currentProject, null)
+  return resolveCurrent(getProjects(), stored)
+}
+
+export function setCurrentProjectId(id: string | null): void {
+  saveState(GLOBAL.currentProject, id)
+}
+
+/** Purge toutes les données d'un projet supprimé (aucune orpheline en réserve). */
+export function deleteProjectData(projectId: string): void {
+  for (const base of Object.values(SCOPED)) {
+    try { localStorage.removeItem(`${base}::${projectId}`) } catch { /* storage indisponible */ }
+  }
+}
+
+// ── Entity types owned by the repository ────────────────────────────────────
 
 export type GanttGroup = 'lot' | 'zone' | 'chrono'
 export interface GanttPrefs {
@@ -80,14 +128,6 @@ export interface Holiday {
   label?: string
 }
 
-const _today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })()
-const _addDays = (n: number) => new Date(_today.getTime() + n * 86400000)
-const DEFAULT_HOLIDAYS: Holiday[] = [
-  { start: _addDays(28), end: _addDays(35), label: 'Congés' },
-]
-
-// ── Entity types owned by the repository ────────────────────────────────────
-
 export interface LotContact {
   id: string
   name: string
@@ -97,29 +137,14 @@ export interface LotContact {
   phone: string
 }
 
-// ── Default seeds (used until the user creates their own data) ───────────────
-
-const DEFAULT_LOTS: LotContact[] = [
-  { id: 'L05', name: 'LOT 05 - Menuiseries int. / Isolation', company: 'SMP Aménagement', contactName: 'Jean Dupont', email: 'j.dupont@smp.fr', phone: '06 12 34 56 78' },
-  { id: 'L06', name: 'LOT 06 - Électricité / Contrôle accès', company: 'Soveclim Services', contactName: 'Marie Martin', email: 'm.martin@soveclim.fr', phone: '06 23 45 67 89' },
-  { id: 'L07', name: 'LOT 07 - CVC', company: 'Soveclim Services', contactName: 'Pierre Lécuyer', email: 'p.lecuyer@soveclim.fr', phone: '06 34 56 78 90' },
-  { id: 'L08', name: 'LOT 08 - Embellissements', company: 'Soretherm', contactName: 'Anne Legrand', email: 'a.legrand@soretherm.fr', phone: '06 45 67 89 01' },
-]
-
-const DEFAULT_RESERVES: Reserve[] = [
-  { id: 'r1', number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'Joint de fenêtre séjour mal posé', priority: 'medium', status: 'open', createdAt: '2026-09-04', visitId: 'VS-DEMO', company: 'SMP Aménagement' },
-  { id: 'r2', number: 'R-002', lotId: 'L07', logementId: 'B-201', description: 'Fuite au niveau du raccord CVC', priority: 'high', status: 'open', createdAt: '2026-09-08', visitId: 'VS-DEMO', company: 'Soveclim Services' },
-  { id: 'r3', number: 'R-003', lotId: 'L08', logementId: 'A-102', description: 'Retouche peinture couloir', priority: 'low', status: 'resolved', createdAt: '2026-08-28' },
-]
-
 // ── Planning (Gantt) ─────────────────────────────────────────────────────────
 
 export function getGanttTasks(): GanttTask[] {
-  return loadState<GanttTask[]>(KEYS.gantt, GANTT_TASKS)
+  return loadState<GanttTask[]>(k(SCOPED.gantt), [])
 }
 
 export function saveGanttTasks(tasks: GanttTask[]): void {
-  saveState(KEYS.gantt, tasks)
+  saveState(k(SCOPED.gantt), tasks)
 }
 
 /** Per top-level lot (parent) progress, read from the planning. */
@@ -132,70 +157,77 @@ export function getLotProgress(): Record<string, number> {
 // ── Reserves ─────────────────────────────────────────────────────────────────
 
 export function getReserves(): Reserve[] {
-  return loadState<Reserve[]>(KEYS.reserves, DEFAULT_RESERVES)
+  return loadState<Reserve[]>(k(SCOPED.reserves), [])
 }
 
 export function saveReserves(reserves: Reserve[]): void {
-  saveState(KEYS.reserves, reserves)
+  saveState(k(SCOPED.reserves), reserves)
 }
 
 // ── Visites / réunions de chantier (session globale) ─────────────────────────
 // Supabase mapping (future): visits + visit_zones + visit_task_checks +
 // visit_notes (+ the reserves tagged with visit_id for the "à revoir" points).
 
-/** Every logement/commun of the catalog, selectable when opening a session. */
-export const ZONE_REFS: ZoneRef[] = LOGEMENTS.map(l => ({
-  refId: l.id,
-  label: l.label,
-  kind: l.zoneId === 'COMMUNS' ? 'commun' : 'logement',
-  buildingId: l.zoneId,
-  buildingLabel: l.zoneLabel,
-}))
+/**
+ * Structure de l'opération : bâtiments, niveaux, logements, communs, extérieurs.
+ * Vide tant que l'utilisateur n'a pas décrit son chantier (écran « Structure »).
+ */
+export function getUnits(): Unit[] {
+  return loadState<Unit[]>(k(SCOPED.units), [])
+}
 
-/** Demo session: A-101 fully controlled, A-102 half done, B-201 with a reprise. */
-const DEFAULT_VISITS: VisitSession[] = [(() => {
-  const seeded: Record<string, Record<string, { state: TaskState; progress?: number }>> = {
-    'A-101': { L05: { state: 'ok', progress: 100 }, L06: { state: 'ok', progress: 100 }, L07: { state: 'ok', progress: 100 }, L08: { state: 'ok', progress: 90 } },
-    'A-102': { L05: { state: 'ok', progress: 100 }, L06: { state: 'ok', progress: 70 } },
-    'B-201': { L05: { state: 'ok', progress: 60 }, L07: { state: 'to_review', progress: 20 } },
-  }
-  const zones = buildZonesFromPlanning(GANTT_TASKS, ZONE_REFS).map(z => {
-    const s = seeded[z.refId]
-    if (!s) return z
-    return { ...z, tasks: z.tasks.map(t => (s[t.lotId] ? { ...t, ...s[t.lotId] } : t)) }
+export function saveUnits(units: Unit[]): void {
+  saveState(k(SCOPED.units), units)
+}
+
+/** Rattachements tâche de planning ↔ unité, saisis dans un sens ou dans l'autre. */
+export function getTaskUnits(): TaskUnitLink[] {
+  return loadState<TaskUnitLink[]>(k(SCOPED.taskUnits), [])
+}
+
+export function saveTaskUnits(links: TaskUnitLink[]): void {
+  saveState(k(SCOPED.taskUnits), links)
+}
+
+/**
+ * Zones proposées à l'ouverture d'une session : les unités réellement
+ * parcourables (logements, communs, extérieurs), rattachées à leur bâtiment.
+ * Dérivé de la structure — il n'y a qu'une seule source de vérité.
+ */
+export function getZoneRefs(): ZoneRef[] {
+  const units = getUnits()
+  return visitableUnits(units).map(u => {
+    const building = buildingOf(units, u.id) ?? u
+    return {
+      refId: u.id,
+      label: u.code ? `${u.name} (${u.code})` : u.name,
+      kind: u.kind === 'dwelling' ? 'logement' : 'commun',
+      buildingId: building.id,
+      buildingLabel: building.name,
+    }
   })
-  return {
-    id: 'VS-DEMO',
-    kind: 'visite' as const,
-    date: '2026-09-09',
-    title: 'Visite hebdomadaire',
-    status: 'en_cours' as const,
-    participants: [
-      { id: 'p1', name: 'Jean Dupont', role: 'MOE' as const },
-      { id: 'p2', name: 'Marie Martin', role: 'MOA' as const },
-    ],
-    zones,
-    notes: [],
-    startedAt: '2026-09-09T07:12:00.000Z',
-    createdAt: '2026-09-09T07:12:00.000Z',
-  }
-})()]
+}
+
+/** Chemin complet d'une unité — « Bâtiment A › R+1 › Logement 3 ». */
+export function zoneFullPath(unitId: string): string {
+  return unitPath(getUnits(), unitId)
+}
 
 export function getVisits(): VisitSession[] {
-  return loadState<VisitSession[]>(KEYS.visits, DEFAULT_VISITS)
+  return loadState<VisitSession[]>(k(SCOPED.visits), [])
 }
 
 export function saveVisits(visits: VisitSession[]): void {
-  saveState(KEYS.visits, visits)
+  saveState(k(SCOPED.visits), visits)
 }
 
 /** Session names the user added beyond "visite" / "réunion", kept for reuse. */
 export function getVisitKinds(): string[] {
-  return loadState<string[]>(KEYS.visitKinds, [])
+  return loadState<string[]>(k(SCOPED.visitKinds), [])
 }
 
 export function saveVisitKinds(kinds: string[]): void {
-  saveState(KEYS.visitKinds, kinds)
+  saveState(k(SCOPED.visitKinds), kinds)
 }
 
 // ── Comptes & session ───────────────────────────────────────────────────────
@@ -208,132 +240,132 @@ const DEFAULT_USERS: User[] = [
 ]
 
 export function getUsers(): User[] {
-  return loadState<User[]>(KEYS.users, DEFAULT_USERS)
+  return loadState<User[]>(GLOBAL.users, DEFAULT_USERS)
 }
 
 export function saveUsers(users: User[]): void {
-  saveState(KEYS.users, users)
+  saveState(GLOBAL.users, users)
 }
 
 export function getSession(): Session | null {
-  return loadState<Session | null>(KEYS.session, null)
+  return loadState<Session | null>(GLOBAL.session, null)
 }
 
 export function saveSession(session: Session | null): void {
-  saveState(KEYS.session, session)
+  saveState(GLOBAL.session, session)
 }
 
 // ── Engagements de dates pris par les entreprises ───────────────────────────
 
 export function getCommitments(): DateCommitment[] {
-  return loadState<DateCommitment[]>(KEYS.commitments, [])
+  return loadState<DateCommitment[]>(k(SCOPED.commitments), [])
 }
 
 export function saveCommitments(c: DateCommitment[]): void {
-  saveState(KEYS.commitments, c)
+  saveState(k(SCOPED.commitments), c)
 }
 
 // ── Lots configuration ───────────────────────────────────────────────────────
 
 export function getLotsConfig(): LotContact[] {
-  return loadState<LotContact[]>(KEYS.lotsConfig, DEFAULT_LOTS)
+  return loadState<LotContact[]>(k(SCOPED.lotsConfig), [])
 }
 
 export function saveLotsConfig(lots: LotContact[]): void {
-  saveState(KEYS.lotsConfig, lots)
+  saveState(k(SCOPED.lotsConfig), lots)
 }
 
 // ── Finances (marchés / avenants / situations) ──────────────────────────────
 // Supabase mapping: markets, market_amendments, market_situations.
 
 export function getMarches(): Marche[] {
-  return loadState<Marche[]>(KEYS.marches, DEFAULT_MARCHES)
+  return loadState<Marche[]>(k(SCOPED.marches), [])
 }
 export function saveMarches(m: Marche[]): void {
-  saveState(KEYS.marches, m)
+  saveState(k(SCOPED.marches), m)
 }
 
 export function getAvenants(): Avenant[] {
-  return loadState<Avenant[]>(KEYS.avenants, DEFAULT_AVENANTS)
+  return loadState<Avenant[]>(k(SCOPED.avenants), [])
 }
 export function saveAvenants(a: Avenant[]): void {
-  saveState(KEYS.avenants, a)
+  saveState(k(SCOPED.avenants), a)
 }
 
 export function getSituations(): Situation[] {
-  return loadState<Situation[]>(KEYS.situations, DEFAULT_SITUATIONS)
+  return loadState<Situation[]>(k(SCOPED.situations), [])
 }
 export function saveSituations(s: Situation[]): void {
-  saveState(KEYS.situations, s)
+  saveState(k(SCOPED.situations), s)
 }
 
 // ── Administratif (RFI / VISA / GED) ────────────────────────────────────────
 // Supabase mapping (future): rfis, submittals/visas, documents tables.
 
 export function getRfis(): Rfi[] {
-  return loadState<Rfi[]>(KEYS.rfis, DEFAULT_RFIS)
+  return loadState<Rfi[]>(k(SCOPED.rfis), [])
 }
 export function saveRfis(r: Rfi[]): void {
-  saveState(KEYS.rfis, r)
+  saveState(k(SCOPED.rfis), r)
 }
 
 export function getVisas(): Visa[] {
-  return loadState<Visa[]>(KEYS.visas, DEFAULT_VISAS)
+  return loadState<Visa[]>(k(SCOPED.visas), [])
 }
 export function saveVisas(v: Visa[]): void {
-  saveState(KEYS.visas, v)
+  saveState(k(SCOPED.visas), v)
 }
 
 export function getDocs(): Doc[] {
-  return loadState<Doc[]>(KEYS.docs, DEFAULT_DOCS)
+  return loadState<Doc[]>(k(SCOPED.docs), [])
 }
 export function saveDocs(d: Doc[]): void {
-  saveState(KEYS.docs, d)
+  saveState(k(SCOPED.docs), d)
 }
 
 // ── Alertes (actions utilisateur : résolu / épinglé réunion) ────────────────
 
 export function getAlertActions(): AlertActions {
-  return loadState<AlertActions>(KEYS.alertActions, {})
+  return loadState<AlertActions>(k(SCOPED.alertActions), {})
 }
 export function saveAlertActions(a: AlertActions): void {
-  saveState(KEYS.alertActions, a)
+  saveState(k(SCOPED.alertActions), a)
 }
 
 // ── Congés / périodes non travaillées ───────────────────────────────────────
 
 export function getHolidays(): Holiday[] {
-  return loadState<Holiday[]>(KEYS.holidays, DEFAULT_HOLIDAYS)
+  return loadState<Holiday[]>(k(SCOPED.holidays), [])
 }
 export function saveHolidays(h: Holiday[]): void {
-  saveState(KEYS.holidays, h)
+  saveState(k(SCOPED.holidays), h)
 }
 
 // ── DPGF (quantitatif) ──────────────────────────────────────────────────────
 
 export function getDpgf(): DpgfLine[] {
-  return loadState<DpgfLine[]>(KEYS.dpgf, DEFAULT_DPGF)
+  return loadState<DpgfLine[]>(k(SCOPED.dpgf), [])
 }
 export function saveDpgf(lines: DpgfLine[]): void {
-  saveState(KEYS.dpgf, lines)
+  saveState(k(SCOPED.dpgf), lines)
 }
 
 // ── Préférences Gantt (zoom, regroupement) — persistées ─────────────────────
 
 export function getGanttPrefs(): GanttPrefs {
-  return { ...DEFAULT_GANTT_PREFS, ...loadState<Partial<GanttPrefs>>(KEYS.ganttPrefs, {}) }
+  return { ...DEFAULT_GANTT_PREFS, ...loadState<Partial<GanttPrefs>>(k(SCOPED.ganttPrefs), {}) }
 }
 export function saveGanttPrefs(p: GanttPrefs): void {
-  saveState(KEYS.ganttPrefs, p)
+  saveState(k(SCOPED.ganttPrefs), p)
 }
 
 // ── Journal d'activité ──────────────────────────────────────────────────────
 
 export function getActivity(): ActivityEvent[] {
-  return loadState<ActivityEvent[]>(KEYS.activity, DEFAULT_ACTIVITY)
+  return loadState<ActivityEvent[]>(k(SCOPED.activity), [])
 }
 export function saveActivity(events: ActivityEvent[]): void {
-  saveState(KEYS.activity, events)
+  saveState(k(SCOPED.activity), events)
 }
 /** Append an event to the journal (read-modify-write). */
 export function logActivity(type: ActivityType, message: string): void {
@@ -343,8 +375,8 @@ export function logActivity(type: ActivityType, message: string): void {
 // ── Réunions / décisions / actions ──────────────────────────────────────────
 
 export function getMeetings(): Meeting[] {
-  return loadState<Meeting[]>(KEYS.meetings, DEFAULT_MEETINGS)
+  return loadState<Meeting[]>(k(SCOPED.meetings), [])
 }
 export function saveMeetings(m: Meeting[]): void {
-  saveState(KEYS.meetings, m)
+  saveState(k(SCOPED.meetings), m)
 }

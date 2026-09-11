@@ -162,20 +162,22 @@
   border-radius: 2px;
 }
 
-/* Baseline (contractual) hatched bar — same footprint as the actual bar */
-.gantt-baseline {
+/* Réel constaté — fine barre pleine sous le prévisionnel, pour lire l'écart
+   d'un coup d'œil. Le contractuel n'a plus de barre propre : il EST le
+   prévisionnel, donc la barre pleine elle-même. */
+.gantt-actual {
   position: absolute;
-  top: 7px;
-  height: 14px;
-  border-radius: 3px;
-  background: repeating-linear-gradient(45deg, #c8d2db 0 4px, #eef2f6 4px 8px);
-  border: 1px solid #cfd8e0;
+  top: 23px;
+  height: 4px;
+  min-width: 3px;
+  border-radius: 2px;
+  background: #0f766e;
   z-index: 1;
   pointer-events: none;
   box-sizing: border-box;
 }
 
-/* Gantt Bar — thinner, overlaid on top of the baseline hatch */
+/* Gantt Bar — prévisionnel (= contractuel) */
 .gantt-bar {
   position: absolute;
   height: 14px;

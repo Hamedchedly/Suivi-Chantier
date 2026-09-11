@@ -5,16 +5,18 @@ interface Props {
   currentPage: Page
   onPageChange: (p: Page) => void
   onOpenGestion: () => void
+  /** Opération affichée — rappelée sous le titre pour éviter toute confusion. */
+  projectName: string
 }
 
-export function SideNav({ currentPage, onPageChange, onOpenGestion }: Props) {
+export function SideNav({ currentPage, onPageChange, onOpenGestion, projectName }: Props) {
   return (
     <nav className="side-nav">
       <div className="snav-brand">
         <div className="snav-logo"><HardHat size={20} /></div>
         <div>
           <div className="snav-title">Suivi Chantier</div>
-          <div className="snav-sub">Gambetta</div>
+          <div className="snav-sub" title={projectName}>{projectName}</div>
         </div>
       </div>
       <div className="snav-items">
