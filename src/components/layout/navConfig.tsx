@@ -1,6 +1,6 @@
-import { Home, BarChart3, FolderOpen, Bell, Settings, ClipboardList, Euro, FileText } from 'lucide-react'
+import { Home, BarChart3, FolderOpen, Bell, Settings, ClipboardList, Euro, FileText, ClipboardCheck } from 'lucide-react'
 
-export type Page = 'home' | 'gantt' | 'cr' | 'finances' | 'config' | 'rapports' | 'alertes'
+export type Page = 'home' | 'gantt' | 'visite' | 'cr' | 'finances' | 'config' | 'rapports' | 'alertes'
 
 export const GESTION_PAGES: Page[] = ['cr', 'finances', 'rapports']
 
@@ -8,6 +8,7 @@ export const GESTION_PAGES: Page[] = ['cr', 'finances', 'rapports']
 export const PRIMARY_NAV = [
   { id: 'home' as Page, label: 'Accueil', icon: Home },
   { id: 'gantt' as Page, label: 'Planning', icon: BarChart3 },
+  { id: 'visite' as Page, label: 'Visite', icon: ClipboardCheck },
   { id: 'gestion' as const, label: 'Gestion', icon: FolderOpen }, // opens the Gestion sheet
   { id: 'alertes' as Page, label: 'Alertes', icon: Bell },
   { id: 'config' as Page, label: 'Config', icon: Settings },

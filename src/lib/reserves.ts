@@ -11,6 +11,8 @@ export interface Reserve {
   status: ReserveStatus
   photo?: string // data URL (downscaled)
   createdAt: string // ISO
+  visitId?: string // set when the reserve is a "point à revoir" raised during a visit
+  company?: string // entreprise concernée (optional)
 }
 
 /** Next sequential number R-00N based on existing reserves. */

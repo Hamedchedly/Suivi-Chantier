@@ -28,6 +28,7 @@ import { DEFAULT_DPGF } from '../data/dpgfMock'
 import { ActivityEvent, ActivityType, pushEvent } from './activity'
 import { Meeting } from './meetings'
 import { DEFAULT_MEETINGS } from '../data/meetingsMock'
+import { Visit as VisitSession, makeZone, type VisitZone, type TaskState } from './visits'
 import { loadState, saveState } from './storage'
 
 // Versioned storage keys (bump the suffix when a stored shape changes).
@@ -48,6 +49,7 @@ const KEYS = {
   ganttPrefs: 'sc-gantt-prefs-v1',
   activity: 'sc-activity-v1',
   meetings: 'sc-meetings-v1',
+  visits2: 'sc-visits2-v1',
 } as const
 
 const _tA = (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d })()
@@ -114,8 +116,8 @@ const DEFAULT_LOTS: LotContact[] = [
 ]
 
 const DEFAULT_RESERVES: Reserve[] = [
-  { id: 'r1', number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'Joint de fenêtre séjour mal posé', priority: 'medium', status: 'open', createdAt: '2026-09-04' },
-  { id: 'r2', number: 'R-002', lotId: 'L07', logementId: 'B-201', description: 'Fuite au niveau du raccord CVC', priority: 'high', status: 'open', createdAt: '2026-09-08' },
+  { id: 'r1', number: 'R-001', lotId: 'L05', logementId: 'A-101', description: 'Joint de fenêtre séjour mal posé', priority: 'medium', status: 'open', createdAt: '2026-09-04', visitId: 'VS-DEMO', company: 'SMP Aménagement' },
+  { id: 'r2', number: 'R-002', lotId: 'L07', logementId: 'B-201', description: 'Fuite au niveau du raccord CVC', priority: 'high', status: 'open', createdAt: '2026-09-08', visitId: 'VS-DEMO', company: 'Soveclim Services' },
   { id: 'r3', number: 'R-003', lotId: 'L08', logementId: 'A-102', description: 'Retouche peinture couloir', priority: 'low', status: 'resolved', createdAt: '2026-08-28' },
 ]
 
@@ -160,6 +162,47 @@ export function getVisits(): Visit[] {
 
 export function saveVisits(visits: Visit[]): void {
   saveState(KEYS.visits, visits)
+}
+
+// ── Visites (session globale — nouveau modèle) ───────────────────────────────
+// Supabase mapping (future): visits + visit_zones + visit_task_checks (+ the
+// reserves tagged with visit_id for the "à revoir" points).
+
+const VISIT_LOTS = ['L05', 'L06', 'L07', 'L08']
+
+const _seedZone = (refId: string, label: string, kind: VisitZone['kind'], states: Partial<Record<string, TaskState>>, override?: 'to_review' | 'blocked'): VisitZone => {
+  const z = makeZone(refId, label, kind, VISIT_LOTS)
+  z.tasks = z.tasks.map(t => ({ ...t, state: states[t.lotId] ?? 'not_checked' }))
+  if (override) z.override = override
+  return z
+}
+
+const DEFAULT_VISITS2: VisitSession[] = [
+  {
+    id: 'VS-DEMO',
+    date: '2026-09-09',
+    title: 'Visite hebdomadaire',
+    status: 'en_cours',
+    participants: [
+      { id: 'p1', name: 'Jean Dupont', role: 'MOE' },
+      { id: 'p2', name: 'Marie Martin', role: 'MOA' },
+    ],
+    zones: [
+      _seedZone('A-101', 'Logt A-101', 'logement', { L05: 'ok', L06: 'ok', L07: 'ok', L08: 'ok' }),
+      _seedZone('A-102', 'Logt A-102', 'logement', { L05: 'ok', L06: 'ok' }),
+      _seedZone('B-201', 'Logt B-201', 'logement', { L07: 'to_review', L05: 'ok' }),
+      _seedZone('COM', 'Parties communes', 'commun', {}),
+    ],
+    createdAt: '2026-09-09T09:00:00.000Z',
+  },
+]
+
+export function getVisits2(): VisitSession[] {
+  return loadState<VisitSession[]>(KEYS.visits2, DEFAULT_VISITS2)
+}
+
+export function saveVisits2(visits: VisitSession[]): void {
+  saveState(KEYS.visits2, visits)
 }
 
 // ── Lots configuration ───────────────────────────────────────────────────────

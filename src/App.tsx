@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
+import { Visite } from './components/pages/Visite'
 import { CR } from './components/pages/CR'
 import { Reports } from './components/pages/Reports'
 import { Config } from './components/pages/Config'
@@ -19,6 +20,7 @@ export type { Page }
 const PAGE_META: Record<Page, { title: string; sub?: string }> = {
   home:     { title: 'Gambetta — Réhabilitation', sub: 'GAM-2026-001 • 111 Rue Gambetta, Reims' },
   gantt:    { title: 'Planning', sub: 'Déplacez les barres pour modifier les dates' },
+  visite:   { title: 'Visite de chantier', sub: 'Session de contrôle terrain' },
   cr:       { title: 'Comptes Rendus', sub: 'Visites de chantier' },
   finances: { title: 'Finances', sub: 'Marchés, avenants & situations' },
   config:   { title: 'Configuration', sub: 'Paramètres du projet' },
@@ -53,6 +55,7 @@ export default function App() {
         <div className="app-body">
           {currentPage === 'home'     && <Home onNavigate={setCurrentPage} />}
           {currentPage === 'gantt'    && <Gantt />}
+          {currentPage === 'visite'   && <Visite />}
           {currentPage === 'cr'       && <CR />}
           {currentPage === 'finances' && <Finances />}
           {currentPage === 'rapports' && <Reports />}
