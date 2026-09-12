@@ -176,15 +176,28 @@ legend { color: var(--navy); font-weight: 700; font-size: .9rem; padding: 0 6px 
    so the page itself scrolled and dragged the topbar out of view. */
 body { max-width: 100% }
 
+/* Accessibilité — anneau de focus visible au clavier (sans gêner la souris). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* KPI Grid */
-.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px }
-@media (min-width: 768px) { .kpi-grid { grid-template-columns: repeat(4, 1fr) } }
+.kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px }
+@media (max-width: 360px) { .kpi-grid { gap: 8px } }
 .kpi-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s }
 .kpi-card:hover { box-shadow: var(--shadow) }
 .kpi-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; font-weight: 600; letter-spacing: .03em; margin-bottom: 6px }
-.kpi-value { font-size: 27px; font-weight: 700; color: var(--navy); letter-spacing: -.02em }
+.kpi-value { font-size: 27px; font-weight: 700; color: var(--navy); letter-spacing: -.02em; white-space: nowrap }
 .kpi-value.ok { color: var(--ok) }
 .kpi-value.warn { color: var(--bad) }
+/* Trois tuiles côte à côte tiennent sur un téléphone étroit sans déborder. */
+@media (max-width: 430px) {
+  .kpi-card { padding: 12px 10px }
+  .kpi-value { font-size: 21px }
+  .kpi-label { font-size: .64rem; margin-bottom: 4px }
+}
 
 /* Lots */
 .lot-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm); transition: box-shadow .2s }
@@ -312,10 +325,13 @@ section { margin-bottom: 24px }
 .task-slider:disabled { cursor: default }
 .task-slider:disabled::-webkit-slider-thumb { display: none }
 
-/* ── Desktop layout overrides (must come after all base rules) ────────────── */
-@media (min-width: 1024px) {
+/* ── Tablette & desktop : side-nav latérale, contenu plafonné (dès 768px) ─── */
+@media (min-width: 768px) {
   .app-wrapper { flex-direction: row }
-  .side-nav { display: flex; flex-direction: column; width: 226px; flex-shrink: 0; background: linear-gradient(180deg, #02457A 0%, #001B48 100%); padding: 16px 12px 12px; box-shadow: 2px 0 18px rgba(0,27,72,.15); z-index: 10 }
+  .side-nav { display: flex; flex-direction: column; width: 210px; flex-shrink: 0; background: linear-gradient(180deg, #02457A 0%, #001B48 100%); padding: 16px 12px 12px; box-shadow: 2px 0 18px rgba(0,27,72,.15); z-index: 10 }
   .bot-nav { display: none }
   .app-body > * { max-width: 1400px; margin-left: auto; margin-right: auto; width: 100% }
+}
+@media (min-width: 1024px) {
+  .side-nav { width: 226px }
 }

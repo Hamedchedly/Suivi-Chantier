@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Building2, ChevronDown, ChevronRight, DoorClosed, Layers, Pencil, Plus,
-  Trees, Trash2, Users, X,
+  Trees, Trash2, Users, X, MoreHorizontal,
 } from 'lucide-react'
 import {
   Unit, UnitKind, UnitInput, UnitError, TaskUnitLink, UNIT_KIND_LABEL, ALLOWED_CHILDREN,
@@ -10,6 +10,7 @@ import {
 } from '../../lib/units'
 import { GanttTask } from '../../types/gantt'
 import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks } from '../../lib/repo'
+import { SavedIndicator } from '../common/SavedIndicator'
 
 const KIND_ICON: Record<UnitKind, typeof Building2> = {
   building: Building2,
@@ -28,6 +29,14 @@ export function Structure() {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(getUnits().map(u => u.id)))
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
+  // Actions d'une ligne repliées dans un menu « … » pour ne pas saturer le mobile.
+  const [menuUnit, setMenuUnit] = useState<string | null>(null)
+  // Signature légère : ne change que si la structure ou un rattachement change.
+  const savedSignature = useMemo(
+    () => units.map(u => `${u.id}:${u.name}:${u.code ?? ''}:${u.parentId ?? ''}`).join('|')
+      + '#' + links.map(l => `${l.taskId}~${l.unitId}`).join('|'),
+    [units, links],
+  )
 
   // Formulaire de création / renommage
   const [form, setForm] = useState<(UnitInput & { editing?: string }) | null>(null)
@@ -135,17 +144,30 @@ export function Structure() {
             )}
           </button>
 
-          {canHold.map(kind => (
-            <button key={kind} onClick={() => startCreate(unit.id, kind)} style={iconBtn}
-              title={`Ajouter : ${UNIT_KIND_LABEL[kind].toLowerCase()}`}>
-              <Plus size={13} /><span style={{ fontSize: '10px' }}>{UNIT_KIND_LABEL[kind]}</span>
-            </button>
-          ))}
-          <button onClick={() => startEdit(unit)} style={iconBtn} title="Renommer"><Pencil size={13} /></button>
-          <button onClick={() => setConfirm(unit.id)} style={{ ...iconBtn, color: '#b42318' }} title="Supprimer">
-            <Trash2 size={13} />
+          <button
+            onClick={() => { setMenuUnit(m => (m === unit.id ? null : unit.id)); setConfirm(null) }}
+            style={{ ...iconBtn, background: menuUnit === unit.id ? 'var(--line)' : 'none', borderRadius: '6px' }}
+            aria-label={`Actions pour ${unit.name}`} aria-expanded={menuUnit === unit.id}>
+            <MoreHorizontal size={16} />
           </button>
         </div>
+
+        {/* Menu d'actions de la ligne — ajouts, renommage, suppression */}
+        {menuUnit === unit.id && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginLeft: `${8 + depth * 16}px`, marginBottom: '6px', padding: '8px', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
+            {canHold.map(kind => (
+              <button key={kind} onClick={() => { startCreate(unit.id, kind); setMenuUnit(null) }} style={menuBtn}>
+                <Plus size={13} /> {UNIT_KIND_LABEL[kind]}
+              </button>
+            ))}
+            <button onClick={() => { startEdit(unit); setMenuUnit(null) }} style={menuBtn}>
+              <Pencil size={13} /> Renommer
+            </button>
+            <button onClick={() => { setConfirm(unit.id); setMenuUnit(null) }} style={{ ...menuBtn, color: '#b42318', borderColor: '#f3c9c4' }}>
+              <Trash2 size={13} /> Supprimer
+            </button>
+          </div>
+        )}
 
         {confirm === unit.id && (
           <div style={{ ...confirmBox, marginLeft: `${8 + depth * 16}px` }}>
@@ -240,8 +262,9 @@ export function Structure() {
   }
 
   return (
-    <div style={{ padding: '14px', paddingBottom: '80px' }}>
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '14px', background: '#eef2f6', padding: '3px', borderRadius: '8px', maxWidth: '420px' }}>
+    <div style={{ padding: '14px', paddingBottom: '80px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px', flex: '0 1 420px' }}>
         {([['zones', 'Par bâtiment / zone'], ['taches', 'Par tâche']] as const).map(([id, label]) => (
           <button key={id} onClick={() => setMode(id)} style={{
             flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600,
@@ -250,6 +273,8 @@ export function Structure() {
             boxShadow: mode === id ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
           }}>{label}</button>
         ))}
+        </div>
+        <SavedIndicator watch={savedSignature} />
       </div>
 
       {/* Formulaire de création / renommage */}
@@ -362,6 +387,7 @@ const checkRow: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 const checkbox: React.CSSProperties = { width: '15px', height: '15px', flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }
 const iconBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '3px', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '3px 4px', borderRadius: '6px' }
 const smallBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 9px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', fontWeight: 600, color: 'var(--navy)', cursor: 'pointer' }
+const menuBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 11px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--navy)', cursor: 'pointer' }
 const primaryBtn: React.CSSProperties = { padding: '8px 15px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }
 const dangerBtn: React.CSSProperties = { padding: '5px 10px', borderRadius: '7px', border: 'none', background: '#b42318', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }
 const ghostBtn: React.CSSProperties = { padding: '5px 9px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', cursor: 'pointer' }

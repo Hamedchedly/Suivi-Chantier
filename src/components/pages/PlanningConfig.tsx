@@ -7,6 +7,7 @@ import {
   PlanningError, PLANNING_ERROR_LABEL, createLot, createTask, renameTask,
   setTaskDates, removeTask,
 } from '../../lib/planning'
+import { SavedIndicator } from '../common/SavedIndicator'
 
 const iso = (d: Date) => {
   const x = new Date(d); x.setHours(0, 0, 0, 0)
@@ -161,7 +162,7 @@ export function PlanningConfig() {
             <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '860px', fontSize: '12px' }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, textAlign: 'left', minWidth: '210px' }}>Tâche</th>
+                  <th style={{ ...th, ...stickyLeft, textAlign: 'left', minWidth: '190px', zIndex: 3 }}>Tâche</th>
                   <th style={th}>Semaines</th>
                   <th style={th}>Début contractuel</th>
                   <th style={th}>Fin contractuelle</th>
@@ -198,7 +199,7 @@ export function PlanningConfig() {
 
                     {(lot.children ?? []).map(t => (
                       <tr key={t.id}>
-                        <td style={{ ...td, textAlign: 'left' }}>
+                        <td style={{ ...td, ...stickyLeft, textAlign: 'left', background: '#fff' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             {t.is_milestone && <Flag size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
                             <input value={t.title} onChange={e => rename(t.id, e.target.value)}
@@ -275,8 +276,9 @@ export function PlanningConfig() {
           </div>
         )}
         {leaves.length > 0 && (
-          <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--muted)', marginTop: '10px' }}>
             Les modifications sont enregistrées automatiquement.
+            <SavedIndicator watch={tasks} />
           </div>
         )}
       </div>
@@ -295,4 +297,6 @@ const formBox: React.CSSProperties = { border: '1px solid var(--line)', borderRa
 const errMsg: React.CSSProperties = { fontSize: '12px', color: '#b42318', marginTop: '8px' }
 const th: React.CSSProperties = { padding: '9px 10px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--muted)', background: '#f8fafc', borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap', position: 'sticky', top: 0 }
 const td: React.CSSProperties = { padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid var(--line)', color: 'var(--ink)' }
+// Colonne « Tâche » figée à gauche : le libellé reste lisible pendant le défilement horizontal.
+const stickyLeft: React.CSSProperties = { position: 'sticky', left: 0, zIndex: 2, boxShadow: '2px 0 0 var(--line)' }
 const cellInput: React.CSSProperties = { padding: '5px 7px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', boxSizing: 'border-box', width: '140px', fontFamily: 'inherit' }

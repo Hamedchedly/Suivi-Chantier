@@ -3,6 +3,7 @@ import { Download, Upload } from 'lucide-react'
 import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
 import { PlanningConfig } from './PlanningConfig'
 import { Project, updateProject } from '../../lib/projects'
+import { SavedIndicator } from '../common/SavedIndicator'
 
 type ConfigTab = 'project' | 'planning' | 'lots' | 'email' | 'export' | 'backup'
 
@@ -189,8 +190,9 @@ export function Config({ project, projects, onProjectChange }: ConfigProps) {
               />
             </div>
 
-            <div style={{ marginTop: '12px', fontSize: '12px', color: '#5b7183' }}>
+            <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
               Les modifications sont enregistrées au fil de la saisie.
+              <SavedIndicator watch={project} />
             </div>
           </div>
         )}

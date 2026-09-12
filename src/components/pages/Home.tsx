@@ -1,11 +1,12 @@
 import {
   Play, AlertTriangle, CalendarClock, MapPin, ClipboardCheck, Clock,
-  BarChart3, Flag, Building2, FileText, FolderOpen, ChevronRight,
+  BarChart3, Flag, Building2, FileText, FolderOpen, ChevronRight, Network, ListChecks,
 } from 'lucide-react'
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
 import type { Page } from '../../App'
 import {
   getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getVisits, getCommitments,
+  getZoneRefs, getUnits, getLotsConfig,
 } from '../../lib/repo'
 import {
   overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
@@ -13,13 +14,16 @@ import {
 import { projectFinance, euros } from '../../lib/finance'
 import { isOverdue, reserveKind } from '../../lib/reserves'
 import { visitKindLabel, visitWorksProgress, progressGap } from '../../lib/visits'
-import { LOGEMENTS } from '../../data/zones'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
 }
 
-const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.label ?? id : '')
+// Libellés de zone : lus depuis les unités du projet actif (pas un catalogue figé).
+const zoneLabelLookup = () => {
+  const map = new Map(getZoneRefs().map(z => [z.refId, z.label]))
+  return (id?: string) => (id ? map.get(id) ?? id : '')
+}
 const fmtFr = (iso: string) => { const [y, m, d] = iso.split('-'); return d ? `${d}/${m}/${y}` : iso }
 const fmtTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) : null
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}` }
@@ -28,6 +32,15 @@ export function Home({ onNavigate }: HomeProps) {
   const today = new Date()
   const tasks = getGanttTasks()
   const reserves = getReserves()
+  const logementLabel = zoneLabelLookup()
+
+  // Étapes de configuration d'un projet neuf, pour ne pas laisser l'écran vide.
+  const setupSteps = [
+    { done: getUnits().length > 0, page: 'structure' as Page, icon: <Network size={16} />, label: 'Décrire le chantier', sub: 'Bâtiments, niveaux, logements et zones' },
+    { done: tasks.length > 0, page: 'gantt' as Page, icon: <BarChart3 size={16} />, label: 'Construire le planning', sub: 'Lots, tâches et dates contractuelles' },
+    { done: getLotsConfig().length > 0, page: 'entreprises' as Page, icon: <Building2 size={16} />, label: 'Ajouter les entreprises', sub: 'Lots, contacts et engagements' },
+  ]
+  const showSetup = setupSteps.some(s => !s.done)
 
   const progress = overallProgress(tasks)
   const drift = maxDrift(tasks)
@@ -63,7 +76,38 @@ export function Home({ onNavigate }: HomeProps) {
   ]
 
   return (
-    <div style={{ padding: '16px 12px', paddingBottom: '16px' }}>
+    <div style={{ padding: '16px 12px', paddingBottom: '16px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+      {/* Onboarding — visible tant que le chantier n'est pas décrit */}
+      {showSetup && (
+        <section style={{ marginBottom: '16px' }}>
+          <div className="card" style={{ padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <ListChecks size={16} color="var(--navy)" />
+              <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>Configurez votre chantier</strong>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 10px' }}>
+              Quelques étapes pour démarrer le suivi de cette opération.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {setupSteps.map((s, i) => (
+                <button key={s.page} onClick={() => onNavigate(s.page)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '11px', width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', background: '#fff', border: `1px solid ${s.done ? 'var(--ok)' : 'var(--line)'}` }}>
+                  <div style={{ width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: s.done ? 'var(--ok-bg)' : 'var(--sky-soft)', color: s.done ? 'var(--ok)' : 'var(--navy)', fontWeight: 700, fontSize: '13px' }}>
+                    {s.done ? '✓' : i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{s.label}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{s.sub}</div>
+                  </div>
+                  {s.icon}
+                  <ChevronRight size={15} color="var(--muted)" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Hero — avancement gauge */}
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', padding: '16px 18px' }}>
         <div style={{ width: '120px', height: '120px', flexShrink: 0, position: 'relative' }}>
@@ -85,12 +129,11 @@ export function Home({ onNavigate }: HomeProps) {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — l'avancement est déjà porté par la jauge ci-dessus */}
       <div className="kpi-grid">
-        <KPICard label="Avancement" value={`${progress}%`} variant="ok" />
         <KPICard label="Dérive max" value={`+${drift} j`} variant={drift > 0 ? 'warn' : undefined} />
         <KPICard label="Retards" value={late.length} variant={late.length > 0 ? 'warn' : undefined} />
-        <KPICard label="Réserves" value={openReserves.length} variant={openReserves.length > 0 ? 'warn' : undefined} />
+        <KPICard label="Réserves ouvertes" value={openReserves.length} variant={openReserves.length > 0 ? 'warn' : undefined} />
       </div>
 
       {/* Visites — pilotage */}
