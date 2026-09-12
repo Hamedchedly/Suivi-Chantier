@@ -3,7 +3,7 @@ import { GanttTask } from '../types/gantt'
 import { Reserve } from './reserves'
 import { Marche, Avenant, Situation } from './finance'
 import { serialize, deserialize } from './storage'
-import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getProjects, getCurrentProjectId } from './repo'
+import { getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getProjects, getCurrentProjectId, getZoneRefs } from './repo'
 import { findProject } from './projects'
 
 export interface ShareProject {
@@ -21,6 +21,8 @@ export interface Snapshot {
   marches: Marche[]
   avenants: Avenant[]
   situations: Situation[]
+  /** Libellés des zones (refId → libellé), pour situer les réserves côté MOA. */
+  zones?: Record<string, string>
 }
 
 /** En-tête du lien partagé : l'opération active, ou un libellé neutre si aucune. */
@@ -41,6 +43,7 @@ export function buildSnapshot(): Snapshot {
     marches: getMarches(),
     avenants: getAvenants(),
     situations: getSituations(),
+    zones: Object.fromEntries(getZoneRefs().map(z => [z.refId, z.label])),
   }
 }
 

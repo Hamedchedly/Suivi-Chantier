@@ -81,6 +81,26 @@ describe('buildZonesFromPlanning', () => {
     expect(zones[1].tasks).toHaveLength(0)
     expect(zoneState(zones[1])).toBe('not_started')
   })
+
+  it('utilise le résolveur de rattachement fourni (modèle tâche→zone)', () => {
+    // Des tâches sans logement_id, rattachées via un résolveur externe.
+    const t2 = [parent('L', 'L05', [
+      leaf({ id: 'x1', lot_id: 'L05' }),
+      leaf({ id: 'x2', lot_id: 'L05' }),
+    ])]
+    const linked: Record<string, string> = { x1: 'A-101', x2: 'COM' }
+    const zones = buildZonesFromPlanning(t2, refs, (task, refId) => linked[task.id] === refId)
+    expect(zones[0].tasks.map(t => t.taskId)).toEqual(['x1'])
+    expect(zones[1].tasks.map(t => t.taskId)).toEqual(['x2'])
+  })
+
+  it('retombe sur la date prévisionnelle quand aucune baseline n’existe', () => {
+    const t2 = [parent('L', 'L05', [
+      leaf({ id: 'x1', lot_id: 'L05', logement_id: 'A-101', planned_end: d('2026-05-10') }),
+    ])]
+    const check0 = buildZonesFromPlanning(t2, refs)[0].tasks[0]
+    expect(check0.baselineEnd).toBe('2026-05-10')
+  })
 })
 
 // ── Lot grouping ─────────────────────────────────────────────────────────────

@@ -225,10 +225,17 @@ export interface ZoneRef {
 
 /**
  * Build a session's zones from the real planning: every leaf task attached to a
- * selected logement becomes a checkpoint, carrying its contractual and planned
+ * selected zone becomes a checkpoint, carrying its contractual and planned
  * dates. A zone with no planning task stays valid (notes / photos / réserves).
+ *
+ * `belongs` décide si une tâche concerne une zone. Par défaut on retombe sur
+ * l'ancien champ `logement_id` ; le module Visite passe un résolveur basé sur
+ * les rattachements tâche→unité saisis dans « Bâtiments & zones ».
  */
-export function buildZonesFromPlanning(tasks: GanttTask[], refs: ZoneRef[]): VisitZone[] {
+export function buildZonesFromPlanning(
+  tasks: GanttTask[], refs: ZoneRef[],
+  belongs: (task: GanttTask, refId: string) => boolean = (t, refId) => t.logement_id === refId,
+): VisitZone[] {
   const leaves = flattenLeaves(tasks)
   return refs.map(ref => ({
     refId: ref.refId,
@@ -238,14 +245,15 @@ export function buildZonesFromPlanning(tasks: GanttTask[], refs: ZoneRef[]): Vis
     buildingLabel: ref.buildingLabel,
     override: null,
     tasks: leaves
-      .filter(t => t.logement_id === ref.refId)
+      .filter(t => belongs(t, ref.refId))
       .map(t => ({
         taskId: t.id,
         lotId: t.lot_id,
         title: t.title,
         state: 'not_checked' as TaskState,
         plannedProgress: t.progress,
-        baselineEnd: t.baseline_end ? isoDay(t.baseline_end) : undefined,
+        // Contractuel = prévisionnel : à défaut de baseline, on prend planned_end.
+        baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
         plannedEnd: isoDay(t.planned_end),
         company: t.company_id,
       })),

@@ -55,6 +55,12 @@ describe('share snapshot encode/decode', () => {
     expect(snap.v).toBe(1)
     expect(snap.project.name).toBe('Opération')
     expect(snap.tasks).toEqual([])
+    expect(snap.zones).toEqual({})
+  })
+
+  it('embarque et restitue les libellés de zone', () => {
+    const decoded = decodeSnapshot(encodeSnapshot(snapshot({ zones: { 'L5': 'Logement 5' } })))
+    expect(decoded!.zones).toEqual({ 'L5': 'Logement 5' })
   })
 
   it('returns null on garbage input', () => {

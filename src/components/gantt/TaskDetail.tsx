@@ -1,7 +1,8 @@
 import { X } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { driftDays } from '../../lib/schedule'
-import { LOGEMENTS } from '../../data/zones'
+import { getTaskUnits, getZoneRefs } from '../../lib/repo'
+import { unitIdsForTask } from '../../lib/units'
 
 const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   'completed': { label: 'Terminé', color: '#15803d', bg: '#e6f6ec' },
@@ -11,7 +12,12 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
   'not-started': { label: 'Non démarré', color: '#5b7183', bg: '#eef2f6' },
   'cancelled': { label: 'Annulé', color: '#6b21a8', bg: '#f3e8ff' },
 }
-const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.label ?? id : '—')
+/** Zones rattachées à la tâche (via « Bâtiments & zones »), pour affichage. */
+const zonesOfTask = (taskId: string): string => {
+  const labels = new Map(getZoneRefs().map(z => [z.refId, z.label]))
+  const names = unitIdsForTask(getTaskUnits(), taskId).map(id => labels.get(id) ?? id)
+  return names.length ? names.join(', ') : '—'
+}
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr') : '—')
 
 interface Props {
@@ -66,7 +72,7 @@ export function TaskDetail({ task, onClose, onProgress, onDates, totalFloat }: P
           </div>
 
           <Row label="Lot" value={task.lot_id || '—'} />
-          <Row label="Logement" value={logementLabel(task.logement_id)} />
+          <Row label="Zones" value={zonesOfTask(task.id)} />
           <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
           {/* Le contractuel EST le prévisionnel : une seule paire de dates saisies. */}
           {editable ? (

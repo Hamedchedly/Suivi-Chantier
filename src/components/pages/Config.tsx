@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Download, Upload } from 'lucide-react'
+import { Download, Upload, Plus, Trash2 } from 'lucide-react'
 import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
 import { PlanningConfig } from './PlanningConfig'
 import { Project, updateProject } from '../../lib/projects'
@@ -25,6 +25,15 @@ export function Config({ project, projects, onProjectChange }: ConfigProps) {
   const updateLot = (id: string, field: keyof LotContact, value: string) => {
     setLots(prev => prev.map(l => (l.id === id ? { ...l, [field]: value } : l)))
   }
+  const addLot = () => {
+    // Code lisible et unique : LOT01, LOT02… en comblant les trous.
+    let n = 1
+    const codes = new Set(lots.map(l => l.id))
+    while (codes.has(`LOT${String(n).padStart(2, '0')}`)) n++
+    const id = `LOT${String(n).padStart(2, '0')}`
+    setLots(prev => [...prev, { id, name: `Lot ${String(n).padStart(2, '0')}`, company: '', contactName: '', email: '', phone: '' }])
+  }
+  const removeLot = (id: string) => setLots(prev => prev.filter(l => l.id !== id))
 
   /** Écrit directement dans le registre des opérations : la saisie est persistée. */
   const patchProject = (field: 'name' | 'address' | 'moa' | 'moe' | 'amo', value: string) => {
@@ -203,9 +212,32 @@ export function Config({ project, projects, onProjectChange }: ConfigProps) {
         {/* Lots Tab */}
         {activeTab === 'lots' && (
           <div style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <p style={{ fontSize: '12px', color: '#5b7183', margin: 0 }}>
+                Les lots et leurs entreprises alimentent les réserves, la vue Entreprises et les finances.
+              </p>
+              <button onClick={addLot} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', border: 'none', background: '#02457A', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                <Plus size={15} /> Ajouter un lot
+              </button>
+            </div>
+
+            {lots.length === 0 && (
+              <div style={{ fontSize: '12px', color: '#5b7183', padding: '18px', border: '1px dashed #d1dce5', borderRadius: '10px' }}>
+                Aucun lot. Ajoutez un lot et son entreprise pour commencer.
+              </div>
+            )}
+
             {lots.map(lot => (
               <div key={lot.id} style={{ border: '1px solid #e4ecf2', borderRadius: '10px', padding: '12px', background: '#fff' }}>
-                <div style={{ fontWeight: '600', color: '#02457A', fontSize: '13px', marginBottom: '10px' }}>{lot.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#018ABE', background: '#D6E8EE', borderRadius: '6px', padding: '3px 7px' }}>{lot.id}</span>
+                  <div style={{ flex: 1 }}>
+                    <LotField label="Libellé du lot" value={lot.name} onChange={v => updateLot(lot.id, 'name', v)} />
+                  </div>
+                  <button onClick={() => removeLot(lot.id)} title="Supprimer le lot" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '4px', alignSelf: 'flex-start', marginTop: '18px' }}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
                 <LotField label="Entreprise" value={lot.company} onChange={v => updateLot(lot.id, 'company', v)} />
                 <LotField label="Contact" value={lot.contactName} onChange={v => updateLot(lot.id, 'contactName', v)} />
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -218,9 +250,12 @@ export function Config({ project, projects, onProjectChange }: ConfigProps) {
                 </div>
               </div>
             ))}
-            <div style={{ fontSize: '11px', color: '#5b7183' }}>
-              Les modifications sont enregistrées automatiquement.
-            </div>
+            {lots.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#5b7183' }}>
+                Les modifications sont enregistrées automatiquement.
+                <SavedIndicator watch={lots} />
+              </div>
+            )}
           </div>
         )}
 

@@ -22,10 +22,12 @@ import type { RemarkInput } from '../visite/ZoneControl'
 import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
   getCommitments, saveCommitments, getLotsConfig, getVisitKinds, saveVisitKinds,
-  logActivity, getZoneRefs, type LotContact,
+  logActivity, getZoneRefs, getUnits, getTaskUnits, type LotContact,
 } from '../../lib/repo'
 import { getProjects, getCurrentProjectId } from '../../lib/repo'
 import { findProject, projectLabel, projectSubtitle } from '../../lib/projects'
+import { taskConcernsUnit } from '../../lib/units'
+import type { GanttTask } from '../../types/gantt'
 import { SelectionBar } from '../common/SelectionBar'
 import { EMPTY_SELECTION, Selection, toggle, toggleAll, removeSelected } from '../../lib/selection'
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
@@ -589,6 +591,11 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
   const [companies, setCompanies] = useState<Set<string>>(new Set())
   // Catalogue des zones du projet actif — vide tant que l'opération n'est pas décrite.
   const zoneRefs = useMemo(() => getZoneRefs(), [])
+  // Une tâche concerne une zone via les rattachements de « Bâtiments & zones ».
+  const zoneBelongs = useMemo(() => {
+    const units = getUnits(); const links = getTaskUnits()
+    return (t: GanttTask, refId: string) => taskConcernsUnit(units, links, t.id, refId)
+  }, [])
   const [selected, setSelected] = useState<Set<string>>(() => new Set(getZoneRefs().map(r => r.refId)))
 
   const allCompanies = [...new Set(lots.map(l => l.company))].sort()
@@ -634,7 +641,7 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
     onCreate(newVisit({
       kind, kindLabel: kindLabel ?? undefined, date, participants: guests, brief,
       companiesPresent: [...companies],
-      zones: buildZonesFromPlanning(getGanttTasks(), refs),
+      zones: buildZonesFromPlanning(getGanttTasks(), refs, zoneBelongs),
     }))
   }
 

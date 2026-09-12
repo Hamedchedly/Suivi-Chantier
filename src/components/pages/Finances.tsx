@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Plus, Trash2 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import {
-  Avenant, Situation, AvenantStatus,
+  Marche, Avenant, Situation, AvenantStatus,
   projectFinance, marcheFinance, euros,
 } from '../../lib/finance'
 import {
-  getMarches, getAvenants, saveAvenants, getSituations, saveSituations, logActivity,
+  getMarches, saveMarches, getAvenants, saveAvenants, getSituations, saveSituations,
+  getLotsConfig, logActivity,
 } from '../../lib/repo'
+import { SavedIndicator } from '../common/SavedIndicator'
 import { DpgfView } from './DpgfView'
 
 type FinSection = 'marches' | 'avenants' | 'situations' | 'dpgf'
@@ -22,12 +24,26 @@ const lotShort = (lotId: string) => lotId.replace('L', 'LOT ')
 
 export function Finances() {
   const [section, setSection] = useState<FinSection>('marches')
-  const marches = getMarches()
+  const [marches, setMarches] = useState<Marche[]>(getMarches)
   const [avenants, setAvenants] = useState<Avenant[]>(getAvenants)
   const [situations, setSituations] = useState<Situation[]>(getSituations)
+  const [lots] = useState(getLotsConfig)
+  const [form, setForm] = useState<{ lotId: string; amountHT: string } | null>(null)
 
+  useEffect(() => { saveMarches(marches) }, [marches])
   useEffect(() => { saveAvenants(avenants) }, [avenants])
   useEffect(() => { saveSituations(situations) }, [situations])
+
+  const addMarche = () => {
+    if (!form) return
+    const lot = lots.find(l => l.id === form.lotId)
+    const amountHT = Math.max(0, parseFloat(form.amountHT.replace(',', '.')) || 0)
+    const m: Marche = { id: `m${Date.now()}`, lotId: form.lotId, company: lot?.company || '', amountHT }
+    setMarches(prev => [...prev, m])
+    logActivity('finance', `Marché créé — ${form.lotId} (${euros(amountHT)})`)
+    setForm(null)
+  }
+  const removeMarche = (id: string) => setMarches(prev => prev.filter(m => m.id !== id))
 
   const pf = projectFinance(marches, avenants, situations)
   const donutData = [
@@ -100,16 +116,55 @@ export function Finances() {
       {/* Marchés */}
       {section === 'marches' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            <SavedIndicator watch={marches} />
+            {!form && (
+              <button onClick={() => setForm({ lotId: lots[0]?.id ?? '', amountHT: '' })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', border: 'none', background: 'var(--navy)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', marginLeft: 'auto' }}>
+                <Plus size={15} /> Ajouter un marché
+              </button>
+            )}
+          </div>
+
+          {form && (
+            <div style={{ ...card, display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={form.lotId} onChange={e => setForm({ ...form, lotId: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', flex: '1 1 160px' }}>
+                {lots.length === 0 && <option value="">Aucun lot — créez-en dans Configuration</option>}
+                {lots.map(l => <option key={l.id} value={l.id}>{l.id} — {l.company || l.name}</option>)}
+              </select>
+              <input type="number" min={0} inputMode="decimal" placeholder="Montant HT (€)" value={form.amountHT}
+                onChange={e => setForm({ ...form, amountHT: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', width: '150px' }} />
+              <button onClick={addMarche} disabled={!form.lotId}
+                style={{ padding: '8px 14px', borderRadius: '7px', border: 'none', background: form.lotId ? 'var(--accent)' : '#e8eef4', color: form.lotId ? '#fff' : 'var(--muted)', fontSize: '13px', fontWeight: 700, cursor: form.lotId ? 'pointer' : 'default' }}>
+                Créer
+              </button>
+              <button onClick={() => setForm(null)} style={{ padding: '8px 12px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>Annuler</button>
+            </div>
+          )}
+
+          {marches.length === 0 && !form && (
+            <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '18px', border: '1px dashed var(--line)', borderRadius: '10px' }}>
+              Aucun marché. Ajoutez le marché de chaque lot pour suivre facturation et paiements.
+            </div>
+          )}
+
           {marches.map(m => {
             const f = marcheFinance(m, avenants, situations)
             return (
               <div key={m.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                   <div>
-                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: '13px' }}>{lotShort(m.lotId)} — {m.company}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: '13px' }}>{lotShort(m.lotId)}{m.company ? ` — ${m.company}` : ''}</div>
                     <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>Montant marché : {euros(f.amount)}</div>
                   </div>
-                  <div style={{ fontWeight: 700, color: 'var(--navy-2)', fontSize: '14px' }}>{f.billedPct}%</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--navy-2)', fontSize: '14px' }}>{f.billedPct}%</div>
+                    <button onClick={() => removeMarche(m.id)} title="Supprimer le marché" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '2px' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div style={{ height: '8px', borderRadius: '4px', background: 'var(--line)', overflow: 'hidden', margin: '8px 0 4px' }}>
                   <div style={{ width: `${f.billedPct}%`, height: '100%', background: 'var(--navy2)' }} />

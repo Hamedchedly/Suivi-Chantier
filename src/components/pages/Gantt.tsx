@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
-import { LOGEMENTS } from '../../data/zones'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
+  getUnits, getTaskUnits, getZoneRefs,
 } from '../../lib/repo'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
+import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
 import GanttTable from '../gantt/GanttTable'
@@ -21,7 +22,6 @@ const LOT_OPTS = [
   { id: 'L07', label: 'LOT 07 — CVC' },
   { id: 'L08', label: 'LOT 08 — Embellissements' },
 ]
-const LOGEMENT_OPTS = LOGEMENTS.map(l => ({ id: l.id, label: l.label, group: l.zoneLabel }))
 
 const updateTaskInList = (list: GanttTask[], id: string, updates: Partial<GanttTask>): GanttTask[] =>
   list.map(t => {
@@ -53,19 +53,26 @@ function makeParent(id: string, title: string, children: GanttTask[]): GanttTask
 }
 
 // Build the display tree from the raw tasks, applying grouping + multi filters.
-function buildTree(tasks: GanttTask[], group: GanttGroup, lots: Set<string>, zones: Set<string>): GanttTask[] {
+interface ZoneOpt { id: string; label: string }
+
+function buildTree(
+  tasks: GanttTask[], group: GanttGroup, lots: Set<string>, zones: Set<string>,
+  zoneRefs: ZoneOpt[], concerns: (taskId: string, unitId: string) => boolean,
+): GanttTask[] {
   const leaves = flattenLeaves(tasks).filter(l =>
     (lots.size === 0 || lots.has(l.lot_id)) &&
-    (zones.size === 0 || (l.logement_id ? zones.has(l.logement_id) : false)),
+    (zones.size === 0 || [...zones].some(z => concerns(l.id, z))),
   )
   if (group === 'chrono') {
     return [...leaves].sort((a, b) => a.planned_start.getTime() - b.planned_start.getTime())
   }
   if (group === 'zone') {
-    return LOGEMENTS
-      .map(lg => {
-        const children = leaves.filter(l => l.logement_id === lg.id)
-        return children.length ? makeParent(`grp-z-${lg.id}`, lg.label, children) : null
+    // Regroupe par zone du projet (bâtiments, logements, communs) via les
+    // rattachements tâche→unité saisis dans « Bâtiments & zones ».
+    return zoneRefs
+      .map(z => {
+        const children = leaves.filter(l => concerns(l.id, z.id))
+        return children.length ? makeParent(`grp-z-${z.id}`, z.label, children) : null
       })
       .filter((t): t is GanttTask => t !== null)
   }
@@ -99,6 +106,13 @@ export function Gantt() {
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
 
+  // Zones du projet (unités) et rattachements tâche→zone, pour le regroupement
+  // et le filtre « Par logement ».
+  const units = useMemo(() => getUnits(), [])
+  const links = useMemo(() => getTaskUnits(), [])
+  const zoneOpts = useMemo(() => getZoneRefs().map(z => ({ id: z.refId, label: z.label, group: z.buildingLabel })), [])
+  const concerns = useMemo(() => (taskId: string, unitId: string) => taskConcernsUnit(units, links, taskId, unitId), [units, links])
+
   useEffect(() => { saveGanttTasks(ganttTasks) }, [ganttTasks])
   useEffect(() => { saveGanttPrefs({ zoom, group, autoSchedule: autoPlan }) }, [zoom, group, autoPlan])
 
@@ -110,8 +124,8 @@ export function Gantt() {
   )
 
   const displayTree = useMemo(
-    () => buildTree(tasksWithCpm, group, selectedLots, selectedZones),
-    [tasksWithCpm, group, selectedLots, selectedZones],
+    () => buildTree(tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns),
+    [tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns],
   )
 
   // Expand all group parents whenever the grouping / filters change.
@@ -206,7 +220,7 @@ export function Gantt() {
           {/* Filters + controls */}
           <div className="g-toolbar">
             <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
-            <MultiSelect label="Logements" options={LOGEMENT_OPTS} selected={selectedZones} onChange={setSelectedZones} />
+            <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
             <div style={{ flex: 1 }} />
             <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique (calculé par CPM)">
               <Zap size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Critique</span>

@@ -4,15 +4,14 @@ import { Snapshot } from '../../lib/share'
 import { GanttViewState } from '../../types/gantt'
 import { overallProgress, maxDrift, lateTasks, lotSummaries } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
-import { LOGEMENTS } from '../../data/zones'
 import GanttTable from '../gantt/GanttTable'
 import '../../styles/gantt.css'
-
-const logementLabel = (id?: string) => (id ? LOGEMENTS.find(l => l.id === id)?.label ?? id : '')
 
 export function ShareView({ snapshot }: { snapshot: Snapshot }) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const today = new Date()
+  // Libellés de zone embarqués dans l'instantané (le MOA n'a pas accès au projet).
+  const logementLabel = (id?: string) => (id ? snapshot.zones?.[id] ?? id : '')
 
   const tasks = snapshot.tasks
   const openReserves = snapshot.reserves.filter(r => r.status === 'open')
