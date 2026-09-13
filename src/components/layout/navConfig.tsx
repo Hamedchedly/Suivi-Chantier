@@ -6,13 +6,13 @@ import {
 export type Page =
   | 'home' | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances'
   | 'config' | 'rapports' | 'alertes' | 'comptes' | 'projets' | 'moncompte'
-  | 'structure'
+  | 'structure' | 'demandes'
 
 /** Pages atteintes depuis la feuille « Gestion » — l'onglet reste alors actif. */
 export const GESTION_PAGES: Page[] = ['cr', 'entreprises', 'finances', 'rapports', 'structure', 'config']
 
 /** Pages de l'espace utilisateur, accessibles par l'icône de compte en haut à droite. */
-export const ACCOUNT_PAGES: Page[] = ['projets', 'moncompte', 'comptes']
+export const ACCOUNT_PAGES: Page[] = ['projets', 'moncompte', 'comptes', 'demandes']
 
 /**
  * Navigation principale — exactement 5 entrées, autant que de colonnes dans la

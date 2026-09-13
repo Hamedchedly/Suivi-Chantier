@@ -10,6 +10,11 @@ import { Finances } from './components/pages/Finances'
 import { Alertes } from './components/pages/Alertes'
 import { ShareView } from './components/pages/ShareView'
 import { Login } from './components/pages/Login'
+import { Landing } from './components/pages/Landing'
+import { DemoRequest } from './components/pages/DemoRequest'
+import { DemoRequests } from './components/pages/DemoRequests'
+import { ForgotPassword } from './components/pages/ForgotPassword'
+import { ResetPassword } from './components/pages/ResetPassword'
 import { Comptes } from './components/pages/Comptes'
 import { MonCompte } from './components/pages/MonCompte'
 import { Projets } from './components/pages/Projets'
@@ -46,6 +51,7 @@ const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
   rapports: { title: 'Rapports', sub: 'CRs envoyés et brouillons' },
   alertes:  { title: 'Alertes & vigilance', sub: 'Retards, dérives et points à évoquer' },
   comptes:  { title: 'Comptes', sub: 'Utilisateurs, droits et accès' },
+  demandes: { title: 'Demandes de démo', sub: 'Auto-inscriptions à valider' },
   projets:  { title: 'Mes opérations', sub: 'Créer, ouvrir et gérer vos chantiers' },
   moncompte: { title: 'Mon compte', sub: 'Adresse e-mail et mot de passe' },
 }
@@ -62,22 +68,45 @@ export default function App() {
   // local (comptes en navigateur). L'interface est identique dans les deux cas.
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured)
   const [remoteUser, setRemoteUser] = useState<User | null>(null)
+  // Écrans avant connexion : accueil (vitrine), connexion, demande de démo, oubli.
+  type PreAuth = 'landing' | 'login' | 'demo' | 'forgot'
+  const [preAuth, setPreAuth] = useState<PreAuth>('landing')
+  const [authNotice, setAuthNotice] = useState<string | null>(null)
+  const [recovery, setRecovery] = useState(false) // lien de réinitialisation suivi
 
   useEffect(() => {
     if (!isSupabaseConfigured) return
     let alive = true
     let syncedUid: string | null = null
 
-    const handle = async (_event: unknown, sbSession: { user: { id: string } } | null) => {
+    let recovering = false
+    const handle = async (event: string, sbSession: { user: { id: string } } | null) => {
       if (!alive) return
-      // Déconnexion : couper la sync et purger le cache local (pas de fuite entre comptes).
-      if (!sbSession) {
-        disableSync(); clearLocalAppState(); syncedUid = null
-        setRemoteUser(null); setRemoteReady(true)
+      // Lien de réinitialisation suivi : afficher le formulaire de nouveau mot de passe.
+      if (event === 'PASSWORD_RECOVERY') {
+        recovering = true; setRecovery(true); setRemoteReady(true)
         return
       }
-      // Nouvelle session (connexion / rechargement) : fusion locale ↔ serveur
-      // (dernière-écriture-gagne), puis activation du write-through.
+      // Pendant la réinitialisation, ignorer les autres événements jusqu'à la déconnexion.
+      if (recovering && event !== 'SIGNED_OUT') { setRemoteReady(true); return }
+      // Déconnexion : couper la sync et purger le cache local (pas de fuite entre comptes).
+      if (!sbSession) {
+        disableSync(); clearLocalAppState(); syncedUid = null; recovering = false
+        setRecovery(false); setRemoteUser(null); setRemoteReady(true)
+        return
+      }
+      // Profil d'abord : un compte désactivé (en attente de validation) ne rentre pas.
+      const u = await currentProfileUser()
+      if (!alive) return
+      if (!u || u.disabled) {
+        await signOutRemote()
+        setAuthNotice(u?.disabled
+          ? 'Votre compte est en attente de validation par un administrateur.'
+          : null)
+        setPreAuth('login')
+        return // l'événement SIGNED_OUT qui suit remet remoteUser à null
+      }
+      // Nouvelle session : fusion locale ↔ serveur, puis activation du write-through.
       const uid = sbSession.user.id
       if (uid !== syncedUid) {
         await initRemoteSession(uid)
@@ -85,8 +114,6 @@ export default function App() {
         syncedUid = uid
         setProjects(getProjects()); setProjectId(getCurrentProjectId())
       }
-      const u = await currentProfileUser()
-      if (!alive) return
       setRemoteUser(u); setRemoteReady(true)
     }
 
@@ -116,6 +143,7 @@ export default function App() {
     if (isSupabaseConfigured) { signOutRemote(); setRemoteUser(null) }
     else setSession(null)
     setCurrentPage('home')
+    setAuthNotice(null); setPreAuth('landing')
   }
 
   const impersonate = (target: User) => {
@@ -191,14 +219,41 @@ export default function App() {
     )
   }
 
-  // No session → nothing but the sign-in screen.
+  // Pas de session → parcours avant connexion : accueil (vitrine) par défaut,
+  // puis connexion, demande de démo, oubli / réinitialisation de mot de passe.
   if (!currentUser) {
+    if (recovery) {
+      return (
+        <ResetPassword onDone={() => {
+          setRecovery(false); setPreAuth('login')
+          setAuthNotice('Mot de passe modifié. Connectez-vous avec le nouveau.')
+        }} />
+      )
+    }
+    if (preAuth === 'login') {
+      return (
+        <Login
+          remote={isSupabaseConfigured}
+          users={users}
+          onSignIn={signIn}
+          onRemoteSignedIn={() => setCurrentPage('home')}
+          onForgot={isSupabaseConfigured ? () => setPreAuth('forgot') : undefined}
+          onBack={() => { setAuthNotice(null); setPreAuth('landing') }}
+          notice={authNotice}
+        />
+      )
+    }
+    if (preAuth === 'forgot') {
+      return <ForgotPassword onBack={() => setPreAuth('login')} />
+    }
+    if (preAuth === 'demo' && isSupabaseConfigured) {
+      return <DemoRequest onBack={() => setPreAuth('landing')} onSignIn={() => setPreAuth('login')} />
+    }
     return (
-      <Login
+      <Landing
         remote={isSupabaseConfigured}
-        users={users}
-        onSignIn={signIn}
-        onRemoteSignedIn={() => setCurrentPage('home')}
+        onConnect={() => { setAuthNotice(null); setPreAuth('login') }}
+        onRequestDemo={() => setPreAuth('demo')}
       />
     )
   }
@@ -211,7 +266,7 @@ export default function App() {
     structure: 'structure', config: 'config',
   }
   const allowed = (p: Page): boolean => {
-    if (p === 'comptes') return isSuperadmin(currentUser)
+    if (p === 'comptes' || p === 'demandes') return isSuperadmin(currentUser)
     const f = PAGE_FEATURE[p]
     return f ? hasFeature(currentUser, f) : true
   }
@@ -220,7 +275,8 @@ export default function App() {
 
   // Sans opération, seul l'espace « Mes opérations » a du sens.
   const noProject = !project
-  const page: Page = noProject && currentPage !== 'moncompte' && currentPage !== 'comptes'
+  const ACCOUNT_ONLY: Page[] = ['moncompte', 'comptes', 'demandes']
+  const page: Page = noProject && !ACCOUNT_ONLY.includes(currentPage)
     ? 'projets'
     : currentPage
 
@@ -237,6 +293,7 @@ export default function App() {
       onSwitchProject={switchProject}
       onNavigate={go}
       onSignOut={signOut}
+      remote={isSupabaseConfigured}
     />
   )
 
@@ -282,8 +339,15 @@ export default function App() {
                   Cette page est réservée aux super-administrateurs.
                 </div>
           )}
+          {page === 'demandes' && (
+            isSuperadmin(currentUser)
+              ? <DemoRequests />
+              : <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
+                  Cette page est réservée aux super-administrateurs.
+                </div>
+          )}
           {page === 'home'     && <Home onNavigate={go} />}
-          {!allowed(page) && page !== 'home' && page !== 'projets' && page !== 'moncompte' && page !== 'comptes' && (
+          {!allowed(page) && !['home', 'projets', 'moncompte', 'comptes', 'demandes'].includes(page) && (
             <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
               Ce module n'est pas activé pour votre compte. Demandez à un super-administrateur.
             </div>

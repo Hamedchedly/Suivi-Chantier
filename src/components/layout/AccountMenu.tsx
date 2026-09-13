@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Building2, Check, FolderKanban, LogOut, User as UserIcon, Users } from 'lucide-react'
+import { Building2, Check, FolderKanban, Inbox, LogOut, User as UserIcon, Users } from 'lucide-react'
 import { User, isSuperadmin } from '../../lib/auth'
 import { Project, projectLabel } from '../../lib/projects'
 import type { Page } from './navConfig'
@@ -11,6 +11,8 @@ interface Props {
   onSwitchProject: (id: string) => void
   onNavigate: (p: Page) => void
   onSignOut: () => void
+  /** Mode serveur : donne accès aux demandes de démo (super-admin). */
+  remote?: boolean
 }
 
 const initials = (name: string) =>
@@ -23,7 +25,7 @@ const row: React.CSSProperties = {
 }
 
 export function AccountMenu({
-  user, projects, currentProjectId, onSwitchProject, onNavigate, onSignOut,
+  user, projects, currentProjectId, onSwitchProject, onNavigate, onSignOut, remote,
 }: Props) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -109,6 +111,11 @@ export function AccountMenu({
           {isSuperadmin(user) && (
             <button onClick={() => go('comptes')} style={row}>
               <Users size={15} style={{ color: 'var(--muted)' }} /> Comptes utilisateurs
+            </button>
+          )}
+          {isSuperadmin(user) && remote && (
+            <button onClick={() => go('demandes')} style={row}>
+              <Inbox size={15} style={{ color: 'var(--muted)' }} /> Demandes de démo
             </button>
           )}
           <button onClick={() => { setOpen(false); onSignOut() }}

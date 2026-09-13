@@ -19,6 +19,7 @@ import type { User, UserRole, Feature } from './auth'
 export interface RemoteProfile {
   id: string
   email: string | null
+  username: string | null
   display_name: string | null
   role: UserRole
   disabled: boolean
@@ -30,7 +31,7 @@ export interface RemoteProfile {
 export function profileToUser(p: RemoteProfile): User {
   return {
     id: p.id,
-    username: p.email ?? p.id,
+    username: p.username ?? p.email ?? p.id,
     email: p.email ?? undefined,
     password: '',                       // jamais exposé côté client
     role: p.role,
@@ -41,6 +42,18 @@ export function profileToUser(p: RemoteProfile): User {
   }
 }
 
+/** Demande de démo (auto-inscription en attente de validation). */
+export interface DemoRequest {
+  id: string
+  user_id: string | null
+  name: string | null
+  email: string | null
+  company: string | null
+  message: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
 function client() {
   if (!supabase) throw new Error('Supabase non configuré')
   return supabase
@@ -49,6 +62,41 @@ function client() {
 export async function signInEmail(email: string, password: string): Promise<{ error?: string }> {
   const { error } = await client().auth.signInWithPassword({ email: email.trim(), password })
   return error ? { error: error.message } : {}
+}
+
+/**
+ * Connexion par e-mail OU identifiant. Un identifiant est résolu en e-mail via
+ * la fonction email_for_login avant le sign-in (Supabase s'authentifie par e-mail).
+ */
+export async function signInWithIdentifier(identifier: string, password: string): Promise<{ error?: string }> {
+  const id = identifier.trim()
+  if (!id) return { error: 'invalid' }
+  let email = id
+  if (!id.includes('@')) {
+    const { data, error } = await client().rpc('email_for_login', { identifier: id })
+    if (error) return { error: error.message }
+    if (!data) return { error: 'invalid' } // identifiant inconnu → erreur générique
+    email = data as string
+  }
+  return signInEmail(email, password)
+}
+
+/** Envoie un e-mail de réinitialisation de mot de passe. */
+export async function requestPasswordReset(email: string): Promise<{ error?: string }> {
+  const { error } = await client().auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: window.location.origin,
+  })
+  return error ? { error: error.message } : {}
+}
+
+/** Auto-inscription (« Demander une démo ») : crée un compte en attente. */
+export async function submitDemoRequest(input: {
+  name: string; email: string; password: string; company?: string; message?: string
+}): Promise<{ error?: string }> {
+  const { data, error } = await client().functions.invoke('demo-signup', { body: input })
+  if (error) return { error: error.message }
+  if (data && typeof data === 'object' && 'error' in data) return { error: String((data as { error: unknown }).error) }
+  return {}
 }
 
 export async function signOutRemote(): Promise<void> {
@@ -93,9 +141,37 @@ export async function adminListUsers(): Promise<User[]> {
   const { data } = await callAdmin<{ users: RemoteProfile[] }>('list')
   return (data?.users ?? []).map(profileToUser)
 }
-export const adminCreateUser = (p: { email: string; password: string; display_name?: string; role?: UserRole; features?: Feature[] }) =>
+export const adminCreateUser = (p: { email: string; password: string; display_name?: string; role?: UserRole; features?: Feature[]; username?: string }) =>
   callAdmin('create', p)
 export const adminSetPassword = (id: string, password: string) => callAdmin('setPassword', { id, password })
-export const adminUpdateUser = (id: string, patch: Partial<{ display_name: string; role: UserRole; disabled: boolean; features: Feature[] }>) =>
+export const adminUpdateUser = (id: string, patch: Partial<{ display_name: string; role: UserRole; disabled: boolean; features: Feature[]; username: string }>) =>
   callAdmin('update', { id, patch })
 export const adminDeleteUser = (id: string) => callAdmin('delete', { id })
+
+// ── Demandes de démo (super-admin, via RLS directe sur demo_requests) ─────────
+
+export async function listDemoRequests(): Promise<DemoRequest[]> {
+  const { data, error } = await client().from('demo_requests').select('*').order('created_at', { ascending: false })
+  if (error) return []
+  return (data ?? []) as DemoRequest[]
+}
+
+/** Valide une demande : active le compte + ouvre les modules choisis. */
+export async function approveDemoRequest(req: DemoRequest, features: Feature[]): Promise<{ error?: string }> {
+  if (!req.user_id) return { error: 'compte introuvable' }
+  const { error } = await adminUpdateUser(req.user_id, { disabled: false, features })
+  if (error) return { error }
+  await client().from('demo_requests').update({ status: 'approved' }).eq('id', req.id)
+  return {}
+}
+
+/** Rejette une demande : supprime le compte en attente (la ligne casse en cascade). */
+export async function rejectDemoRequest(req: DemoRequest): Promise<{ error?: string }> {
+  if (req.user_id) {
+    const { error } = await adminDeleteUser(req.user_id)
+    if (error) return { error }
+  } else {
+    await client().from('demo_requests').delete().eq('id', req.id)
+  }
+  return {}
+}

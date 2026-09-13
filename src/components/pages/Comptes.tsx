@@ -63,7 +63,7 @@ export function Comptes({ users, currentUser, onChange, onImpersonate, remote }:
   const doCreate = (username: string, password: string, role: UserRole, displayName: string, email: string) => {
     if (remote) {
       setCreating(false)
-      run(adminCreateUser({ email, password, role, display_name: displayName || undefined, features: role === 'user' ? ALL_FEATURES : undefined }), `Compte « ${email} » créé`)
+      run(adminCreateUser({ email, password, role, display_name: displayName || undefined, features: role === 'user' ? ALL_FEATURES : undefined, username: username || undefined }), `Compte « ${email} » créé`)
       return
     }
     const r = createUser(users, { username, password, role, displayName, email })
@@ -161,7 +161,9 @@ export function Comptes({ users, currentUser, onChange, onImpersonate, remote }:
                     {u.displayName} {isMe && <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--muted)' }}>— vous</span>}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                    {remote ? (u.email ?? u.id) : <>identifiant <code>{u.username}</code>{u.email ? ` · ${u.email}` : ''}</>}
+                    {remote
+                      ? <>{u.email ?? u.id}{u.username && u.username !== u.email ? <> · id <code>{u.username}</code></> : ''}</>
+                      : <>identifiant <code>{u.username}</code>{u.email ? ` · ${u.email}` : ''}</>}
                   </div>
                 </div>
                 <span style={{ ...badge, background: admin ? '#ede9fe' : '#eef2f6', color: admin ? '#6d28d9' : '#5b7183' }}>
@@ -234,10 +236,9 @@ function CreateForm({ remote, onCancel, onCreate }: {
   return (
     <div style={{ padding: '13px', borderRadius: '11px', border: '1px solid var(--line)', background: '#f8fafc', marginBottom: '18px' }}>
       <div style={sectionLabel}>Nouveau compte</div>
-      {!remote && (
-        <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Identifiant" autoCapitalize="none"
-          style={{ ...input, width: '100%', marginBottom: '8px' }} />
-      )}
+      <input value={username} onChange={e => setUsername(e.target.value)}
+        placeholder={remote ? 'Identifiant court (facultatif)' : 'Identifiant'} autoCapitalize="none"
+        style={{ ...input, width: '100%', marginBottom: '8px' }} />
       <input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Nom affiché (facultatif)"
         style={{ ...input, width: '100%', marginBottom: '8px' }} />
       <input value={email} onChange={e => setEmail(e.target.value)} type="email" autoCapitalize="none"
