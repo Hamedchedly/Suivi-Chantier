@@ -24,6 +24,21 @@ export default defineConfig({
       workbox: { navigateFallback: '/index.html' }
     })
   ],
+  build: {
+    // Sépare les grosses dépendances en chunks propres : meilleur cache et
+    // chargement, et la limite d'alerte de taille est respectée.
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts'
+          if (id.includes('@supabase')) return 'supabase'
+          if (id.includes('react')) return 'react'
+          return 'vendor'
+        },
+      },
+    },
+  },
   preview: {
     // Railway serves the built app via `vite preview` (see railway.toml).
     // Vite 7 validates the Host header and rejects unknown domains otherwise.
