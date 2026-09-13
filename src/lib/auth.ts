@@ -19,6 +19,24 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   superadmin: 'Super-administrateur',
 }
 
+// ── Fonctionnalités (modules) activables par utilisateur ─────────────────────
+// Le super-admin voit tout ; pour un utilisateur, seules les fonctionnalités
+// cochées sont accessibles. Accueil, « Mes opérations » et « Mon compte » sont
+// toujours disponibles ; « Comptes » reste réservé au super-admin.
+export type Feature =
+  | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances'
+  | 'rapports' | 'alertes' | 'structure' | 'config'
+
+export const ALL_FEATURES: Feature[] = [
+  'gantt', 'visite', 'cr', 'entreprises', 'finances', 'rapports', 'alertes', 'structure', 'config',
+]
+
+export const FEATURE_LABEL: Record<Feature, string> = {
+  gantt: 'Planning', visite: 'Visites', cr: 'Réserves & réunions',
+  entreprises: 'Entreprises', finances: 'Finances', rapports: 'Rapports',
+  alertes: 'Alertes', structure: 'Bâtiments & zones', config: 'Configuration',
+}
+
 export interface User {
   id: string
   username: string
@@ -28,6 +46,18 @@ export interface User {
   displayName: string
   createdAt: string     // ISO
   disabled?: boolean
+  /** Modules accessibles ; undefined = tous (comptes hérités). */
+  features?: Feature[]
+}
+
+/**
+ * Un module est-il accessible à cet utilisateur ?
+ * Super-admin → toujours ; liste absente → tout (rétrocompatibilité).
+ */
+export function hasFeature(u: User | null | undefined, f: Feature): boolean {
+  if (!u) return false
+  if (u.role === 'superadmin') return true
+  return u.features ? u.features.includes(f) : true
 }
 
 /** Loose check — enough to catch a typo, not a validation authority. */
@@ -151,6 +181,13 @@ export function setPassword(users: User[], id: string, password: string): Result
   if (!findUser(users, id)) return { ok: false, users, error: 'not_found' }
   if (!password) return { ok: false, users, error: 'password_required' }
   return { ok: true, users: users.map(u => u.id === id ? { ...u, password } : u) }
+}
+
+/** Fonctionnalités accessibles à un utilisateur (ignoré pour un super-admin). */
+export function setFeatures(users: User[], id: string, features: Feature[]): Result<User[]> {
+  if (!findUser(users, id)) return { ok: false, users, error: 'not_found' }
+  const clean = ALL_FEATURES.filter(f => features.includes(f))   // ordonné & validé
+  return { ok: true, users: users.map(u => u.id === id ? { ...u, features: clean } : u) }
 }
 
 export const AUTH_ERROR_LABEL: Record<AuthError, string> = {

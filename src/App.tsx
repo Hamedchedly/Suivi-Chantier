@@ -26,7 +26,7 @@ import {
   getUsers, saveUsers, getSession, saveSession, logActivity,
   getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, deleteProjectData,
 } from './lib/repo'
-import { User, Session, findUser, isSuperadmin } from './lib/auth'
+import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from './lib/auth'
 import { Project, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
 
 export type { Page }
@@ -141,7 +141,20 @@ export default function App() {
   // No session → nothing but the sign-in screen.
   if (!currentUser) return <Login users={users} onSignIn={signIn} />
 
-  const go = (p: Page) => { setCurrentPage(p); setGestionOpen(false) }
+  // Droits d'accès par module. Accueil / Mes opérations / Mon compte sont
+  // toujours ouverts ; « Comptes » reste réservé au super-admin.
+  const PAGE_FEATURE: Partial<Record<Page, Feature>> = {
+    gantt: 'gantt', visite: 'visite', cr: 'cr', entreprises: 'entreprises',
+    finances: 'finances', rapports: 'rapports', alertes: 'alertes',
+    structure: 'structure', config: 'config',
+  }
+  const allowed = (p: Page): boolean => {
+    if (p === 'comptes') return isSuperadmin(currentUser)
+    const f = PAGE_FEATURE[p]
+    return f ? hasFeature(currentUser, f) : true
+  }
+
+  const go = (p: Page) => { setCurrentPage(allowed(p) ? p : 'home'); setGestionOpen(false) }
 
   // Sans opération, seul l'espace « Mes opérations » a du sens.
   const noProject = !project
@@ -172,6 +185,7 @@ export default function App() {
         onPageChange={go}
         onOpenGestion={() => setGestionOpen(true)}
         projectName={project ? projectLabel(project) : 'Aucune opération'}
+        canAccess={allowed}
       />
 
       <div className="app-main">
@@ -207,20 +221,25 @@ export default function App() {
                 </div>
           )}
           {page === 'home'     && <Home onNavigate={go} />}
-          {page === 'gantt'    && <Gantt />}
-          {page === 'visite'   && <Visite />}
-          {page === 'cr'       && <CR />}
-          {page === 'entreprises' && <Entreprises />}
-          {page === 'finances' && <Finances />}
-          {page === 'rapports' && <Reports onNavigate={go} />}
-          {page === 'alertes'  && <Alertes />}
-          {page === 'structure' && <Structure />}
-          {page === 'config'   && <Config project={project ?? null} onProjectChange={setProjects} projects={projects} />}
+          {!allowed(page) && page !== 'home' && page !== 'projets' && page !== 'moncompte' && page !== 'comptes' && (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
+              Ce module n'est pas activé pour votre compte. Demandez à un super-administrateur.
+            </div>
+          )}
+          {allowed('gantt') && page === 'gantt'    && <Gantt />}
+          {allowed('visite') && page === 'visite'   && <Visite />}
+          {allowed('cr') && page === 'cr'       && <CR />}
+          {allowed('entreprises') && page === 'entreprises' && <Entreprises />}
+          {allowed('finances') && page === 'finances' && <Finances />}
+          {allowed('rapports') && page === 'rapports' && <Reports onNavigate={go} />}
+          {allowed('alertes') && page === 'alertes'  && <Alertes />}
+          {allowed('structure') && page === 'structure' && <Structure />}
+          {allowed('config') && page === 'config'   && <Config project={project ?? null} onProjectChange={setProjects} projects={projects} />}
         </div>
       </div>
 
-      <Navigation currentPage={page} onPageChange={go} onOpenGestion={() => setGestionOpen(true)} />
-      <GestionSheet open={gestionOpen} currentPage={page} onClose={() => setGestionOpen(false)} onPick={go} />
+      <Navigation currentPage={page} onPageChange={go} onOpenGestion={() => setGestionOpen(true)} canAccess={allowed} />
+      <GestionSheet open={gestionOpen} currentPage={page} onClose={() => setGestionOpen(false)} onPick={go} canAccess={allowed} />
     </div>
   )
 }

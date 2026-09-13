@@ -17,9 +17,12 @@ interface Props {
   onOpenGestion: () => void
   /** Opération affichée — rappelée sous le titre pour éviter toute confusion. */
   projectName: string
+  canAccess?: (page: Page) => boolean
 }
 
-export function SideNav({ currentPage, onPageChange, onOpenGestion, projectName }: Props) {
+export function SideNav({ currentPage, onPageChange, onOpenGestion, projectName, canAccess }: Props) {
+  const can = (id: Page | 'gestion') =>
+    id === 'gestion' ? GESTION_PAGES.some(p => !canAccess || canAccess(p)) : (!canAccess || canAccess(id as Page))
   return (
     <nav className="side-nav">
       <div className="snav-brand">
@@ -30,7 +33,7 @@ export function SideNav({ currentPage, onPageChange, onOpenGestion, projectName 
         </div>
       </div>
       <div className="snav-items">
-        {PRIMARY_NAV.map(({ id, label, icon: Icon }) => {
+        {PRIMARY_NAV.filter(({ id }) => can(id)).map(({ id, label, icon: Icon }) => {
           const active = id === 'gestion' ? GESTION_PAGES.includes(currentPage) : currentPage === id
           return (
             <button

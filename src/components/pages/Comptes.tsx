@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import {
   UserPlus, Shield, User as UserIcon, LogIn, Trash2, KeyRound, Ban, Check,
-  ShieldAlert, X,
+  ShieldAlert, X, SlidersHorizontal,
 } from 'lucide-react'
 import {
   User, UserRole, ROLE_LABEL, AUTH_ERROR_LABEL, AuthError,
-  createUser, deleteUser, setRole, setDisabled, setPassword,
+  Feature, ALL_FEATURES, FEATURE_LABEL,
+  createUser, deleteUser, setRole, setDisabled, setPassword, setFeatures,
 } from '../../lib/auth'
 import { logActivity } from '../../lib/repo'
 import { badge, sectionLabel, input, ghostBtn, bigBtnInline, linkBtn } from '../visite/visiteStyles'
@@ -23,6 +24,7 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
   const [error, setError] = useState<AuthError | null>(null)
   const [creating, setCreating] = useState(false)
   const [pwFor, setPwFor] = useState<string | null>(null)
+  const [featFor, setFeatFor] = useState<string | null>(null)
 
   const apply = (result: { ok: boolean; users: User[]; error?: AuthError }, done?: string) => {
     if (!result.ok) { setError(result.error ?? null); return }
@@ -104,6 +106,11 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
                 <button onClick={() => { setPwFor(pwFor === u.id ? null : u.id); setError(null) }} style={ghostBtn}>
                   <KeyRound size={14} /> Mot de passe
                 </button>
+                {!admin && (
+                  <button onClick={() => { setFeatFor(featFor === u.id ? null : u.id); setError(null) }} style={ghostBtn}>
+                    <SlidersHorizontal size={14} /> Fonctionnalités
+                  </button>
+                )}
                 <button onClick={() => apply(setDisabled(users, u.id, !u.disabled), `Compte « ${u.username} » ${u.disabled ? 'réactivé' : 'désactivé'}`)}
                   style={ghostBtn}>
                   {u.disabled ? <Check size={14} /> : <Ban size={14} />} {u.disabled ? 'Réactiver' : 'Désactiver'}
@@ -120,6 +127,13 @@ export function Comptes({ users, currentUser, onChange, onImpersonate }: Props) 
                 <PasswordForm
                   onCancel={() => setPwFor(null)}
                   onSet={pw => { apply(setPassword(users, u.id, pw), `Mot de passe de « ${u.username} » modifié`); setPwFor(null) }}
+                />
+              )}
+
+              {featFor === u.id && !admin && (
+                <FeaturesForm
+                  value={u.features ?? ALL_FEATURES}
+                  onToggle={next => apply(setFeatures(users, u.id, next), `Fonctionnalités de « ${u.username} » mises à jour`)}
                 />
               )}
             </div>
@@ -168,6 +182,34 @@ function CreateForm({ onCancel, onCreate }: {
           style={{ ...bigBtnInline, background: 'var(--navy)', padding: '10px 15px', fontSize: '13px' }}>
           Créer
         </button>
+      </div>
+    </div>
+  )
+}
+
+function FeaturesForm({ value, onToggle }: { value: Feature[]; onToggle: (next: Feature[]) => void }) {
+  const set = new Set(value)
+  const toggle = (f: Feature) => {
+    const next = new Set(set)
+    if (next.has(f)) next.delete(f); else next.add(f)
+    onToggle([...next])
+  }
+  return (
+    <div style={{ marginTop: '10px', padding: '10px', borderRadius: '9px', border: '1px solid var(--line)', background: '#f8fafc' }}>
+      <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+        Modules accessibles à ce compte (Accueil et Mes opérations restent toujours ouverts).
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '6px' }}>
+        {ALL_FEATURES.map(f => {
+          const on = set.has(f)
+          return (
+            <label key={f} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 9px', borderRadius: '8px', cursor: 'pointer',
+              border: on ? '1px solid var(--accent)' : '1px solid var(--line)', background: on ? 'var(--sky-soft)' : '#fff', fontSize: '12px', color: 'var(--navy)' }}>
+              <input type="checkbox" checked={on} onChange={() => toggle(f)} style={{ accentColor: 'var(--accent)' }} />
+              {FEATURE_LABEL[f]}
+            </label>
+          )
+        })}
       </div>
     </div>
   )

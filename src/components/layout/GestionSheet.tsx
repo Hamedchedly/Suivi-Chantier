@@ -6,10 +6,12 @@ interface Props {
   currentPage: Page
   onClose: () => void
   onPick: (p: Page) => void
+  canAccess?: (p: Page) => boolean
 }
 
-export function GestionSheet({ open, currentPage, onClose, onPick }: Props) {
+export function GestionSheet({ open, currentPage, onClose, onPick, canAccess }: Props) {
   if (!open) return null
+  const items = GESTION_ITEMS.filter(i => !canAccess || canAccess(i.id))
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(2,27,72,.45)', zIndex: 200 }} />
@@ -18,7 +20,7 @@ export function GestionSheet({ open, currentPage, onClose, onPick }: Props) {
           <span style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '15px' }}>Gestion</span>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4 }}><X size={18} /></button>
         </div>
-        {GESTION_ITEMS.map(({ id, label, desc, icon: Icon }) => (
+        {items.map(({ id, label, desc, icon: Icon }) => (
           <button
             key={id}
             onClick={() => onPick(id)}

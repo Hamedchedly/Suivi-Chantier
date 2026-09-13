@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   User, authenticate, isSuperadmin, canEditLocked,
   createUser, deleteUser, setRole, setDisabled, setPassword, setEmail, changeOwnPassword,
+  hasFeature, setFeatures,
 } from './auth'
 
 const u = (over: Partial<User> & { id: string; username: string }): User => ({
@@ -132,5 +133,33 @@ describe('setPassword', () => {
   })
   it('refuses an empty one', () => {
     expect(setPassword(base, 'u1', '').error).toBe('password_required')
+  })
+})
+
+describe('fonctionnalités', () => {
+  it('un super-admin a toujours accès à tout', () => {
+    const admin = u({ id: 'a', username: 'sa', role: 'superadmin', features: [] })
+    expect(hasFeature(admin, 'finances')).toBe(true)
+    expect(hasFeature(admin, 'gantt')).toBe(true)
+  })
+  it('liste absente = tout accessible (rétrocompatibilité)', () => {
+    const legacy = u({ id: 'l', username: 'l' })
+    expect(hasFeature(legacy, 'visite')).toBe(true)
+  })
+  it('un utilisateur restreint n’accède qu’aux modules cochés', () => {
+    const restricted = u({ id: 'r', username: 'r', features: ['visite', 'cr'] })
+    expect(hasFeature(restricted, 'visite')).toBe(true)
+    expect(hasFeature(restricted, 'finances')).toBe(false)
+  })
+  it('setFeatures valide et ordonne la liste', () => {
+    const r = setFeatures(base, 'u1', ['finances', 'gantt', 'inconnu' as never])
+    const user = r.users.find(x => x.id === 'u1')!
+    expect(user.features).toEqual(['gantt', 'finances'])
+  })
+  it('setFeatures signale un utilisateur inconnu', () => {
+    expect(setFeatures(base, 'nope', []).error).toBe('not_found')
+  })
+  it('hasFeature est faux sans utilisateur', () => {
+    expect(hasFeature(null, 'gantt')).toBe(false)
   })
 })
