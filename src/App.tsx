@@ -28,6 +28,8 @@ import {
 } from './lib/repo'
 import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from './lib/auth'
 import { Project, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
+import { isSupabaseConfigured } from './lib/supabase'
+import { currentProfileUser, onAuthChange, signOutRemote } from './lib/supabaseAuth'
 
 export type { Page }
 
@@ -55,14 +57,30 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>(getProjects)
   const [projectId, setProjectId] = useState<string | null>(getCurrentProjectId)
 
-  useEffect(() => { saveUsers(users) }, [users])
-  useEffect(() => { saveSession(session) }, [session])
+  // Authentification serveur (Supabase) quand elle est configurée ; sinon mode
+  // local (comptes en navigateur). L'interface est identique dans les deux cas.
+  const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured)
+  const [remoteUser, setRemoteUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let alive = true
+    currentProfileUser().then(u => { if (alive) { setRemoteUser(u); setRemoteReady(true) } })
+    const off = onAuthChange(() => currentProfileUser().then(u => { if (alive) setRemoteUser(u) }))
+    return () => { alive = false; off() }
+  }, [])
+
+  useEffect(() => { if (!isSupabaseConfigured) saveUsers(users) }, [users])
+  useEffect(() => { if (!isSupabaseConfigured) saveSession(session) }, [session])
   useEffect(() => { saveProjects(projects) }, [projects])
   useEffect(() => { setCurrentProjectId(projectId) }, [projectId])
 
-  const currentUser = session ? findUser(users, session.userId) ?? null : null
-  // While impersonating, this is the super-admin who started it.
-  const impersonator = session?.impersonatorId ? findUser(users, session.impersonatorId) ?? null : null
+  const currentUser = isSupabaseConfigured
+    ? remoteUser
+    : (session ? findUser(users, session.userId) ?? null : null)
+  // Impersonation (mode local uniquement) : le super-admin qui l'a lancée.
+  const impersonator = !isSupabaseConfigured && session?.impersonatorId
+    ? findUser(users, session.impersonatorId) ?? null : null
   const project = findProject(projects, projectId)
 
   const signIn = (u: User) => {
@@ -71,7 +89,8 @@ export default function App() {
   }
 
   const signOut = () => {
-    setSession(null)
+    if (isSupabaseConfigured) { signOutRemote(); setRemoteUser(null) }
+    else setSession(null)
     setCurrentPage('home')
   }
 
@@ -138,8 +157,27 @@ export default function App() {
     )
   }
 
+  // Auth serveur : bref écran de chargement le temps de récupérer la session.
+  if (isSupabaseConfigured && !remoteReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(180deg,#02457A,#001B48)', color: '#cfe0ee', fontSize: '14px' }}>
+        Chargement…
+      </div>
+    )
+  }
+
   // No session → nothing but the sign-in screen.
-  if (!currentUser) return <Login users={users} onSignIn={signIn} />
+  if (!currentUser) {
+    return (
+      <Login
+        remote={isSupabaseConfigured}
+        users={users}
+        onSignIn={signIn}
+        onRemoteSignedIn={() => currentProfileUser().then(u => { setRemoteUser(u); setCurrentPage('home') })}
+      />
+    )
+  }
 
   // Droits d'accès par module. Accueil / Mes opérations / Mon compte sont
   // toujours ouverts ; « Comptes » reste réservé au super-admin.
@@ -212,10 +250,10 @@ export default function App() {
               onDelete={removeProject}
             />
           )}
-          {page === 'moncompte' && <MonCompte users={users} currentUser={currentUser} onChange={setUsers} />}
+          {page === 'moncompte' && <MonCompte users={users} currentUser={currentUser} onChange={setUsers} remote={isSupabaseConfigured} />}
           {page === 'comptes' && (
             isSuperadmin(currentUser)
-              ? <Comptes users={users} currentUser={currentUser} onChange={setUsers} onImpersonate={impersonate} />
+              ? <Comptes users={users} currentUser={currentUser} onChange={setUsers} onImpersonate={impersonate} remote={isSupabaseConfigured} />
               : <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
                   Cette page est réservée aux super-administrateurs.
                 </div>

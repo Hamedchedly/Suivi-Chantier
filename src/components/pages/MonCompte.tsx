@@ -1,22 +1,26 @@
 import { useState } from 'react'
-import { Mail, KeyRound, Check, ShieldAlert } from 'lucide-react'
+import { Mail, KeyRound, Check, ShieldAlert, ShieldCheck } from 'lucide-react'
 import {
   User, AuthError, AUTH_ERROR_LABEL, ROLE_LABEL, setEmail, changeOwnPassword,
 } from '../../lib/auth'
+import { changeOwnPasswordRemote } from '../../lib/supabaseAuth'
 
 interface Props {
   users: User[]
   currentUser: User
   onChange: (users: User[]) => void
+  /** Mode serveur : mot de passe géré par Supabase Auth. */
+  remote?: boolean
 }
 
 /** The signed-in user's own settings: contact address and password. */
-export function MonCompte({ users, currentUser, onChange }: Props) {
+export function MonCompte({ users, currentUser, onChange, remote }: Props) {
   const [email, setEmailValue] = useState(currentUser.email ?? '')
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<AuthError | null>(null)
+  const [remoteErr, setRemoteErr] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
   const saveEmail = () => {
@@ -26,11 +30,19 @@ export function MonCompte({ users, currentUser, onChange }: Props) {
     onChange(r.users)
   }
 
-  const savePassword = () => {
+  const savePassword = async () => {
+    setError(null); setRemoteErr(null)
+    if (remote) {
+      if (!next) { setError('password_required'); return }
+      if (next !== confirm) { setError('password_mismatch'); return }
+      const { error: err } = await changeOwnPasswordRemote(next)
+      if (err) { setRemoteErr(err); setDone(null); return }
+      setDone('Mot de passe modifié.'); setCurrent(''); setNext(''); setConfirm('')
+      return
+    }
     const r = changeOwnPassword(users, currentUser.id, current, next, confirm)
     if (!r.ok) { setError(r.error ?? null); setDone(null); return }
-    setError(null); setDone('Mot de passe modifié.')
-    setCurrent(''); setNext(''); setConfirm('')
+    setDone('Mot de passe modifié.'); setCurrent(''); setNext(''); setConfirm('')
     onChange(r.users)
   }
 
@@ -41,13 +53,13 @@ export function MonCompte({ users, currentUser, onChange }: Props) {
           {currentUser.displayName}
         </div>
         <div style={{ fontSize: '11px', color: '#5b7183' }}>
-          identifiant <code>{currentUser.username}</code> · {ROLE_LABEL[currentUser.role]}
+          {remote ? <>{currentUser.email} · </> : <>identifiant <code>{currentUser.username}</code> · </>}{ROLE_LABEL[currentUser.role]}
         </div>
       </div>
 
-      {error && (
+      {(error || remoteErr) && (
         <div style={{ ...notice, background: '#fdecec', border: '1px solid #f5c2c2', color: '#b91c1c' }}>
-          {AUTH_ERROR_LABEL[error]}
+          {error ? AUTH_ERROR_LABEL[error] : remoteErr}
         </div>
       )}
       {done && (
@@ -56,21 +68,23 @@ export function MonCompte({ users, currentUser, onChange }: Props) {
         </div>
       )}
 
-      <div style={card}>
-        <div style={title}><Mail size={15} /> Adresse e-mail</div>
-        <p style={hint}>Sert à vous identifier et à recevoir les comptes rendus diffusés.</p>
-        <input
-          type="email" value={email} onChange={e => setEmailValue(e.target.value)}
-          placeholder="prenom.nom@entreprise.fr" autoCapitalize="none"
-          style={field}
-        />
-        <button onClick={saveEmail} style={primary}>Enregistrer l'adresse</button>
-      </div>
+      {!remote && (
+        <div style={card}>
+          <div style={title}><Mail size={15} /> Adresse e-mail</div>
+          <p style={hint}>Sert à vous identifier et à recevoir les comptes rendus diffusés.</p>
+          <input
+            type="email" value={email} onChange={e => setEmailValue(e.target.value)}
+            placeholder="prenom.nom@entreprise.fr" autoCapitalize="none"
+            style={field}
+          />
+          <button onClick={saveEmail} style={primary}>Enregistrer l'adresse</button>
+        </div>
+      )}
 
       <div style={card}>
         <div style={title}><KeyRound size={15} /> Mot de passe</div>
-        <input type="password" value={current} onChange={e => setCurrent(e.target.value)}
-          placeholder="Mot de passe actuel" style={field} />
+        {!remote && <input type="password" value={current} onChange={e => setCurrent(e.target.value)}
+          placeholder="Mot de passe actuel" style={field} />}
         <input type="password" value={next} onChange={e => setNext(e.target.value)}
           placeholder="Nouveau mot de passe" style={field} />
         <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
@@ -79,13 +93,23 @@ export function MonCompte({ users, currentUser, onChange }: Props) {
         <button onClick={savePassword} style={primary}>Modifier le mot de passe</button>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', padding: '11px 12px', borderRadius: '10px', background: '#fff7ed', border: '1px solid #fed7aa' }}>
-        <ShieldAlert size={15} color="#c2410c" style={{ flexShrink: 0, marginTop: '1px' }} />
-        <div style={{ fontSize: '11px', color: '#9a3412', lineHeight: 1.45 }}>
-          Ces informations sont enregistrées dans ce navigateur, en clair. Elles organisent
-          l'accès à l'interface sans protéger les données.
+      {remote ? (
+        <div style={{ display: 'flex', gap: '8px', padding: '11px 12px', borderRadius: '10px', background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+          <ShieldCheck size={15} color="#047857" style={{ flexShrink: 0, marginTop: '1px' }} />
+          <div style={{ fontSize: '11px', color: '#065f46', lineHeight: 1.45 }}>
+            Compte géré par le serveur (Supabase Auth). Votre mot de passe est chiffré ;
+            l'adresse e-mail se modifie auprès d'un super-administrateur.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '8px', padding: '11px 12px', borderRadius: '10px', background: '#fff7ed', border: '1px solid #fed7aa' }}>
+          <ShieldAlert size={15} color="#c2410c" style={{ flexShrink: 0, marginTop: '1px' }} />
+          <div style={{ fontSize: '11px', color: '#9a3412', lineHeight: 1.45 }}>
+            Ces informations sont enregistrées dans ce navigateur, en clair. Elles organisent
+            l'accès à l'interface sans protéger les données.
+          </div>
+        </div>
+      )}
     </div>
   )
 }
