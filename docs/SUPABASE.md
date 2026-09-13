@@ -37,23 +37,40 @@ usage analytique ou un futur back-office.
   `signOutRemote`, `currentProfileUser`, `changeOwnPasswordRemote`, et les appels
   `admin*` vers la fonction Edge.
 
-## Étapes restantes (câblage interface)
+## Câblage interface — FAIT
+
+Tout le câblage ci-dessous est implémenté et **vérifié par une vraie connexion**
+sur le backend déployé (connexion, hydratation, write-through, suppression).
 
 1. **Config** : `cp .env.example .env.local`, renseigner la clé publiable ; côté
-   Vercel, définir `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
-2. **Amorçage** : créer le premier super-admin (dashboard Supabase → Auth → Add
-   user), puis dans SQL : `update public.profiles set role='superadmin' where email='…';`
-3. **Login** (`Login.tsx`) : si `isSupabaseConfigured`, formulaire **e-mail +
-   mot de passe** → `signInEmail`. Repli local sinon.
-4. **Session** (`src/App.tsx`) : dériver l'utilisateur courant de
-   `currentProfileUser()` + `onAuthChange`, avec un bref écran de chargement.
-5. **Comptes / MonCompte** : brancher sur `adminListUsers/adminCreateUser/
-   adminSetPassword/adminUpdateUser/adminDeleteUser` et `changeOwnPasswordRemote`.
-6. **Synchro données** (`repo.ts`) : hydrater `app_state` à la connexion,
-   `upsert` en write-through à chaque `saveState` (débounce). Lectures inchangées.
+   Vercel, définir `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`. ✅
+2. **Amorçage** : premier super-admin créé (dashboard → Auth), profil promu
+   (`update public.profiles set role='superadmin' …`). ✅
+3. **Login** (`Login.tsx`) : formulaire e-mail + mot de passe → `signInEmail`
+   quand `isSupabaseConfigured` ; repli local sinon. ✅
+4. **Session** (`src/App.tsx`) : cycle de vie piloté par `onAuthChange`
+   (INITIAL_SESSION / SIGNED_IN / SIGNED_OUT), écran de chargement. ✅
+5. **Comptes / MonCompte** : branchés sur `adminListUsers/adminCreateUser/
+   adminSetPassword/adminUpdateUser/adminDeleteUser` et `changeOwnPasswordRemote`. ✅
+6. **Synchro données** (`src/lib/sync.ts`) : ✅
+   - **Hydratation** à la connexion : `clearLocalAppState()` (jamais de mélange
+     entre comptes sur un même navigateur) puis `hydrateFromRemote(uid)` recopie
+     `app_state` dans localStorage (le serveur fait autorité).
+   - **Write-through** débouncé (800 ms) : chaque `saveState`/`removeState`
+     (observés via les notificateurs de `storage.ts`) est répercuté en
+     `upsert`/`delete` sur `app_state`. Les lectures des composants sont
+     inchangées (localStorage = cache synchrone).
+   - Résilience : file conservée en cas d'échec réseau, backoff exponentiel
+     plafonné ; `v` est nullable (une valeur `null` légitime ne fait plus
+     échouer le lot).
+   - Clés `sc-users-v1` / `sc-session-v1` **exclues** (gérées par Supabase Auth).
 
-> La bascule doit être **vérifiée par une vraie connexion en local** (`.env.local`)
-> avant d'activer les variables en production.
+## Limite connue
+
+Modèle **serveur-autoritaire** à l'hydratation : une édition faite **hors-ligne**
+puis écrasée par l'état serveur au rechargement n'est pas fusionnée (pas de
+résolution de conflit par horodatage). Acceptable pour un usage mono-session en
+ligne ; à renforcer si l'usage hors-ligne devient courant.
 
 ## Sécurité
 

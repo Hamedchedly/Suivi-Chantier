@@ -30,6 +30,7 @@ import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from 
 import { Project, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
 import { isSupabaseConfigured } from './lib/supabase'
 import { currentProfileUser, onAuthChange, signOutRemote } from './lib/supabaseAuth'
+import { hydrateFromRemote, enableSync, disableSync, clearLocalAppState } from './lib/sync'
 
 export type { Page }
 
@@ -65,8 +66,31 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return
     let alive = true
-    currentProfileUser().then(u => { if (alive) { setRemoteUser(u); setRemoteReady(true) } })
-    const off = onAuthChange(() => currentProfileUser().then(u => { if (alive) setRemoteUser(u) }))
+    let syncedUid: string | null = null
+
+    const handle = async (_event: unknown, sbSession: { user: { id: string } } | null) => {
+      if (!alive) return
+      // Déconnexion : couper la sync et purger le cache local (pas de fuite entre comptes).
+      if (!sbSession) {
+        disableSync(); clearLocalAppState(); syncedUid = null
+        setRemoteUser(null); setRemoteReady(true)
+        return
+      }
+      // Nouvelle session (connexion / rechargement) : hydrater depuis le serveur.
+      const uid = sbSession.user.id
+      if (uid !== syncedUid) {
+        disableSync(); clearLocalAppState()
+        await hydrateFromRemote(uid)
+        if (!alive) return
+        enableSync(uid); syncedUid = uid
+        setProjects(getProjects()); setProjectId(getCurrentProjectId())
+      }
+      const u = await currentProfileUser()
+      if (!alive) return
+      setRemoteUser(u); setRemoteReady(true)
+    }
+
+    const off = onAuthChange(handle)
     return () => { alive = false; off() }
   }, [])
 
@@ -174,7 +198,7 @@ export default function App() {
         remote={isSupabaseConfigured}
         users={users}
         onSignIn={signIn}
-        onRemoteSignedIn={() => currentProfileUser().then(u => { setRemoteUser(u); setCurrentPage('home') })}
+        onRemoteSignedIn={() => setCurrentPage('home')}
       />
     )
   }

@@ -11,6 +11,7 @@
 // dans App, et branchement de la page Comptes / MonCompte sur ces fonctions.
 // ────────────────────────────────────────────────────────────────────────────
 
+import type { AuthChangeEvent, Session as SupabaseSession } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type { User, UserRole, Feature } from './auth'
 
@@ -62,8 +63,14 @@ export async function currentProfileUser(): Promise<User | null> {
   return p ? profileToUser(p as RemoteProfile) : null
 }
 
-export function onAuthChange(cb: () => void): () => void {
-  const { data } = client().auth.onAuthStateChange(() => cb())
+/**
+ * S'abonne aux changements de session. Émet aussi l'état initial (INITIAL_SESSION)
+ * au moment de l'abonnement : unique source de vérité pour le cycle de vie.
+ */
+export function onAuthChange(
+  cb: (event: AuthChangeEvent, session: SupabaseSession | null) => void,
+): () => void {
+  const { data } = client().auth.onAuthStateChange((event, session) => cb(event, session))
   return () => data.subscription.unsubscribe()
 }
 

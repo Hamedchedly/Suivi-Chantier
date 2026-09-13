@@ -6,10 +6,13 @@
 -- miroir (write-through) à chaque sauvegarde ; l'API synchrone des composants
 -- reste inchangée. Voir docs/SUPABASE.md.
 
+-- v est nullable : certaines clés valent légitimement null (ex.
+-- sc-current-project-v1 quand aucune opération n'est active). Une contrainte
+-- NOT NULL ferait échouer le lot d'upsert complet sur ces valeurs.
 create table if not exists public.app_state (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   k text not null,
-  v jsonb not null,
+  v jsonb,
   updated_at timestamptz not null default now(),
   primary key (user_id, k)
 );

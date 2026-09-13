@@ -39,7 +39,7 @@ import { DateCommitment } from './commitments'
 import type { User, Session } from './auth'
 import type { Project } from './projects'
 import { resolveCurrent } from './projects'
-import { loadState, saveState } from './storage'
+import { loadState, saveState, removeState } from './storage'
 
 // ── Clés globales (hors projet) ─────────────────────────────────────────────
 const GLOBAL = {
@@ -107,8 +107,9 @@ export function setCurrentProjectId(id: string | null): void {
 
 /** Purge toutes les données d'un projet supprimé (aucune orpheline en réserve). */
 export function deleteProjectData(projectId: string): void {
+  // removeState propage la suppression au miroir serveur quand la sync est active.
   for (const base of Object.values(SCOPED)) {
-    try { localStorage.removeItem(`${base}::${projectId}`) } catch { /* storage indisponible */ }
+    removeState(`${base}::${projectId}`)
   }
 }
 

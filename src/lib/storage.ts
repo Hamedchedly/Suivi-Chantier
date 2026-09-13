@@ -38,10 +38,45 @@ export function loadState<T>(key: string, fallback: T): T {
   }
 }
 
+// ── Notificateurs de mutation ────────────────────────────────────────────────
+// Permettent à une couche de synchronisation (src/lib/sync.ts) d'observer les
+// écritures/suppressions sans que les appelants (repo.ts, composants) changent.
+// `raw` est la chaîne déjà sérialisée (dates encodées) — prête à être renvoyée.
+type WriteListener = (key: string, raw: string) => void
+type RemoveListener = (key: string) => void
+const writeListeners = new Set<WriteListener>()
+const removeListeners = new Set<RemoveListener>()
+
+export function onStateWrite(fn: WriteListener): () => void {
+  writeListeners.add(fn)
+  return () => { writeListeners.delete(fn) }
+}
+
+export function onStateRemove(fn: RemoveListener): () => void {
+  removeListeners.add(fn)
+  return () => { removeListeners.delete(fn) }
+}
+
 export function saveState<T>(key: string, value: T): void {
+  let raw: string
   try {
-    localStorage.setItem(key, JSON.stringify(value, replacer))
+    raw = JSON.stringify(value, replacer)
   } catch {
-    // storage full or unavailable — ignore
+    return // valeur non sérialisable — on abandonne
   }
+  try {
+    localStorage.setItem(key, raw)
+  } catch {
+    // storage plein ou indisponible — on notifie tout de même le miroir serveur
+  }
+  for (const fn of writeListeners) fn(key, raw)
+}
+
+export function removeState(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // indisponible — ignore
+  }
+  for (const fn of removeListeners) fn(key)
 }
