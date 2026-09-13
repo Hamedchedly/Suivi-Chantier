@@ -1,0 +1,355 @@
+<title>Suivi Chantier</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f4f8fc; --surface:#ffffff; --surface-2:#eaf2fa; --surface-3:#e0ecf7;
+    --ink:#0a1a2b; --ink-2:#425f7c; --ink-3:#6c85a0; --line:#d8e6f2;
+    --navy:#02457A; --sky:#018ABE; --sky-2:#6fb9d8; --deep:#001B48;
+    --accent:#F2A900; --accent-2:#c9720a; --on-accent:#3a2700;
+    --good:#128a5a; --warn:#c2410c;
+    --shadow:0 1px 2px rgba(2,27,72,.06),0 12px 32px -12px rgba(2,27,72,.18);
+    --shadow-lg:0 30px 70px -30px rgba(2,27,72,.45);
+    --maxw:1120px; --radius:16px;
+    --font-d:"Bricolage Grotesque",system-ui,sans-serif;
+    --font-b:"Inter",system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#071320; --surface:#0e1f31; --surface-2:#13273c; --surface-3:#183149;
+    --ink:#e9f2fb; --ink-2:#a6bdd2; --ink-3:#7d97b0; --line:#21384f;
+    --navy:#7cc0e6; --sky:#5bb8df; --sky-2:#2f6d8a; --deep:#cfe6f5;
+    --accent:#f9bd2a; --accent-2:#f9bd2a; --on-accent:#241700;
+    --good:#3fc98d; --warn:#f7a35f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 14px 34px -14px rgba(0,0,0,.6);
+    --shadow-lg:0 34px 80px -30px rgba(0,0,0,.75);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#071320; --surface:#0e1f31; --surface-2:#13273c; --surface-3:#183149;
+    --ink:#e9f2fb; --ink-2:#a6bdd2; --ink-3:#7d97b0; --line:#21384f;
+    --navy:#7cc0e6; --sky:#5bb8df; --sky-2:#2f6d8a; --deep:#cfe6f5;
+    --accent:#f9bd2a; --accent-2:#f9bd2a; --on-accent:#241700;
+    --good:#3fc98d; --warn:#f7a35f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 14px 34px -14px rgba(0,0,0,.6);
+    --shadow-lg:0 34px 80px -30px rgba(0,0,0,.75);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-b);
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:var(--font-d);font-weight:600;line-height:1.08;
+    letter-spacing:-.02em;text-wrap:balance;margin:0}
+  p{margin:0}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--sky)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-b);
+    font-weight:600;font-size:15px;padding:13px 22px;border-radius:12px;cursor:pointer;
+    border:1px solid transparent;transition:transform .12s ease,box-shadow .12s ease}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--accent);color:var(--on-accent);box-shadow:0 8px 20px -8px var(--accent-2)}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{background:var(--surface-2)}
+
+  /* Nav */
+  header.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;gap:20px;height:64px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--font-d);font-weight:700;
+    font-size:17px;letter-spacing:-.01em}
+  .brand .chip{width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,#0a5c93,#02457a 55%,#001b48);
+    display:grid;place-items:center;flex:0 0 auto}
+  .nav-links{margin-left:auto;display:flex;gap:26px;align-items:center}
+  .nav-links a{font-size:14px;color:var(--ink-2);font-weight:500}
+  .nav-links a:hover{color:var(--ink)}
+  @media(max-width:820px){.nav-links .lnk{display:none}}
+
+  /* Hero */
+  .hero{padding:76px 0 40px}
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:36px}.hero{padding:48px 0 20px}}
+  h1{font-size:clamp(34px,5vw,56px)}
+  .lead{margin-top:20px;font-size:clamp(16px,2.1vw,19px);color:var(--ink-2);max-width:34ch}
+  .cta-row{margin-top:30px;display:flex;gap:12px;flex-wrap:wrap}
+  .micro{margin-top:16px;font-size:13px;color:var(--ink-3);display:flex;gap:16px;flex-wrap:wrap}
+  .micro span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--good)}
+
+  /* Dashboard mock */
+  .mock{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow-lg);overflow:hidden}
+  .mock-top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);
+    background:var(--surface-2)}
+  .mock-top .tt{margin-left:6px;font-weight:600;font-size:13px}
+  .mock-top .rt{margin-left:auto;font-size:11px;color:var(--ink-3)}
+  .mock-body{padding:16px}
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi{background:var(--surface-2);border-radius:12px;padding:12px 13px}
+  .kpi .lab{font-size:11px;color:var(--ink-3);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+  .kpi .val{font-family:var(--font-d);font-weight:700;font-size:26px;margin-top:3px;letter-spacing:-.02em}
+  .kpi .val.amber{color:var(--accent-2)}
+  .kpi .val.warn{color:var(--warn)}
+  .lots{margin-top:12px;display:flex;flex-direction:column;gap:9px}
+  .lot{display:grid;grid-template-columns:96px 1fr 38px;gap:10px;align-items:center;font-size:12px}
+  .lot .nm{color:var(--ink-2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar{height:8px;border-radius:6px;background:var(--surface-3);overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--sky),var(--navy))}
+  .lot .pc{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+
+  /* Sections */
+  section{padding:56px 0}
+  .sec-head{max-width:60ch;margin-bottom:34px}
+  .sec-head h2{font-size:clamp(26px,3.4vw,36px)}
+  .sec-head p{margin-top:12px;color:var(--ink-2);font-size:17px}
+
+  .roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:820px){.roles{grid-template-columns:1fr}}
+  .role{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:24px;
+    box-shadow:var(--shadow)}
+  .role .ic{width:44px;height:44px;border-radius:11px;background:var(--surface-2);display:grid;place-items:center;
+    color:var(--sky);margin-bottom:14px}
+  .role h3{font-size:19px}
+  .role .tag{font-size:12px;font-weight:600;color:var(--sky);letter-spacing:.02em}
+  .role ul{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+  .role li{display:flex;gap:9px;font-size:14px;color:var(--ink-2);line-height:1.5}
+  .role li svg{flex:0 0 auto;margin-top:3px;color:var(--good)}
+
+  .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:900px){.feat{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:600px){.feat{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card .ic{width:38px;height:38px;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;
+    color:var(--navy);margin-bottom:12px}
+  .card h3{font-size:16px}
+  .card p{margin-top:6px;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* band */
+  .band{background:linear-gradient(155deg,#0a5c93,#02457a 52%,#001b48);color:#eaf4fb;border-radius:24px;
+    padding:44px;display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center}
+  @media(max-width:820px){.band{grid-template-columns:1fr;padding:30px}}
+  .band h2{color:#fff;font-size:clamp(24px,3vw,32px)}
+  .band p{color:#bcd7ea;margin-top:12px;font-size:16px}
+  .band .stats{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .band .st{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:16px}
+  .band .st .v{font-family:var(--font-d);font-weight:700;font-size:30px;color:#fff}
+  .band .st .l{font-size:12.5px;color:#bcd7ea;margin-top:2px}
+
+  .sec-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:700px){.sec-list{grid-template-columns:1fr}}
+  .sec-item{display:flex;gap:13px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .sec-item .ic{color:var(--good);flex:0 0 auto;margin-top:1px}
+  .sec-item h3{font-size:15px}
+  .sec-item p{font-size:13px;color:var(--ink-2);margin-top:4px;line-height:1.5}
+
+  /* final CTA */
+  .final{text-align:center;padding:72px 0}
+  .final h2{font-size:clamp(28px,4vw,42px);max-width:18ch;margin:0 auto}
+  .final p{color:var(--ink-2);font-size:17px;margin:16px auto 0;max-width:46ch}
+
+  footer{border-top:1px solid var(--line);padding:34px 0;color:var(--ink-3);font-size:13px}
+  .foot-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .foot-in .brand{font-size:15px}
+  .foot-in .sp{margin-left:auto}
+  .badge{display:inline-flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="markg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd6ea"/><stop offset="1" stop-color="#fff"/></linearGradient>
+</defs></svg>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <div class="brand">
+      <span class="chip" aria-hidden="true">
+        <svg width="21" height="21" viewBox="0 0 56 56">
+          <rect x="6" y="16" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="16" width="29" height="7" rx="3.5" fill="#97CADB"/>
+          <rect x="6" y="26" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="26" width="22" height="7" rx="3.5" fill="#fff"/>
+          <rect x="6" y="36" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="36" width="35" height="7" rx="3.5" fill="#56B6D6"/>
+          <rect x="32" y="12" width="3" height="35" rx="1.5" fill="#fff" opacity=".9"/>
+        </svg>
+      </span>
+      Suivi Chantier
+    </div>
+    <nav class="nav-links">
+      <a class="lnk" href="#roles">Pour qui</a>
+      <a class="lnk" href="#fonctions">Fonctions</a>
+      <a class="lnk" href="#securite">Sécurité</a>
+      <a class="btn btn-primary" href="#final" style="padding:9px 16px;font-size:14px">Demander une démo</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Application PWA de suivi de chantier bâtiment</div>
+        <h1 style="margin-top:14px">Le chantier au clair, pour tous ceux qui le pilotent.</h1>
+        <p class="lead">Planning, visites, réserves, entreprises et finances d'une opération — réunis dans un même outil. Pensé pour le maître d'ouvrage, la maîtrise d'œuvre et le conducteur de travaux.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#final">Demander une démo</a>
+          <a class="btn btn-ghost" href="#fonctions">Voir les fonctions</a>
+        </div>
+        <div class="micro">
+          <span><span class="dot"></span>Synchronisé multi-appareils</span>
+          <span><span class="dot"></span>Fonctionne hors-ligne</span>
+          <span><span class="dot"></span>Données chiffrées</span>
+        </div>
+      </div>
+
+      <div class="mock" role="img" aria-label="Tableau de bord d'une opération : 48 % d'avancement, dérive maximale de 114 jours, 2 réserves ouvertes, 53 % de budget facturé, et l'avancement de trois lots.">
+        <div class="mock-top">
+          <span style="width:11px;height:11px;border-radius:50%;background:#e2564a"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#f2b23e"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#39b76a"></span>
+          <span class="tt">Résidence Les Tilleuls — RT-2026</span>
+          <span class="rt">Épernay (51)</span>
+        </div>
+        <div class="mock-body">
+          <div class="kpis">
+            <div class="kpi"><div class="lab">Avancement</div><div class="val">48 %</div></div>
+            <div class="kpi"><div class="lab">Dérive max</div><div class="val warn">+114 j</div></div>
+            <div class="kpi"><div class="lab">Réserves ouvertes</div><div class="val">2</div></div>
+            <div class="kpi"><div class="lab">Budget facturé</div><div class="val amber">53 %</div></div>
+          </div>
+          <div class="lots">
+            <div class="lot"><span class="nm">LOT 01 · Gros œuvre</span><span class="bar"><i style="width:87%"></i></span><span class="pc">87 %</span></div>
+            <div class="lot"><span class="nm">LOT 03 · Menuiseries</span><span class="bar"><i style="width:47%"></i></span><span class="pc">47 %</span></div>
+            <div class="lot"><span class="nm">LOT 06 · Électricité</span><span class="bar"><i style="width:10%"></i></span><span class="pc">10 %</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="roles">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow">Un outil, trois métiers</div>
+        <h2>Chacun y voit ce qui le concerne.</h2>
+        <p>Le même suivi, lu selon votre rôle sur l'opération — sans tableur partagé ni allers-retours par e-mail.</p>
+      </div>
+      <div class="roles">
+        <div class="role">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></div>
+          <div class="tag">Maîtrise d'ouvrage (MOA)</div>
+          <h3 style="margin-top:4px">La vision, sans le détail technique</h3>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Avancement global et dérive en un coup d'œil</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Budget engagé, facturé, avenants</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Lien de consultation, sans compte à créer</li>
+          </ul>
+        </div>
+        <div class="role">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 12 3-3 4 4 8-8 5 5"/><path d="M14 5h5v5"/></svg></div>
+          <div class="tag">Maîtrise d'œuvre (MOE / MOEX)</div>
+          <h3 style="margin-top:4px">Le pilotage, réserve par réserve</h3>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Visites, réserves et comptes rendus</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Dérive réelle vs planning contractuel</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Engagements des entreprises tenus ou non</li>
+          </ul>
+        </div>
+        <div class="role">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.3 2.3-2-2z"/></svg></div>
+          <div class="tag">Conducteur de travaux</div>
+          <h3 style="margin-top:4px">Le terrain, jour après jour</h3>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Planning éditable et avancement par tâche</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Réserves prises sur mobile, avec photos</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Bâtiments, niveaux et logements par zone</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="fonctions" style="padding-top:8px">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow">Fonctions</div>
+        <h2>Tout le suivi d'une opération, au même endroit.</h2>
+        <p>De l'ordre de service à la réception, chaque volet du chantier a sa place — relié aux autres.</p>
+      </div>
+      <div class="feat">
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg></div><h3>Planning &amp; Gantt</h3><p>Barres déplaçables, liens entre tâches, dates contractuelles et dérive réelle calculée sur l'avancement.</p></div>
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><h3>Visites &amp; réserves</h3><p>Sessions de contrôle terrain, réserves localisées et suivies jusqu'à la levée, comptes rendus prêts à diffuser.</p></div>
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Finances</h3><p>Marchés, avenants et situations de travaux. Budget engagé, facturé et payé, sans ressaisie dans un tableur.</p></div>
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 12h4M10 16h4"/></svg></div><h3>Bâtiments &amp; zones</h3><p>Décrivez l'opération — bâtiments, niveaux, logements — et rattachez chaque tâche à sa zone, dans les deux sens.</p></div>
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div><h3>Alertes &amp; dérives</h3><p>Retards, engagements non tenus et points à vérifier remontent d'eux-mêmes — vous voyez où agir en premier.</p></div>
+        <div class="card"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>Plusieurs opérations</h3><p>Chaque chantier a ses propres données. Basculez d'une opération à l'autre depuis votre espace, en un geste.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="band">
+        <div>
+          <div class="eyebrow" style="color:#8fd0ea">Un tableau de bord qui va à l'essentiel</div>
+          <h2 style="margin-top:12px">Dès l'ouverture, vous savez où en est le chantier.</h2>
+          <p>Avancement, dérive, réserves ouvertes et budget facturé : les chiffres qui comptent, avant même de dérouler le détail. Exemple sur une opération de démonstration.</p>
+        </div>
+        <div class="stats">
+          <div class="st"><div class="v">48 %</div><div class="l">Avancement global</div></div>
+          <div class="st"><div class="v">+114 j</div><div class="l">Dérive maximale (LOT 01)</div></div>
+          <div class="st"><div class="v">3</div><div class="l">Lots en retard signalés</div></div>
+          <div class="st"><div class="v">190 000 €</div><div class="l">Facturé · 53 % du marché</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="securite">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="eyebrow">Sécurité &amp; accès</div>
+        <h2>Vos données restent les vôtres.</h2>
+        <p>Comptes gérés côté serveur, accès par rôle, synchronisation chiffrée — et le chantier consultable même sans réseau.</p>
+      </div>
+      <div class="sec-list">
+        <div class="sec-item"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><div><h3>Connexion sécurisée</h3><p>Authentification e-mail / mot de passe, mots de passe chiffrés, chaque compte cloisonné à ses données.</p></div></div>
+        <div class="sec-item"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span><div><h3>Accès par rôle</h3><p>Un super-administrateur gère les comptes et ouvre exactement les modules utiles à chacun.</p></div></div>
+        <div class="sec-item"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1 6.4 2.6L21 8"/><path d="M21 3v5h-5"/></svg></span><div><h3>Synchronisé, multi-appareils</h3><p>Le travail suit l'utilisateur d'un appareil à l'autre ; une édition faite hors-ligne se resynchronise au retour du réseau.</p></div></div>
+        <div class="sec-item"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span><div><h3>Installable, hors-ligne</h3><p>Application web installable (PWA) : elle s'ouvre comme une appli et reste consultable sans connexion.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="final">
+    <div class="wrap final">
+      <h2>Reprenez la main sur vos chantiers.</h2>
+      <p>Une démonstration en conditions réelles, avec une opération d'exemple déjà remplie — planning, réserves et finances compris.</p>
+      <div class="cta-row" style="justify-content:center;margin-top:26px">
+        <a class="btn btn-primary" href="#final">Demander une démo</a>
+        <a class="btn btn-ghost" href="#fonctions">Revoir les fonctions</a>
+      </div>
+      <div style="margin-top:20px"><span class="badge"><span class="dot"></span>Prototype fonctionnel · version 5</span></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-in">
+    <div class="brand" style="font-size:15px">
+      <span class="chip" style="width:28px;height:28px;border-radius:8px" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 56 56">
+          <rect x="6" y="16" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="16" width="29" height="7" rx="3.5" fill="#97CADB"/>
+          <rect x="6" y="26" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="26" width="22" height="7" rx="3.5" fill="#fff"/>
+          <rect x="6" y="36" width="40" height="7" rx="3.5" fill="#fff" opacity=".22"/>
+          <rect x="6" y="36" width="35" height="7" rx="3.5" fill="#56B6D6"/>
+          <rect x="32" y="12" width="3" height="35" rx="1.5" fill="#fff" opacity=".9"/>
+        </svg>
+      </span>
+      Suivi Chantier
+    </div>
+    <span class="sp">Suivi de chantier bâtiment — MOA · MOE / MOEX · conduite de travaux</span>
+  </div>
+</footer>
