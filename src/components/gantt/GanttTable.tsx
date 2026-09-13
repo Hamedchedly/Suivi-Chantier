@@ -101,7 +101,10 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const [depLines, setDepLines] = useState<DepLine[]>([])
   const [svgSize, setSvgSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
-  const dayWidthPx = (viewState.view === 'week' ? 24 : 12) * (viewState.zoom ?? 1)
+  // Vue « semaine » compacte par défaut : une colonne semaine (7 j) fait environ
+  // la hauteur d'une ligne (~28 px) à zoom 1 ; le zoom permet d'étaler pour lire
+  // le détail. 4 px/jour → 28 px/semaine.
+  const dayWidthPx = (viewState.view === 'week' ? 4 : 12) * (viewState.zoom ?? 1)
   const msPerDay = 86400000
   const daysInRange = Math.ceil(
     (viewState.endDate.getTime() - viewState.startDate.getTime()) / msPerDay,

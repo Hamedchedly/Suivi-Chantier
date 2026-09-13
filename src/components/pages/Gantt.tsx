@@ -96,11 +96,9 @@ export function Gantt() {
   const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
   const [depsVisible, setDepsVisible] = useState(true)
   const [highlightCritical, setHighlightCritical] = useState(false)
-  // Lots open on arrival: the planning is read at task level, and a lot is
-  // collapsed by tapping it rather than expanded one by one.
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
-    () => new Set(getGanttTasks().filter(t => t.children?.length).map(t => t.id)),
-  )
+  // Lots collapsed on arrival : on n'affiche que les lots, on tape un lot pour
+  // dérouler ses tâches.
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => new Set())
   const [detailTask, setDetailTask] = useState<GanttTask | null>(null)
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const holidays = useMemo(() => getHolidays(), [])
@@ -128,10 +126,9 @@ export function Gantt() {
     [tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns],
   )
 
-  // Expand all group parents whenever the grouping / filters change.
+  // Changer de regroupement / filtre replie tout : on repart des lots seuls.
   useEffect(() => {
-    setExpandedTasks(new Set(displayTree.filter(t => t.children?.length).map(t => t.id)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setExpandedTasks(new Set())
   }, [group, selectedLots, selectedZones])
 
   const { startDate, endDate } = useMemo(() => {
@@ -178,8 +175,13 @@ export function Gantt() {
     })
     setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
   }
-  /** Vider le planning de l'opération courante (pas de données de démonstration). */
-  const handleReset = () => setGanttTasks([])
+  /** Vider le planning de l'opération courante — action destructive, confirmée. */
+  const handleReset = () => {
+    if (window.confirm('Vider entièrement le planning de cette opération ?\nToutes les tâches seront supprimées. Cette action est irréversible.')) {
+      setGanttTasks([])
+      logActivity('planning', 'Planning vidé (toutes les tâches supprimées)')
+    }
+  }
 
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
@@ -233,7 +235,7 @@ export function Gantt() {
             </button>
             <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
             <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
-            <button className="gtb" onClick={handleReset} title="Réinitialiser les dates"><RotateCcw size={14} /></button>
+            <button className="gtb" onClick={handleReset} title="Vider le planning (supprime toutes les tâches)"><RotateCcw size={14} /></button>
           </div>
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>

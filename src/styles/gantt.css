@@ -91,7 +91,7 @@
 }
 
 .gantt-timeline-header {
-  min-width: 600px;
+  min-width: 320px;
   position: relative;
   font-size: 10px;
   color: #5b7183;
@@ -152,7 +152,7 @@
 .gantt-timeline-cell {
   padding: 8px 5px;
   position: relative;
-  min-width: 600px;
+  min-width: 320px;
 }
 
 .gantt-timeline-container {
