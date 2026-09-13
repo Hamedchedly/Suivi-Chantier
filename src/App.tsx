@@ -30,7 +30,7 @@ import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from 
 import { Project, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
 import { isSupabaseConfigured } from './lib/supabase'
 import { currentProfileUser, onAuthChange, signOutRemote } from './lib/supabaseAuth'
-import { hydrateFromRemote, enableSync, disableSync, clearLocalAppState } from './lib/sync'
+import { initRemoteSession, disableSync, clearLocalAppState } from './lib/sync'
 
 export type { Page }
 
@@ -76,13 +76,13 @@ export default function App() {
         setRemoteUser(null); setRemoteReady(true)
         return
       }
-      // Nouvelle session (connexion / rechargement) : hydrater depuis le serveur.
+      // Nouvelle session (connexion / rechargement) : fusion locale ↔ serveur
+      // (dernière-écriture-gagne), puis activation du write-through.
       const uid = sbSession.user.id
       if (uid !== syncedUid) {
-        disableSync(); clearLocalAppState()
-        await hydrateFromRemote(uid)
+        await initRemoteSession(uid)
         if (!alive) return
-        enableSync(uid); syncedUid = uid
+        syncedUid = uid
         setProjects(getProjects()); setProjectId(getCurrentProjectId())
       }
       const u = await currentProfileUser()

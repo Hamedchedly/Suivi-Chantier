@@ -1,12 +1,16 @@
 import { Page, PRIMARY_NAV, GESTION_PAGES } from './navConfig'
 
-/** Marque « mini-planning » de l'application. */
+/** Marque « mini-planning » de l'application : barres d'avancement + repère du jour. */
 function LogoMark({ size = 22 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect x="8" y="19" width="34" height="7" rx="3.5" fill="#97CADB" />
-      <rect x="8" y="30" width="24" height="7" rx="3.5" fill="#FFFFFF" />
-      <rect x="8" y="41" width="30" height="7" rx="3.5" fill="#D6E8EE" />
+    <svg width={size} height={size} viewBox="0 0 56 56" aria-hidden="true">
+      <rect x="6" y="16" width="40" height="7" rx="3.5" fill="#FFFFFF" opacity=".22" />
+      <rect x="6" y="16" width="29" height="7" rx="3.5" fill="#97CADB" />
+      <rect x="6" y="26" width="40" height="7" rx="3.5" fill="#FFFFFF" opacity=".22" />
+      <rect x="6" y="26" width="22" height="7" rx="3.5" fill="#FFFFFF" />
+      <rect x="6" y="36" width="40" height="7" rx="3.5" fill="#FFFFFF" opacity=".22" />
+      <rect x="6" y="36" width="35" height="7" rx="3.5" fill="#56B6D6" />
+      <rect x="32" y="12" width="3" height="35" rx="1.5" fill="#FFFFFF" opacity=".9" />
     </svg>
   )
 }
