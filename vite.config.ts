@@ -7,14 +7,19 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icon.svg'],
       manifest: {
         name: 'Suivi Chantier',
         short_name: 'Chantier',
         description: 'Suivi de chantier connecté, utilisable hors ligne.',
-        theme_color: '#0b3b60',
-        background_color: '#f6f8fa',
+        theme_color: '#02457A',
+        background_color: '#eaf0f6',
         display: 'standalone',
-        icons: []
+        icons: [
+          { src: '/icon.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
+          { src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' }
+        ]
       },
       workbox: { navigateFallback: '/index.html' }
     })

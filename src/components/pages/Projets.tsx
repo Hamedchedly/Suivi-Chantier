@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Building2, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Building2, Check, Pencil, Plus, Trash2, X, Sparkles } from 'lucide-react'
 import {
   Project, ProjectInput, PROJECT_ERROR_LABEL, ProjectError,
   createProject, updateProject, deleteProject, projectSubtitle,
 } from '../../lib/projects'
+import { seedProjectData } from '../../lib/repo'
+import { DEMO_PROJECT, buildDemoSeed } from '../../lib/demoData'
 import { User } from '../../lib/auth'
 
 interface Props {
@@ -62,6 +64,19 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
     setConfirm(null)
   }
 
+  // Crée un projet fictif pré-rempli (démonstration), en évitant les doublons de nom.
+  const loadDemo = () => {
+    let input = { ...DEMO_PROJECT, createdBy: currentUser.id }
+    for (let n = 2; projects.some(p => p.name.toLowerCase() === input.name.toLowerCase()); n++) {
+      input = { ...input, name: `${DEMO_PROJECT.name} (${n})` }
+    }
+    const res = createProject(projects, input)
+    if (!res.ok || !res.project) return
+    onChange(res.projects)
+    seedProjectData(res.project.id, buildDemoSeed())
+    onSwitch(res.project.id)
+  }
+
   return (
     <div style={{ padding: '16px', maxWidth: '680px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
@@ -72,13 +87,22 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
           </div>
         </div>
         {!form && (
-          <button onClick={startCreate} title="Nouvelle opération" style={{
-            display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
-            borderRadius: '9px', border: 'none', background: 'var(--navy)', color: '#fff',
-            fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-          }}>
-            <Plus size={15} /> Nouvelle
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={loadDemo} title="Créer un projet d'exemple pré-rempli" style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
+              borderRadius: '9px', border: '1px solid var(--line)', background: 'var(--surface, #fff)',
+              color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>
+              <Sparkles size={15} /> Exemple
+            </button>
+            <button onClick={startCreate} title="Nouvelle opération" style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
+              borderRadius: '9px', border: 'none', background: 'var(--navy)', color: '#fff',
+              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+            }}>
+              <Plus size={15} /> Nouvelle
+            </button>
+          </div>
         )}
       </div>
 
@@ -130,9 +154,17 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
       )}
 
       {projects.length === 0 && !form && (
-        <div style={{ textAlign: 'center', padding: '34px 16px', color: 'var(--muted)', fontSize: '13px', border: '1px dashed var(--line)', borderRadius: '12px' }}>
+        <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--muted)', fontSize: '13px', border: '1px dashed var(--line)', borderRadius: '12px' }}>
           Aucune opération pour l'instant.<br />
-          Créez-en une pour commencer à saisir votre planning et vos visites.
+          Créez la vôtre, ou chargez un projet d'exemple pour découvrir l'application.
+          <div style={{ marginTop: '14px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <button onClick={loadDemo} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '9px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+              <Sparkles size={15} /> Charger un exemple
+            </button>
+            <button onClick={startCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '9px', border: 'none', background: 'var(--navy)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              <Plus size={15} /> Nouvelle opération
+            </button>
+          </div>
         </div>
       )}
 

@@ -112,6 +112,35 @@ export function deleteProjectData(projectId: string): void {
   }
 }
 
+/** Données métier d'un projet, tranche par tranche — pour amorcer un exemple. */
+export interface ProjectSeed {
+  gantt?: unknown; reserves?: unknown; lotsConfig?: unknown; units?: unknown
+  taskUnits?: unknown; marches?: unknown; avenants?: unknown; situations?: unknown
+  meetings?: unknown; visits?: unknown; commitments?: unknown; holidays?: unknown
+  dpgf?: unknown; activity?: unknown
+}
+
+/** Écrit les tranches fournies dans les clés cloisonnées d'un projet donné. */
+export function seedProjectData(projectId: string, data: ProjectSeed): void {
+  const write = (base: string, value: unknown) => {
+    if (value !== undefined) saveState(`${base}::${projectId}`, value)
+  }
+  write(SCOPED.gantt, data.gantt)
+  write(SCOPED.reserves, data.reserves)
+  write(SCOPED.lotsConfig, data.lotsConfig)
+  write(SCOPED.units, data.units)
+  write(SCOPED.taskUnits, data.taskUnits)
+  write(SCOPED.marches, data.marches)
+  write(SCOPED.avenants, data.avenants)
+  write(SCOPED.situations, data.situations)
+  write(SCOPED.meetings, data.meetings)
+  write(SCOPED.visits, data.visits)
+  write(SCOPED.commitments, data.commitments)
+  write(SCOPED.holidays, data.holidays)
+  write(SCOPED.dpgf, data.dpgf)
+  write(SCOPED.activity, data.activity)
+}
+
 // ── Entity types owned by the repository ────────────────────────────────────
 
 export type GanttGroup = 'lot' | 'zone' | 'chrono'
