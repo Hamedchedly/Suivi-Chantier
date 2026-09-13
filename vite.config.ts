@@ -25,15 +25,22 @@ export default defineConfig({
     })
   ],
   build: {
-    // Sépare les grosses dépendances en chunks propres : meilleur cache et
-    // chargement, et la limite d'alerte de taille est respectée.
+    // vendor (react + react-dom) dépasse le seuil d'alerte par défaut (500 kb
+    // brut, ~180 kb gzip) ; c'est intentionnel — le regrouper évite le cycle qui
+    // rendait la page blanche. On relève le seuil plutôt que de re-scinder React.
+    chunkSizeWarningLimit: 700,
+    // Sépare uniquement les grosses dépendances FEUILLES (charts, supabase) pour
+    // le cache et la taille. React et ses dépendances d'exécution (react-dom,
+    // scheduler…) restent DANS vendor : les isoler dans un chunk « react » créait
+    // un cycle vendor ↔ react (scheduler tombait dans vendor), et React se
+    // retrouvait undefined au chargement → page blanche en production.
     rollupOptions: {
       output: {
         manualChunks: (id) => {
           if (!id.includes('node_modules')) return
           if (id.includes('recharts') || id.includes('d3-')) return 'charts'
           if (id.includes('@supabase')) return 'supabase'
-          if (id.includes('react')) return 'react'
+          if (id.includes('lucide-react')) return 'icons'
           return 'vendor'
         },
       },
