@@ -75,6 +75,12 @@ Deno.serve(async (req) => {
     if (action === 'update') {
       const { id, patch } = body
       if (!id || !patch) return json({ error: 'id_patch_required' }, 400)
+      // Anti-verrouillage : un super-admin ne peut ni se retirer ses propres
+      // droits ni se desactiver lui-meme.
+      if (id === userData.user.id) {
+        if ('role' in patch && patch.role !== 'superadmin') return json({ error: 'cannot_self_demote' }, 400)
+        if (patch.disabled === true) return json({ error: 'cannot_self_disable' }, 400)
+      }
       const allowed: Record<string, unknown> = {}
       for (const k of ['display_name', 'role', 'disabled', 'features']) {
         if (k in patch) allowed[k] = patch[k]

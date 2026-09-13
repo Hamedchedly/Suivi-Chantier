@@ -178,9 +178,12 @@ export function Comptes({ users, currentUser, onChange, onImpersonate, remote }:
                     <LogIn size={14} /> Se connecter en tant que
                   </button>
                 )}
-                <button onClick={() => doToggleRole(u, admin)} disabled={busy} style={ghostBtn}>
-                  <Shield size={14} /> {admin ? 'Retirer les droits' : 'Passer super-admin'}
-                </button>
+                {/* Anti-verrouillage : on ne peut pas se retirer à soi-même ses droits de super-admin. */}
+                {!isMe && (
+                  <button onClick={() => doToggleRole(u, admin)} disabled={busy} style={ghostBtn}>
+                    <Shield size={14} /> {admin ? 'Retirer les droits' : 'Passer super-admin'}
+                  </button>
+                )}
                 <button onClick={() => { setPwFor(pwFor === u.id ? null : u.id); setError(null) }} style={ghostBtn}>
                   <KeyRound size={14} /> Mot de passe
                 </button>
@@ -189,9 +192,12 @@ export function Comptes({ users, currentUser, onChange, onImpersonate, remote }:
                     <SlidersHorizontal size={14} /> Fonctionnalités
                   </button>
                 )}
-                <button onClick={() => doToggleDisabled(u)} disabled={busy} style={ghostBtn}>
-                  {u.disabled ? <Check size={14} /> : <Ban size={14} />} {u.disabled ? 'Réactiver' : 'Désactiver'}
-                </button>
+                {/* On ne peut pas non plus se désactiver soi-même (risque de blocage). */}
+                {!isMe && (
+                  <button onClick={() => doToggleDisabled(u)} disabled={busy} style={ghostBtn}>
+                    {u.disabled ? <Check size={14} /> : <Ban size={14} />} {u.disabled ? 'Réactiver' : 'Désactiver'}
+                  </button>
+                )}
                 {!isMe && (
                   <button onClick={() => doDelete(u)} disabled={busy}
                     style={{ ...ghostBtn, borderColor: '#f5c2c2', color: '#dc2626' }}>

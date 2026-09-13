@@ -30,9 +30,10 @@ import { runBackHandler } from './lib/backHandler'
 import {
   getUsers, saveUsers, getSession, saveSession, logActivity,
   getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, deleteProjectData,
+  getTrash, saveTrash,
 } from './lib/repo'
 import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from './lib/auth'
-import { Project, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
+import { Project, TrashedProject, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
 import { isSupabaseConfigured } from './lib/supabase'
 import { currentProfileUser, onAuthChange, signOutRemote } from './lib/supabaseAuth'
 import { initRemoteSession, disableSync, clearLocalAppState } from './lib/sync'
@@ -62,6 +63,7 @@ export default function App() {
   const [users, setUsers] = useState<User[]>(getUsers)
   const [session, setSession] = useState<Session | null>(getSession)
   const [projects, setProjects] = useState<Project[]>(getProjects)
+  const [trash, setTrash] = useState<TrashedProject[]>(getTrash)
   const [projectId, setProjectId] = useState<string | null>(getCurrentProjectId)
 
   // Authentification serveur (Supabase) quand elle est configurée ; sinon mode
@@ -112,7 +114,7 @@ export default function App() {
         await initRemoteSession(uid)
         if (!alive) return
         syncedUid = uid
-        setProjects(getProjects()); setProjectId(getCurrentProjectId())
+        setProjects(getProjects()); setProjectId(getCurrentProjectId()); setTrash(getTrash())
       }
       setRemoteUser(u); setRemoteReady(true)
     }
@@ -124,6 +126,7 @@ export default function App() {
   useEffect(() => { if (!isSupabaseConfigured) saveUsers(users) }, [users])
   useEffect(() => { if (!isSupabaseConfigured) saveSession(session) }, [session])
   useEffect(() => { saveProjects(projects) }, [projects])
+  useEffect(() => { saveTrash(trash) }, [trash])
   useEffect(() => { setCurrentProjectId(projectId) }, [projectId])
 
   const currentUser = isSupabaseConfigured
@@ -166,14 +169,39 @@ export default function App() {
     setGestionOpen(false)
   }
 
-  /** Supprimer une opération purge ses données et rebascule sur une autre. */
+  /**
+   * Suppression réversible : l'opération part à la corbeille SANS purger ses
+   * données. On rebascule sur une autre opération active.
+   */
   const removeProject = (id: string) => {
-    deleteProjectData(id)
+    const proj = findProject(projects, id)
+    if (!proj) return
+    setTrash(prev => [{ ...proj, deletedAt: new Date().toISOString() }, ...prev.filter(p => p.id !== id)])
     setProjects(prev => {
       const next = prev.filter(p => p.id !== id)
       setProjectId(cur => (cur === id ? resolveCurrent(next, null) : cur))
       return next
     })
+    logActivity('doc', `Opération « ${proj.name} » mise à la corbeille`)
+  }
+
+  /** Restaurer une opération depuis la corbeille (données intactes). */
+  const restoreProjectFromTrash = (id: string) => {
+    const t = trash.find(x => x.id === id)
+    if (!t) return
+    setTrash(prev => prev.filter(x => x.id !== id))
+    const restored: Project = { ...t }
+    delete (restored as Partial<TrashedProject>).deletedAt
+    setProjects(prev => [...prev, restored])
+    logActivity('doc', `Opération « ${t.name} » restaurée`)
+  }
+
+  /** Suppression DÉFINITIVE depuis la corbeille : purge les données du projet. */
+  const purgeProject = (id: string) => {
+    const t = trash.find(x => x.id === id)
+    deleteProjectData(id)
+    setTrash(prev => prev.filter(x => x.id !== id))
+    if (t) logActivity('doc', `Opération « ${t.name} » supprimée définitivement`)
   }
 
   // Back button: step back inside the app instead of closing it. A spare
@@ -324,11 +352,14 @@ export default function App() {
           {page === 'projets' && (
             <Projets
               projects={projects}
+              trash={trash}
               currentProjectId={projectId}
               currentUser={currentUser}
               onChange={setProjects}
               onSwitch={switchProject}
               onDelete={removeProject}
+              onRestore={restoreProjectFromTrash}
+              onPurge={purgeProject}
             />
           )}
           {page === 'moncompte' && <MonCompte users={users} currentUser={currentUser} onChange={setUsers} remote={isSupabaseConfigured} />}

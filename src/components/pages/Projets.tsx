@@ -1,21 +1,27 @@
 import { useState } from 'react'
-import { Building2, Check, Pencil, Plus, Trash2, X, Sparkles } from 'lucide-react'
+import { Building2, Check, Pencil, Plus, Trash2, X, Sparkles, RotateCcw, Archive } from 'lucide-react'
 import {
-  Project, ProjectInput, PROJECT_ERROR_LABEL, ProjectError,
-  createProject, updateProject, deleteProject, projectSubtitle,
+  Project, TrashedProject, ProjectInput, PROJECT_ERROR_LABEL, ProjectError,
+  createProject, updateProject, projectSubtitle,
 } from '../../lib/projects'
 import { seedProjectData } from '../../lib/repo'
 import { DEMO_PROJECT, buildDemoSeed } from '../../lib/demoData'
+import { GAMBETTA_PROJECT, buildGambettaSeed } from '../../lib/gambettaData'
 import { User } from '../../lib/auth'
 
 interface Props {
   projects: Project[]
+  trash: TrashedProject[]
   currentProjectId: string | null
   currentUser: User
   onChange: (projects: Project[]) => void
   onSwitch: (id: string) => void
-  /** Supprime aussi les données du projet (planning, visites, finances…). */
+  /** Met l'opération à la corbeille (réversible, données conservées). */
   onDelete: (id: string) => void
+  /** Restaure une opération depuis la corbeille. */
+  onRestore: (id: string) => void
+  /** Supprime définitivement une opération de la corbeille (purge les données). */
+  onPurge: (id: string) => void
 }
 
 const input: React.CSSProperties = {
@@ -30,10 +36,11 @@ const label: React.CSSProperties = {
 
 const EMPTY: ProjectInput = { name: '', reference: '', address: '' }
 
-export function Projets({ projects, currentProjectId, currentUser, onChange, onSwitch, onDelete }: Props) {
+export function Projets({ projects, trash, currentProjectId, currentUser, onChange, onSwitch, onDelete, onRestore, onPurge }: Props) {
   const [form, setForm] = useState<ProjectInput | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<string | null>(null)
+  const [purgeConfirm, setPurgeConfirm] = useState<string | null>(null)
   const [error, setError] = useState<ProjectError | null>(null)
 
   const startCreate = () => { setEditing(null); setForm({ ...EMPTY }); setError(null) }
@@ -57,25 +64,25 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
   }
 
   const remove = (id: string) => {
-    const res = deleteProject(projects, id)
-    if (!res.ok) return
-    onChange(res.projects)
-    onDelete(id)
+    onDelete(id)          // → corbeille (réversible), géré par App
     setConfirm(null)
   }
 
-  // Crée un projet fictif pré-rempli (démonstration), en évitant les doublons de nom.
-  const loadDemo = () => {
-    let input = { ...DEMO_PROJECT, createdBy: currentUser.id }
+  // Crée un projet pré-rempli (exemple ou opération réelle), en évitant les
+  // doublons de nom, puis bascule dessus.
+  const loadPreset = (base: ProjectInput, seed: ReturnType<typeof buildDemoSeed>) => {
+    let input = { ...base, createdBy: currentUser.id }
     for (let n = 2; projects.some(p => p.name.toLowerCase() === input.name.toLowerCase()); n++) {
-      input = { ...input, name: `${DEMO_PROJECT.name} (${n})` }
+      input = { ...input, name: `${base.name} (${n})` }
     }
     const res = createProject(projects, input)
     if (!res.ok || !res.project) return
     onChange(res.projects)
-    seedProjectData(res.project.id, buildDemoSeed())
+    seedProjectData(res.project.id, seed)
     onSwitch(res.project.id)
   }
+  const loadDemo = () => loadPreset(DEMO_PROJECT, buildDemoSeed())
+  const loadGambetta = () => loadPreset(GAMBETTA_PROJECT, buildGambettaSeed())
 
   return (
     <div style={{ padding: '16px', maxWidth: '680px', margin: '0 auto' }}>
@@ -88,6 +95,13 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
         </div>
         {!form && (
           <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={loadGambetta} title="Charger l'opération 111 rue Gambetta (planning N17)" style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
+              borderRadius: '9px', border: '1px solid var(--line)', background: 'var(--surface, #fff)',
+              color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>
+              <Building2 size={15} /> Gambetta
+            </button>
             <button onClick={loadDemo} title="Créer un projet d'exemple pré-rempli" style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
               borderRadius: '9px', border: '1px solid var(--line)', background: 'var(--surface, #fff)',
@@ -196,13 +210,13 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
 
             {confirm === p.id ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                <span style={{ fontSize: '11px', color: '#b42318', maxWidth: '132px' }}>
-                  Supprimer l'opération et toutes ses données ?
+                <span style={{ fontSize: '11px', color: '#b45309', maxWidth: '140px' }}>
+                  Mettre à la corbeille ? Restaurable ensuite.
                 </span>
                 <button onClick={() => remove(p.id)} style={{
                   padding: '6px 10px', borderRadius: '8px', border: 'none',
-                  background: '#b42318', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-                }}>Supprimer</button>
+                  background: '#b45309', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                }}>Corbeille</button>
                 <button onClick={() => setConfirm(null)} style={{
                   padding: '6px 9px', borderRadius: '8px', border: '1px solid var(--line)',
                   background: '#fff', fontSize: '11px', cursor: 'pointer',
@@ -219,14 +233,63 @@ export function Projets({ projects, currentProjectId, currentUser, onChange, onS
                 <button onClick={() => startEdit(p)} title="Modifier" style={{
                   border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '6px',
                 }}><Pencil size={15} /></button>
-                <button onClick={() => setConfirm(p.id)} title="Supprimer" style={{
-                  border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '6px',
+                <button onClick={() => setConfirm(p.id)} title="Mettre à la corbeille" style={{
+                  border: 'none', background: 'none', cursor: 'pointer', color: '#b45309', padding: '6px',
                 }}><Trash2 size={15} /></button>
               </div>
             )}
           </div>
         )
       })}
+
+      {trash.length > 0 && (
+        <div style={{ marginTop: '22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '8px' }}>
+            <Archive size={13} /> Corbeille ({trash.length})
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+            Les opérations supprimées sont conservées ici avec toutes leurs données. Restaurez-les
+            à tout moment, ou supprimez-les définitivement.
+          </div>
+          {trash.map(t => (
+            <div key={t.id} style={{
+              display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px',
+              border: '1px dashed var(--line)', borderRadius: '12px', marginBottom: '8px', background: '#fbfaf8',
+            }}>
+              <div style={{ width: '34px', height: '34px', borderRadius: '9px', flexShrink: 0, background: '#f1ede6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={16} color="#b45309" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--navy)' }}>{t.name}</div>
+                <div style={{ fontSize: '10.5px', color: 'var(--muted)' }}>
+                  Supprimée le {new Date(t.deletedAt).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+              {purgeConfirm === t.id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '11px', color: '#b42318', maxWidth: '120px' }}>Supprimer définitivement ?</span>
+                  <button onClick={() => { onPurge(t.id); setPurgeConfirm(null) }} style={{
+                    padding: '6px 10px', borderRadius: '8px', border: 'none', background: '#b42318', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                  }}>Supprimer</button>
+                  <button onClick={() => setPurgeConfirm(null)} style={{
+                    padding: '6px 9px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', cursor: 'pointer',
+                  }}>Annuler</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  <button onClick={() => onRestore(t.id)} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 11px', borderRadius: '8px',
+                    border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', color: 'var(--navy)',
+                  }}><RotateCcw size={13} /> Restaurer</button>
+                  <button onClick={() => setPurgeConfirm(t.id)} title="Supprimer définitivement" style={{
+                    border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '6px',
+                  }}><Trash2 size={15} /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

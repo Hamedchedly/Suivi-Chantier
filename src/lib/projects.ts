@@ -25,6 +25,11 @@ export interface Project {
   createdBy?: string
 }
 
+/** Opération mise à la corbeille : conservée (données intactes) et restaurable. */
+export interface TrashedProject extends Project {
+  deletedAt: string      // ISO
+}
+
 /** Champs texte facultatifs : une valeur vide efface le champ. */
 const OPTIONAL_FIELDS = ['reference', 'address', 'moa', 'moe', 'amo'] as const
 

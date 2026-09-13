@@ -37,7 +37,7 @@ import { Visit as VisitSession, type ZoneRef } from './visits'
 import { Unit, TaskUnitLink, visitableUnits, buildingOf, unitPath } from './units'
 import { DateCommitment } from './commitments'
 import type { User, Session } from './auth'
-import type { Project } from './projects'
+import type { Project, TrashedProject } from './projects'
 import { resolveCurrent } from './projects'
 import { loadState, saveState, removeState } from './storage'
 
@@ -47,6 +47,7 @@ const GLOBAL = {
   session: 'sc-session-v1',
   projects: 'sc-projects-v1',
   currentProject: 'sc-current-project-v1',
+  trash: 'sc-trash-v1',
 } as const
 
 // ── Clés cloisonnées par projet (suffixées `::<projectId>`) ─────────────────
@@ -103,6 +104,19 @@ export function getCurrentProjectId(): string | null {
 
 export function setCurrentProjectId(id: string | null): void {
   saveState(GLOBAL.currentProject, id)
+}
+
+// ── Corbeille des opérations (suppression réversible) ────────────────────────
+// Une opération supprimée y est déplacée SANS purger ses données : on peut la
+// restaurer telle quelle. La purge définitive (deleteProjectData) n'intervient
+// qu'à la suppression définitive depuis la corbeille.
+
+export function getTrash(): TrashedProject[] {
+  return loadState<TrashedProject[]>(GLOBAL.trash, [])
+}
+
+export function saveTrash(trash: TrashedProject[]): void {
+  saveState(GLOBAL.trash, trash)
 }
 
 /** Purge toutes les données d'un projet supprimé (aucune orpheline en réserve). */

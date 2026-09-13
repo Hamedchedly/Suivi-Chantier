@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, RotateCcw, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
@@ -175,14 +175,6 @@ export function Gantt() {
     })
     setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
   }
-  /** Vider le planning de l'opération courante — action destructive, confirmée. */
-  const handleReset = () => {
-    if (window.confirm('Vider entièrement le planning de cette opération ?\nToutes les tâches seront supprimées. Cette action est irréversible.')) {
-      setGanttTasks([])
-      logActivity('planning', 'Planning vidé (toutes les tâches supprimées)')
-    }
-  }
-
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -235,7 +227,6 @@ export function Gantt() {
             </button>
             <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
             <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
-            <button className="gtb" onClick={handleReset} title="Vider le planning (supprime toutes les tâches)"><RotateCcw size={14} /></button>
           </div>
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
