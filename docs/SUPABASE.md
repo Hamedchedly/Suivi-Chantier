@@ -22,22 +22,38 @@ est **une copie 1:1** du modèle existant, la couche de sync reste mince, et les
 tables métier normalisées (`operations`, `tasks`, …) restent disponibles pour un
 usage analytique ou un futur back-office.
 
-## Étapes restantes (dans l'ordre)
+## Déjà en place (côté serveur, déployé)
+
+- **`app_state`** — table de synchronisation clé-valeur (RLS `auth.uid()`).
+- **`profiles`** — rôle (`user` / `superadmin`), `disabled`, `features[]`,
+  `display_name`, e-mail. RLS : lecture de son profil, tout pour un super-admin ;
+  écritures directes réservées au super-admin. Fonction `is_superadmin()` et
+  trigger `handle_new_user` (provisionne un profil à l'inscription).
+- **Fonction Edge `admin-users`** (ACTIVE, `verify_jwt`) — actions `list`,
+  `create`, `setPassword`, `update`, `delete`, exécutées en service_role après
+  vérification que l'appelant est super-admin. C'est le seul chemin pour créer un
+  compte ou changer le mot de passe d'un autre utilisateur.
+- **`src/lib/supabaseAuth.ts`** — adaptateur client : `signInEmail`,
+  `signOutRemote`, `currentProfileUser`, `changeOwnPasswordRemote`, et les appels
+  `admin*` vers la fonction Edge.
+
+## Étapes restantes (câblage interface)
 
 1. **Config** : `cp .env.example .env.local`, renseigner la clé publiable ; côté
    Vercel, définir `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
-2. **Auth** (`src/lib/auth.ts` + `Login.tsx`) : quand `isSupabaseConfigured`,
-   utiliser `supabase.auth.signInWithPassword` / `signUp` (e-mail + mot de passe)
-   au lieu des comptes locaux. Conserver le mode démo local en repli.
-3. **Hydratation** (`src/App.tsx`) : au montage, si une session existe, charger
-   toutes les lignes `app_state` de l'utilisateur dans `localStorage` **avant**
-   le premier rendu (écran de chargement bref).
-4. **Write-through** (`src/lib/repo.ts`) : `saveState` écrit `localStorage` puis
-   `upsert` dans `app_state` (débounce ~500 ms, file d'attente hors-ligne). Les
-   lectures restent synchrones depuis le cache local — les composants ne changent
-   pas.
-5. **Multi-appareils** : `updated_at` + résolution « dernière écriture gagne » au
-   niveau de la clé ; abonnement Realtime optionnel pour le temps réel.
+2. **Amorçage** : créer le premier super-admin (dashboard Supabase → Auth → Add
+   user), puis dans SQL : `update public.profiles set role='superadmin' where email='…';`
+3. **Login** (`Login.tsx`) : si `isSupabaseConfigured`, formulaire **e-mail +
+   mot de passe** → `signInEmail`. Repli local sinon.
+4. **Session** (`src/App.tsx`) : dériver l'utilisateur courant de
+   `currentProfileUser()` + `onAuthChange`, avec un bref écran de chargement.
+5. **Comptes / MonCompte** : brancher sur `adminListUsers/adminCreateUser/
+   adminSetPassword/adminUpdateUser/adminDeleteUser` et `changeOwnPasswordRemote`.
+6. **Synchro données** (`repo.ts`) : hydrater `app_state` à la connexion,
+   `upsert` en write-through à chaque `saveState` (débounce). Lectures inchangées.
+
+> La bascule doit être **vérifiée par une vraie connexion en local** (`.env.local`)
+> avant d'activer les variables en production.
 
 ## Sécurité
 
