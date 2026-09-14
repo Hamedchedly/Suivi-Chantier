@@ -9,7 +9,7 @@ import {
   unitPath, toggleLink, isLinked, unitIdsForTask, taskIdsForUnit, pruneLinks,
 } from '../../lib/units'
 import { GanttTask } from '../../types/gantt'
-import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks } from '../../lib/repo'
+import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks, saveGanttTasks } from '../../lib/repo'
 import { SavedIndicator } from '../common/SavedIndicator'
 
 const KIND_ICON: Record<UnitKind, typeof Building2> = {
@@ -46,12 +46,43 @@ export function Structure() {
   useEffect(() => { saveUnits(units) }, [units])
   useEffect(() => { saveTaskUnits(links) }, [links])
 
-  // Le planning fournit les tâches rattachables, groupées par lot.
-  const lots = useMemo(() => getGanttTasks(), [])
+  // Le planning fournit les tâches rattachables, groupées par lot. En état local
+  // pour qu'une tâche saisie ici apparaisse aussitôt et soit persistée.
+  const [gantt, setGantt] = useState<GanttTask[]>(getGanttTasks)
+  const lots = gantt
   const leaves = useMemo(
-    () => lots.flatMap(lot => (lot.children ?? []).map(t => ({ lot, task: t }))),
-    [lots],
+    () => gantt.flatMap(lot => (lot.children ?? []).map(t => ({ lot, task: t }))),
+    [gantt],
   )
+  useEffect(() => { saveGanttTasks(gantt) }, [gantt])
+
+  /** Coche/décoche en bloc un ensemble de tâches pour une unité donnée. */
+  const setLinksFor = (taskIds: string[], unitId: string, on: boolean) =>
+    setLinks(prev => {
+      const others = prev.filter(l => !(l.unitId === unitId && taskIds.includes(l.taskId)))
+      return on ? [...others, ...taskIds.map(taskId => ({ taskId, unitId }))] : others
+    })
+
+  /** Saisie manuelle d'une tâche : nouvelle feuille rattachée à un lot, datée par défaut sur aujourd'hui. */
+  const addManualTask = (lot: GanttTask, title: string, unitId?: string | null) => {
+    const start = new Date(); start.setHours(0, 0, 0, 0)
+    const end = new Date(start); end.setDate(end.getDate() + 4)
+    const leaf: GanttTask = {
+      id: `t${Date.now()}`, parent_id: lot.id, lot_id: lot.lot_id, title: title.trim(),
+      planned_start: start, planned_end: end, planned_duration: 5,
+      progress: 0, status: 'not-started', priority: 'medium',
+      dependencies: [], is_milestone: false, is_critical: false,
+    }
+    setGantt(prev => prev.map(l => {
+      if (l.id !== lot.id) return l
+      const children = [...(l.children ?? []), leaf]
+      const s = new Date(Math.min(l.planned_start.getTime(), start.getTime()))
+      const e = new Date(Math.max(l.planned_end.getTime(), end.getTime()))
+      const progress = Math.round(children.reduce((a, c) => a + c.progress, 0) / children.length)
+      return { ...l, children, planned_start: s, planned_end: e, progress }
+    }))
+    if (unitId) setLinks(prev => (isLinked(prev, leaf.id, unitId) ? prev : [...prev, { taskId: leaf.id, unitId }]))
+  }
 
   // Un lien dont la tâche ou l'unité a disparu n'a plus de sens.
   useEffect(() => {
@@ -188,14 +219,24 @@ export function Structure() {
   const unit = findUnit(units, selectedUnit)
   const task = leaves.find(l => l.task.id === selectedTask)
 
+  const allTaskIds = leaves.map(l => l.task.id)
+  const allOn = allTaskIds.length > 0 && unit && allTaskIds.every(id => isLinked(links, id, unit.id))
   const tasksPanel = (
     <div style={panel}>
+      <ManualTaskAdder lots={lots} onCreate={(lot, title) => addManualTask(lot, title, unit?.id)} />
       {!unit && <div style={hint}>Choisissez un bâtiment, un niveau, un logement ou une zone à gauche pour lui rattacher des tâches.</div>}
       {unit && (
         <>
           <div style={panelHead}>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{unitPath(units, unit.id)}</div>
-            <strong style={{ fontSize: '14px', color: 'var(--navy)' }}>Tâches concernées</strong>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <strong style={{ flex: 1, fontSize: '14px', color: 'var(--navy)' }}>Tâches concernées</strong>
+              {allTaskIds.length > 0 && (
+                <button onClick={() => setLinksFor(allTaskIds, unit.id, !allOn)} style={selAllBtn}>
+                  {allOn ? 'Tout décocher' : 'Tout cocher'}
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
               Une tâche cochée sur un bâtiment vaut pour tous les logements qu'il contient.
             </div>
@@ -204,9 +245,16 @@ export function Structure() {
           {lots.map(lot => {
             const kids = lot.children ?? []
             if (kids.length === 0) return null
+            const ids = kids.map(k => k.id)
+            const lotOn = ids.every(id => isLinked(links, id, unit.id))
             return (
               <div key={lot.id} style={{ marginBottom: '10px' }}>
-                <div style={groupTitle}>{lot.title}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ ...groupTitle, flex: 1 }}>{lot.title}</div>
+                  <button onClick={() => setLinksFor(ids, unit.id, !lotOn)} style={selAllBtn}>
+                    {lotOn ? 'décocher' : 'cocher'} le lot
+                  </button>
+                </div>
                 {kids.map(t => (
                   <label key={t.id} style={checkRow}>
                     <input type="checkbox" checked={isLinked(links, t.id, unit.id)}
@@ -379,6 +427,49 @@ function placeholderFor(kind: UnitKind): string {
   }
 }
 
+/** Saisie manuelle d'une tâche, rattachée à un lot puis (via les cases) aux zones. */
+function ManualTaskAdder({ lots, onCreate }: { lots: GanttTask[]; onCreate: (lot: GanttTask, title: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [lotId, setLotId] = useState(lots[0]?.id ?? '')
+  const [title, setTitle] = useState('')
+  if (lots.length === 0) return null
+  const create = () => {
+    const lot = lots.find(l => l.id === lotId)
+    if (!lot || !title.trim()) return
+    onCreate(lot, title)
+    setTitle(''); setOpen(false)
+  }
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{ ...smallBtn, marginBottom: '10px' }}>
+        <Plus size={13} /> Nouvelle tâche
+      </button>
+    )
+  }
+  return (
+    <div style={{ border: '1px solid var(--line)', borderRadius: '10px', padding: '10px', marginBottom: '10px', background: '#f8fafc' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+        <strong style={{ flex: 1, fontSize: '13px', color: 'var(--navy)' }}>Nouvelle tâche</strong>
+        <button onClick={() => setOpen(false)} style={iconBtn}><X size={15} /></button>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <select value={lotId} onChange={e => setLotId(e.target.value)} style={{ ...inp, flex: '1 1 130px' }}>
+          {lots.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+        </select>
+        <input autoFocus value={title} placeholder="Intitulé de la tâche"
+          onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') create() }}
+          style={{ ...inp, flex: '2 1 180px' }} />
+        <button onClick={create} style={primaryBtn}>Ajouter</button>
+      </div>
+      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
+        Datée sur aujourd'hui (5 j) par défaut — ajustable dans le planning. Cochez ci-dessous les zones concernées.
+      </div>
+    </div>
+  )
+}
+
+const selAllBtn: React.CSSProperties = { padding: '4px 9px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '11px', fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', whiteSpace: 'nowrap' }
 const panel: React.CSSProperties = { border: '1px solid var(--line)', borderRadius: '12px', background: '#fff', padding: '12px' }
 const panelHead: React.CSSProperties = { borderBottom: '1px solid var(--line)', paddingBottom: '8px', marginBottom: '10px' }
 const hint: React.CSSProperties = { fontSize: '12px', color: 'var(--muted)', padding: '14px 4px', lineHeight: 1.5 }
