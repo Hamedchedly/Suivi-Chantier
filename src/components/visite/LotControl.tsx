@@ -164,14 +164,14 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const blockers = task.blockedBy ?? []
   const isNa = task.state === 'na'
 
-  const actual = task.progress ?? 0
-  const planned = task.plannedProgress ?? actual
-  const lo = Math.min(planned, actual)
-  const hi = Math.max(planned, actual)
-  const ahead = actual >= planned
-  // One bar, three readings: done, the gap to plan, and what is left.
-  const gapColor = ahead ? '#16a34a' : '#f59e0b'
-  const track = `linear-gradient(to right, #02457A 0%, #02457A ${lo}%, ${gapColor} ${lo}%, ${gapColor} ${hi}%, #dbe5ec ${hi}%, #dbe5ec 100%)`
+  const checked = task.progress !== undefined
+  const planned = task.plannedProgress            // attendu selon le planning, figé à l'ouverture
+  const prev = previous?.progress                 // % constaté à la dernière réunion
+  // Le curseur démarre là où en était le point (dernière réunion, sinon prévu) :
+  // il ne reste qu'à le pousser à la valeur du jour. Les repères « prévu » et
+  // « réunion préc. » sont posés par-dessus le remplissage.
+  const thumb = task.progress ?? prev ?? planned ?? 0
+  const track = `linear-gradient(to right, #02457A 0%, #02457A ${thumb}%, #dbe5ec ${thumb}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
     onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
@@ -197,7 +197,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             </button>
           </>
         )}
-        {!isNa && <strong style={{ fontSize: '19px', color: 'var(--navy)' }}>{actual}%</strong>}
+        {!isNa && (
+          <strong style={{ fontSize: '19px', color: checked ? 'var(--navy)' : 'var(--muted)' }} title={checked ? undefined : 'Valeur de départ (dernière réunion) — bougez le curseur pour constater'}>
+            {thumb}%{!checked && <span style={{ fontSize: '10px', fontWeight: 600, verticalAlign: '2px', marginLeft: '2px' }}>·</span>}
+          </strong>
+        )}
       </div>
 
       {/* A non-applicable task is set aside: no bar, and it stops counting */}
@@ -215,31 +219,45 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           )}
         </div>
       ) : (
-        <input
-          className="task-slider"
-          type="range" min={0} max={100} step={5}
-          value={actual}
-          disabled={readOnly}
-          onChange={e => patchProgress(Number(e.target.value))}
-          style={{ background: track }}
-        />
+        <div style={{ position: 'relative' }}>
+          <input
+            className="task-slider"
+            type="range" min={0} max={100} step={5}
+            value={thumb}
+            disabled={readOnly}
+            onChange={e => patchProgress(Number(e.target.value))}
+            style={{ background: track }}
+          />
+          {/* Repère du prévu au planning et de l'avancement de la dernière réunion */}
+          {planned !== undefined && <SliderMark pct={planned} color="#0284c7" title={`Prévu au planning : ${planned}%`} />}
+          {prev !== undefined && <SliderMark pct={prev} color="#f59e0b" title={`Dernière réunion : ${prev}%`} />}
+        </div>
       )}
 
       {/* The bar carries the plan; only the gap itself needs spelling out */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10px', marginTop: '6px', marginBottom: '10px' }}>
+        {!isNa && planned !== undefined && (
+          <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span style={markDot('#0284c7')} /> prévu {planned}%
+          </span>
+        )}
+        {!isNa && prev !== undefined && (
+          <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span style={markDot('#f59e0b')} /> réunion préc. {prev}%{!checked && ' · départ du curseur'}
+          </span>
+        )}
         {!isNa && gap !== null && gap !== 0 && (
           <span style={{ color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 700 }}>
-            {gap < 0 ? `${-gap} pts de retard` : `${gap} pts d'avance`} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>sur le prévu ({planned}%)</span>
+            {gap < 0 ? `${-gap} pts de retard` : `${gap} pts d'avance`}
           </span>
         )}
         {!isNa && gap === 0 && <span style={{ color: '#15803d', fontWeight: 700 }}>conforme au prévu</span>}
         {delta !== null && delta !== 0 && (
           <span style={{ color: 'var(--muted)' }}>
-            depuis le {fmtFr(previous!.date)}
             <strong style={{ color: delta > 0 ? '#15803d' : '#dc2626', marginLeft: '3px' }}>
               {delta > 0 ? <ArrowUp size={10} style={{ verticalAlign: '-1px' }} /> : <ArrowDown size={10} style={{ verticalAlign: '-1px' }} />}
-              {delta > 0 ? `+${delta}` : delta}
-            </strong>
+              {delta > 0 ? `+${delta}` : delta} pts
+            </strong> depuis le {fmtFr(previous!.date)}
           </span>
         )}
       </div>
@@ -532,6 +550,28 @@ function EngagementForm({ company, label, week, hasOne, onSubmit, onClear, onCan
     </div>
   )
 }
+
+/**
+ * Repère vertical posé sur le curseur d'avancement. Le pouce fait 24px : son
+ * centre va de 12px (0 %) à largeur−12px (100 %), d'où le calc d'alignement.
+ */
+function SliderMark({ pct, color, title }: { pct: number; color: string; title: string }) {
+  return (
+    <div
+      title={title}
+      style={{
+        position: 'absolute', top: '-2px', bottom: '-2px',
+        left: `calc(12px + (100% - 24px) * ${pct} / 100)`,
+        width: '3px', marginLeft: '-1.5px', background: color, borderRadius: '2px',
+        boxShadow: '0 0 0 1.5px rgba(255,255,255,.95)', pointerEvents: 'none', zIndex: 2,
+      }}
+    />
+  )
+}
+
+const markDot = (color: string): React.CSSProperties => ({
+  width: '8px', height: '8px', borderRadius: '2px', background: color, display: 'inline-block', flexShrink: 0,
+})
 
 const panelBox: React.CSSProperties = { marginTop: '4px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }
 
