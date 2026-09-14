@@ -1,19 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Plus, FileText, MessageSquare } from 'lucide-react'
 import {
   Rfi, Visa, Doc, VisaStatus, nextRfiRef, countOpenRfis, countPendingVisas, fileSize,
 } from '../../lib/admin'
 import {
-  getRfis, saveRfis, getVisas, saveVisas, getDocs, saveDocs,
+  getRfis, saveRfis, getVisas, saveVisas, getDocs, saveDocs, getLotsConfig, type LotContact,
 } from '../../lib/repo'
 
 type DocSection = 'rfi' | 'visa' | 'ged'
 
-const LOTS = [
-  { id: 'L05', name: 'LOT 05' }, { id: 'L06', name: 'LOT 06' },
-  { id: 'L07', name: 'LOT 07' }, { id: 'L08', name: 'LOT 08' },
-]
-const lotName = (id: string) => LOTS.find(l => l.id === id)?.name ?? id
+// Les lots viennent de la configuration réelle de l'opération active — jamais
+// d'une liste figée (sinon les menus sont faux dès qu'on change d'opération).
+const lotNameIn = (lots: LotContact[], id: string) => lots.find(l => l.id === id)?.name ?? id
 
 const VISA_META: Record<VisaStatus, { label: string; bg: string; fg: string }> = {
   pending: { label: 'En attente', bg: '#fef3c7', fg: '#b45309' },
@@ -28,6 +26,8 @@ export function Documents() {
   const [visas, setVisas] = useState<Visa[]>(getVisas)
   const [docs, setDocs] = useState<Doc[]>(getDocs)
 
+  const lots = useMemo(() => getLotsConfig(), [])
+
   useEffect(() => { saveRfis(rfis) }, [rfis])
   useEffect(() => { saveVisas(visas) }, [visas])
   useEffect(() => { saveDocs(docs) }, [docs])
@@ -40,18 +40,18 @@ export function Documents() {
         <Chip on={section === 'ged'} onClick={() => setSection('ged')} label="Documents" />
       </div>
 
-      {section === 'rfi' && <RfiView rfis={rfis} setRfis={setRfis} />}
-      {section === 'visa' && <VisaView visas={visas} setVisas={setVisas} />}
+      {section === 'rfi' && <RfiView rfis={rfis} setRfis={setRfis} lots={lots} />}
+      {section === 'visa' && <VisaView visas={visas} setVisas={setVisas} lots={lots} />}
       {section === 'ged' && <GedView docs={docs} setDocs={setDocs} />}
     </div>
   )
 }
 
 // ── RFI ──────────────────────────────────────────────────────────────────────
-function RfiView({ rfis, setRfis }: { rfis: Rfi[]; setRfis: React.Dispatch<React.SetStateAction<Rfi[]>> }) {
+function RfiView({ rfis, setRfis, lots }: { rfis: Rfi[]; setRfis: React.Dispatch<React.SetStateAction<Rfi[]>>; lots: LotContact[] }) {
   const [showForm, setShowForm] = useState(false)
   const [subject, setSubject] = useState('')
-  const [lotId, setLotId] = useState('L05')
+  const [lotId, setLotId] = useState(lots[0]?.id ?? '')
   const [question, setQuestion] = useState('')
   const [answering, setAnswering] = useState<string | null>(null)
   const [answerText, setAnswerText] = useState('')
@@ -75,7 +75,8 @@ function RfiView({ rfis, setRfis }: { rfis: Rfi[]; setRfis: React.Dispatch<React
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Objet" style={{ ...inp, flex: 2 }} />
             <select value={lotId} onChange={e => setLotId(e.target.value)} style={{ ...inp, flex: 1 }}>
-              {LOTS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              {lots.length === 0 && <option value="">Aucun lot configuré</option>}
+              {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
           <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="Question..." style={{ ...inp, width: '100%', minHeight: '56px', marginBottom: '8px', resize: 'vertical' }} />
@@ -88,7 +89,7 @@ function RfiView({ rfis, setRfis }: { rfis: Rfi[]; setRfis: React.Dispatch<React
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <strong style={{ color: 'var(--navy)', fontSize: '13px' }}>{r.ref}</strong>
-                <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{lotName(r.lotId)}</span>
+                <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{lotNameIn(lots, r.lotId)}</span>
               </div>
               <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: 700, background: r.status === 'answered' ? 'var(--ok-bg)' : 'var(--warn-bg)', color: r.status === 'answered' ? 'var(--ok)' : 'var(--warn)' }}>
                 {r.status === 'answered' ? 'Répondue' : 'Ouverte'}
@@ -119,7 +120,7 @@ function RfiView({ rfis, setRfis }: { rfis: Rfi[]; setRfis: React.Dispatch<React
 }
 
 // ── VISA ─────────────────────────────────────────────────────────────────────
-function VisaView({ visas, setVisas }: { visas: Visa[]; setVisas: React.Dispatch<React.SetStateAction<Visa[]>> }) {
+function VisaView({ visas, setVisas, lots }: { visas: Visa[]; setVisas: React.Dispatch<React.SetStateAction<Visa[]>>; lots: LotContact[] }) {
   const setStatus = (id: string, status: VisaStatus) =>
     setVisas(prev => prev.map(v => (v.id === id ? { ...v, status } : v)))
 
@@ -132,7 +133,7 @@ function VisaView({ visas, setVisas }: { visas: Visa[]; setVisas: React.Dispatch
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px' }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{v.docName}</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>Indice {v.index} • {lotName(v.lotId)} • {new Date(v.date).toLocaleDateString('fr')}</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>Indice {v.index} • {lotNameIn(lots, v.lotId)} • {new Date(v.date).toLocaleDateString('fr')}</div>
               </div>
               <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: 700, background: meta.bg, color: meta.fg, whiteSpace: 'nowrap' }}>{meta.label}</span>
             </div>
