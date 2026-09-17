@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
+import { DateCommitment } from '../../lib/commitments'
 
 interface GanttTableProps {
   tasks: GanttTask[]
@@ -10,6 +11,9 @@ interface GanttTableProps {
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
   readOnly?: boolean
+  showForecast?: boolean    // show forecast bars (hatched yellow)
+  showBaseline?: boolean    // show baseline thin reference bar
+  commitments?: DateCommitment[] // engagement markers on timeline
 }
 
 interface DragState {
@@ -48,17 +52,14 @@ function buildHeaders(startDate: Date, daysInRange: number, dayWidthPx: number) 
     day += span
   }
 
-  // Weeks numbered relative to the project start: the start week is S0.
-  // startDate is anchored to a Monday, so segments are clean 7-day weeks.
+  // Weeks: ISO week numbers (S36, S37…).
   day = 0
-  let weekIndex = 0
   while (day < daysInRange) {
     const date = new Date(startDate.getTime() + day * msPerDay)
     const dow = date.getDay() || 7
     const span = Math.min(8 - dow, daysInRange - day)
-    weeks.push({ label: `S${weekIndex}`, leftPx: day * dayWidthPx, widthPx: span * dayWidthPx })
+    weeks.push({ label: `S${isoWeek(date)}`, leftPx: day * dayWidthPx, widthPx: span * dayWidthPx })
     day += span
-    weekIndex++
   }
 
   return { months, weeks }
@@ -94,7 +95,18 @@ function flattenVisible(
   return acc
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly }: GanttTableProps) {
+/** ISO week number (1–53) for a given date. */
+function isoWeek(d: Date): number {
+  const target = new Date(d.getTime())
+  const dayNr = (d.getDay() + 6) % 7
+  target.setDate(target.getDate() - dayNr + 3)
+  const jan4 = new Date(target.getFullYear(), 0, 4)
+  return 1 + Math.round((target.getTime() - jan4.getTime()) / 604800000)
+}
+
+const fmt2 = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, commitments }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
@@ -332,10 +344,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             {curWeekVisible && (
               <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.16)', borderLeft: '2px solid rgba(1,138,190,.55)', borderRight: '2px solid rgba(1,138,190,.55)', zIndex: 0, pointerEvents: 'none' }} />
             )}
-            {/* Today marker — solid red line */}
-            {todayVisible && (
-              <div style={{ position: 'absolute', left: todayLeftPx - 1, top: 0, width: 2, height: '100%', background: '#dc2626', zIndex: 2, pointerEvents: 'none', boxShadow: '0 0 0 1px rgba(220,38,38,.15)' }} />
-            )}
+            {/* Today marker removed — current week highlight (blue band above) is sufficient */}
 
             {task.is_milestone ? (
               /* Milestone diamond */
@@ -355,6 +364,28 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {/* Barre du réel constaté, sous la barre du prévisionnel */}
                 {base && <div className="gantt-actual" style={{ left: base.leftPx, width: base.widthPx }} />}
 
+                {/* Baseline bar (thin grey reference line — contractual) */}
+                {showBaseline && task.baseline_start && task.baseline_end && (() => {
+                  const bl = geom(task.baseline_start, task.baseline_end)
+                  return (
+                    <div
+                      title={`Contractuel : ${fmt2(task.baseline_start)} → ${fmt2(task.baseline_end)}`}
+                      style={{ position: 'absolute', left: bl.leftPx, top: 21, width: bl.widthPx, height: 2, background: '#94a3b8', borderRadius: 1, zIndex: 1, opacity: 0.65, pointerEvents: 'none' }}
+                    />
+                  )
+                })()}
+
+                {/* Forecast bar (hatched amber — prévision calculée) */}
+                {showForecast && task.forecast_start && task.forecast_end && (() => {
+                  const f = geom(task.forecast_start, task.forecast_end)
+                  return (
+                    <div
+                      title={`Prévision : ${fmt2(task.forecast_start)} → ${fmt2(task.forecast_end)}`}
+                      style={{ position: 'absolute', left: f.leftPx, top: 17, width: f.widthPx, height: 5, background: 'repeating-linear-gradient(45deg, #f59e0b 0 3px, #fef3c7 3px 6px)', borderRadius: 2, zIndex: 2, opacity: 0.9, pointerEvents: 'none' }}
+                    />
+                  )
+                })()}
+
                 {/* Left resize handle */}
                 {editable && (
                   <div
@@ -362,6 +393,21 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                     style={{ position: 'absolute', left: bar.leftPx - 4, top: 5, width: 8, height: 12, cursor: 'ew-resize', zIndex: 4 }}
                   />
                 )}
+
+                {/* Start date label (always visible — spec: "voir la date de démarrage") */}
+                <div style={{
+                  position: 'absolute',
+                  left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
+                  top: 3,
+                  fontSize: 8,
+                  color: '#5b7183',
+                  whiteSpace: 'nowrap',
+                  zIndex: 2,
+                  pointerEvents: 'none',
+                  fontWeight: 500,
+                }}>
+                  {fmt2(task.planned_start)}
+                </div>
 
                 {/* Actual/planned bar */}
                 <div
@@ -393,6 +439,19 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                     style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 5, width: 8, height: 12, cursor: 'ew-resize', zIndex: 4 }}
                   />
                 )}
+
+                {/* Commitment markers ◆ (engagement pris en visite) */}
+                {commitments?.filter(c => c.taskId === task.id).map(c => {
+                  const cDate = new Date(c.promisedEnd)
+                  const cx = geom(cDate, cDate).leftPx
+                  return (
+                    <div
+                      key={c.id}
+                      title={`Engagement : ${c.label ?? c.promisedEnd}${c.company ? ` — ${c.company}` : ''}`}
+                      style={{ position: 'absolute', left: cx - 5, top: 1, fontSize: 10, color: '#7c3aed', zIndex: 5, pointerEvents: 'none', fontWeight: 700, lineHeight: 1 }}
+                    >◆</div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -413,10 +472,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {curWeekVisible && (
                   <div style={{ position: 'absolute', left: curWeekLeftPx, top: 0, width: curWeekWidthPx, height: '100%', background: 'rgba(1,138,190,.16)', borderLeft: '2px solid rgba(1,138,190,.55)', borderRight: '2px solid rgba(1,138,190,.55)', zIndex: 0, pointerEvents: 'none' }} />
                 )}
-                {/* Today triangle marker */}
-                {todayVisible && (
-                  <div style={{ position: 'absolute', left: todayLeftPx - 5, top: 0, width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '6px solid #dc2626', zIndex: 3, pointerEvents: 'none' }} />
-                )}
+                {/* Today indicator removed — current week band in header is sufficient */}
                 {/* Month row */}
                 <div style={{ position: 'relative', height: 22 }}>
                   {months.map((m, i) => (

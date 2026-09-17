@@ -17,6 +17,10 @@ export interface GanttTask {
   actual_end?: Date
   actual_duration?: number
 
+  forecast_start?: Date   // computed forecast — never user-entered
+  forecast_end?: Date     // computed forecast — never user-entered
+  contractual_working_days?: number // reference duration in working days (from baseline)
+
   progress: number // 0-100
   status: TaskStatus
 

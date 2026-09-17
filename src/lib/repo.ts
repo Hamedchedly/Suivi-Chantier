@@ -36,6 +36,7 @@ import { Meeting } from './meetings'
 import { Visit as VisitSession, type ZoneRef } from './visits'
 import { Unit, TaskUnitLink, visitableUnits, buildingOf, unitPath } from './units'
 import { DateCommitment } from './commitments'
+import { PlanningSnapshot, ChangeLogEntry } from './planningHistory'
 import type { User, Session } from './auth'
 import type { Project, TrashedProject } from './projects'
 import { resolveCurrent } from './projects'
@@ -84,6 +85,8 @@ const SCOPED = {
   commitments: 'sc-commitments-v1',
   visitKinds: 'sc-visit-kinds-v1',
   projectMemo: 'sc-project-memo-v1',
+  planningHistory: 'sc-planning-history-v1',
+  changeLog: 'sc-change-log-v1',
 } as const
 
 /** Projet sans identifiant : les lectures tombent sur les valeurs par défaut. */
@@ -447,6 +450,21 @@ export function getMeetings(): Meeting[] {
 }
 export function saveMeetings(m: Meeting[]): void {
   saveState(k(SCOPED.meetings), m)
+}
+
+// ── Historique du planning ───────────────────────────────────────────────────
+
+export function getPlanningHistory(): PlanningSnapshot[] {
+  return loadState<PlanningSnapshot[]>(k(SCOPED.planningHistory), [])
+}
+export function savePlanningHistory(h: PlanningSnapshot[]): void {
+  saveState(k(SCOPED.planningHistory), h)
+}
+export function getChangeLog(): ChangeLogEntry[] {
+  return loadState<ChangeLogEntry[]>(k(SCOPED.changeLog), [])
+}
+export function saveChangeLog(l: ChangeLogEntry[]): void {
+  saveState(k(SCOPED.changeLog), l)
 }
 
 // ── Messages administrateur (globaux, toutes opérations) ────────────────────

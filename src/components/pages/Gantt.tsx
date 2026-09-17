@@ -1,15 +1,16 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
-  getUnits, getTaskUnits, getZoneRefs,
+  getUnits, getTaskUnits, getZoneRefs, getCommitments,
 } from '../../lib/repo'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
+import { computeForecasts, applyForecastToPlanning, clearForecasts, forecastImpact, hasBaseline } from '../../lib/forecast'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -101,7 +102,11 @@ export function Gantt() {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => new Set())
   const [detailTask, setDetailTask] = useState<GanttTask | null>(null)
   const [showDelays, setShowDelays] = useState(false)
+  const [showForecast, setShowForecast] = useState(false)
+  const [showBaseline, setShowBaseline] = useState(false)
+  const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
+  const commitments = useMemo(() => getCommitments(), [])
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
 
@@ -231,6 +236,31 @@ export function Gantt() {
             <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification : décaler les tâches liées">
               <GitBranch size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-planif</span>
             </button>
+            <button
+              className={`gtb ${showForecast ? 'on' : ''}`}
+              onClick={() => setShowForecast(v => !v)}
+              title="Afficher les barres de prévision (jaune hachuré)"
+            >
+              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Prévision</span>
+            </button>
+            <button
+              className={`gtb ${showBaseline ? 'on' : ''}`}
+              onClick={() => setShowBaseline(v => !v)}
+              title="Afficher le contractuel de référence (gris)"
+            >
+              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Contractuel</span>
+            </button>
+            <button
+              className="gtb"
+              onClick={() => {
+                const computed = computeForecasts(ganttTasks, new Date(), calendar)
+                setForecastTasks(computed)
+              }}
+              title="Calculer les prévisions automatiques (sans modifier le planning)"
+              style={{ background: '#fef3c7', color: '#92400e' }}
+            >
+              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-réplanif</span>
+            </button>
             <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
               {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
             </button>
@@ -240,7 +270,7 @@ export function Gantt() {
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
-              tasks={displayTree}
+              tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : displayTree}
               viewState={viewState}
               onToggleExpanded={id => setExpandedTasks(prev => {
                 const next = new Set(prev)
@@ -250,6 +280,9 @@ export function Gantt() {
               onTaskUpdate={handleTaskUpdate}
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
+              showForecast={showForecast}
+              showBaseline={showBaseline}
+              commitments={commitments}
             />
           </div>
         </>
@@ -269,6 +302,70 @@ export function Gantt() {
       )}
 
       {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+
+      {forecastTasks && (
+        <ForecastPanel
+          tasks={forecastTasks}
+          onApply={() => {
+            const applied = applyForecastToPlanning(forecastTasks)
+            setGanttTasks(applied)
+            setForecastTasks(null)
+            setShowForecast(false)
+          }}
+          onKeep={() => {
+            setGanttTasks(forecastTasks)
+            setForecastTasks(null)
+            setShowForecast(true)
+          }}
+          onCancel={() => {
+            setForecastTasks(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Panneau prévision (auto-réplanification) ───────────────────────────────────
+function ForecastPanel({
+  tasks, onApply, onKeep, onCancel,
+}: { tasks: GanttTask[]; onApply: () => void; onKeep: () => void; onCancel: () => void }) {
+  const { count, maxDrift: drift } = forecastImpact(tasks)
+  const hasBase = hasBaseline(tasks)
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.4)' }} onClick={onCancel} />
+      <div style={{ position: 'relative', width: '100%', background: '#fff', borderRadius: '16px 16px 0 0', padding: '16px', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+          <TrendingUp size={16} color="#f59e0b" style={{ marginRight: 8 }} />
+          <span style={{ fontWeight: 700, fontSize: '15px', color: '#02457A', flex: 1 }}>Prévision calculée</span>
+          <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', color: '#5b7183' }}>✕</button>
+        </div>
+        {count === 0 ? (
+          <p style={{ fontSize: '13px', color: '#15803d', fontWeight: 600, marginBottom: '12px' }}>✓ Aucun écart — planning à jour.</p>
+        ) : (
+          <div style={{ background: '#fef3c7', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px' }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#92400e' }}>
+              {count} tâche{count > 1 ? 's' : ''} impactée{count > 1 ? 's' : ''} — dérive max +{drift} j
+            </p>
+            {!hasBase && <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#b45309' }}>Le contractuel n'est pas encore verrouillé — "Appliquer" figera d'abord les dates planifiées comme référence.</p>}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={onApply}
+            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#018ABE', color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+          >Appliquer au planning</button>
+          <button
+            onClick={onKeep}
+            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e4ecf2', background: '#f8fafc', color: '#02457A', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >Conserver en prévision</button>
+          <button
+            onClick={onCancel}
+            style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #e4ecf2', background: 'transparent', color: '#5b7183', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+          >Annuler</button>
+        </div>
+      </div>
     </div>
   )
 }
