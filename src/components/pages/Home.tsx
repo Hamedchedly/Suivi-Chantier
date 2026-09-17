@@ -1,12 +1,13 @@
+import { useState, useEffect, useRef } from 'react'
 import {
   Play, AlertTriangle, CalendarClock, MapPin, ClipboardCheck, Clock,
-  BarChart3, Flag, Building2, FileText, FolderOpen, ChevronRight, Network, ListChecks,
+  BarChart3, Flag, Building2, FileText, FolderOpen, ChevronRight, Network, ListChecks, StickyNote,
 } from 'lucide-react'
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts'
 import type { Page } from '../../App'
 import {
   getGanttTasks, getReserves, getMarches, getAvenants, getSituations, getVisits, getCommitments,
-  getZoneRefs, getUnits, getLotsConfig,
+  getZoneRefs, getUnits, getLotsConfig, getProjectMemo, saveProjectMemo,
 } from '../../lib/repo'
 import {
   overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
@@ -258,7 +259,33 @@ export function Home({ onNavigate }: HomeProps) {
           ))}
         </div>
       </section>
+
+      {/* Mémo de chantier */}
+      <section>
+        <h2 className="section-title"><StickyNote size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Mémo de chantier</h2>
+        <ProjectMemo />
+      </section>
     </div>
+  )
+}
+
+function ProjectMemo() {
+  const [text, setText] = useState(getProjectMemo)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => saveProjectMemo(text), 600)
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [text])
+
+  return (
+    <textarea
+      value={text}
+      onChange={e => setText(e.target.value)}
+      placeholder="Notes libres : points de vigilance, rappels, contacts clés…"
+      style={{ width: '100%', minHeight: '96px', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--line)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', background: '#fffbf0', color: 'var(--ink)', boxSizing: 'border-box', lineHeight: 1.55 }}
+    />
   )
 }
 

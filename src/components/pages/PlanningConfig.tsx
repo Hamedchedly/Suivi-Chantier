@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Trash2, Flag, X, Pencil, ChevronRight, ChevronDown, Link2 } from 'lucide-react'
+import { Plus, Trash2, Flag, X, Pencil, ChevronRight, ChevronDown, Link2, StickyNote } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { getGanttTasks, saveGanttTasks, getHolidays, saveHolidays, Holiday } from '../../lib/repo'
 import { endDrift, startDrift } from '../../lib/actualDates'
@@ -56,6 +56,7 @@ export function PlanningConfig() {
   // Tâches dont les sous-tâches sont affichées
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [depPanel, setDepPanel] = useState<string | null>(null)
+  const [notePanel, setNotePanel] = useState<string | null>(null)
   const [error, setError] = useState<PlanningError | null>(null)
   const [confirm, setConfirm] = useState<string | null>(null)
 
@@ -135,6 +136,15 @@ export function PlanningConfig() {
     ])
   )
   const taskLabel = (id: string) => allSelectableTasks.find(x => x.id === id)?.label ?? id
+
+  const setTaskNote = (taskId: string, note: string) =>
+    setWorkTasks(prev => prev.map(lot => ({
+      ...lot,
+      children: (lot.children ?? []).map(t =>
+        t.id === taskId ? { ...t, description: note || undefined }
+          : { ...t, children: (t.children ?? []).map(st => st.id === taskId ? { ...st, description: note || undefined } : st) }
+      ),
+    })))
 
   const toggleDep = (taskId: string, depId: string, add: boolean) => {
     const task = workTasks.flatMap(l => (l.children ?? []).flatMap(t => [t, ...(t.children ?? [])])).find(t => t.id === taskId)
@@ -334,6 +344,7 @@ export function PlanningConfig() {
                             <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.actual_end)}</td>
                             <td style={td}><DriftCell value={endDrift(t)} /></td>
                             <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                              {editing && <button onClick={() => setNotePanel(prev => prev === t.id ? null : t.id)} style={{ ...miniBtn, color: notePanel === t.id ? 'var(--ok)' : t.description ? 'var(--accent)' : 'var(--muted)' }} title={t.description ? 'Note : ' + t.description.slice(0, 40) : 'Ajouter une note'}><StickyNote size={13} /></button>}
                               {editing && <button onClick={() => setDepPanel(prev => prev === t.id ? null : t.id)} style={{ ...miniBtn, color: depPanel === t.id ? 'var(--accent)' : 'var(--muted)' }} title="Prédécesseurs"><Link2 size={13} /></button>}
                               {editing && <button onClick={() => { setSubDraft({ parentId: t.id, draft: emptyDraft() }); setError(null) }} style={miniBtn} title="Ajouter une sous-tâche"><Plus size={13} /></button>}
                               {editing && <button onClick={() => setConfirm(t.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer la tâche"><Trash2 size={13} /></button>}
@@ -396,6 +407,22 @@ export function PlanningConfig() {
                                 </div>
                                 {error && subDraft?.parentId === t.id && <div style={errMsg}>{PLANNING_ERROR_LABEL[error]}</div>}
                               </div>
+                            </td></tr>
+                          )}
+
+                          {/* Panneau note */}
+                          {notePanel === t.id && (
+                            <tr><td colSpan={10} style={{ padding: '10px 12px', background: '#f0fdf4', borderBottom: '1px solid var(--line)' }}>
+                              <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 700, marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <StickyNote size={12} /> Note sur « {t.title} »
+                              </div>
+                              <textarea
+                                autoFocus
+                                defaultValue={t.description ?? ''}
+                                onChange={e => setTaskNote(t.id, e.target.value)}
+                                placeholder="Points de vigilance, observations, liens utiles…"
+                                style={{ width: '100%', minHeight: '64px', padding: '7px 10px', borderRadius: '7px', border: '1px solid var(--line)', fontSize: '12px', fontFamily: 'inherit', resize: 'vertical', background: '#fff', boxSizing: 'border-box' }}
+                              />
                             </td></tr>
                           )}
 

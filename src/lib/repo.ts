@@ -83,6 +83,7 @@ const SCOPED = {
   visits: 'sc-visits-v3',
   commitments: 'sc-commitments-v1',
   visitKinds: 'sc-visit-kinds-v1',
+  projectMemo: 'sc-project-memo-v1',
 } as const
 
 /** Projet sans identifiant : les lectures tombent sur les valeurs par défaut. */
@@ -285,6 +286,16 @@ export function getVisitKinds(): string[] {
 
 export function saveVisitKinds(kinds: string[]): void {
   saveState(k(SCOPED.visitKinds), kinds)
+}
+
+// ── Mémo projet ─────────────────────────────────────────────────────────────
+
+export function getProjectMemo(): string {
+  return loadState<string>(k(SCOPED.projectMemo), '')
+}
+
+export function saveProjectMemo(memo: string): void {
+  saveState(k(SCOPED.projectMemo), memo)
 }
 
 // ── Comptes & session ───────────────────────────────────────────────────────
