@@ -45,27 +45,46 @@ export function endFromDuration(start: Date, duration: number): Date {
 
 const uid = (prefix: string) => `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`
 
-/** Bornes et avancement d'un lot, recalculés depuis ses tâches. */
+/** All leaf tasks of a subtree (tasks with no children). */
+function allLeaves(task: GanttTask): GanttTask[] {
+  if (!task.children?.length) return [task]
+  return task.children.flatMap(allLeaves)
+}
+
+/** Recompute a task's progress and bounds from its sub-tasks. */
+export function recomputeTask(task: GanttTask): GanttTask {
+  const subs = task.children ?? []
+  if (subs.length === 0) return task
+  const start = new Date(Math.min(...subs.map(s => s.planned_start.getTime())))
+  const end = new Date(Math.max(...subs.map(s => s.planned_end.getTime())))
+  const work = subs.filter(s => !s.is_milestone)
+  const progress = work.length ? Math.round(work.reduce((acc, s) => acc + s.progress, 0) / work.length) : 0
+  return { ...task, planned_start: start, planned_end: end, planned_duration: durationBetween(start, end), progress }
+}
+
+/** Bornes et avancement d'un lot, recalculés depuis ses tâches (et leurs sous-tâches). */
 export function recomputeLot(lot: GanttTask): GanttTask {
-  const kids = lot.children ?? []
+  const kids = (lot.children ?? []).map(t => t.children?.length ? recomputeTask(t) : t)
   if (kids.length === 0) return lot
-  const start = new Date(Math.min(...kids.map(k => k.planned_start.getTime())))
-  const end = new Date(Math.max(...kids.map(k => k.planned_end.getTime())))
-  const work = kids.filter(k => !k.is_milestone)
+  const leaves = kids.flatMap(allLeaves)
+  const start = new Date(Math.min(...leaves.map(k => k.planned_start.getTime())))
+  const end = new Date(Math.max(...leaves.map(k => k.planned_end.getTime())))
+  const work = leaves.filter(k => !k.is_milestone)
   const progress = work.length
     ? Math.round(work.reduce((s, k) => s + k.progress, 0) / work.length)
     : 0
   return {
     ...lot,
+    children: kids,
     planned_start: start,
     planned_end: end,
     planned_duration: durationBetween(start, end),
     progress,
-    actual_start: kids.map(k => k.actual_start).filter(Boolean).length
-      ? new Date(Math.min(...kids.filter(k => k.actual_start).map(k => k.actual_start!.getTime())))
+    actual_start: leaves.map(k => k.actual_start).filter(Boolean).length
+      ? new Date(Math.min(...leaves.filter(k => k.actual_start).map(k => k.actual_start!.getTime())))
       : undefined,
-    actual_end: kids.length > 0 && kids.every(k => k.actual_end)
-      ? new Date(Math.max(...kids.map(k => k.actual_end!.getTime())))
+    actual_end: leaves.length > 0 && leaves.every(k => k.actual_end)
+      ? new Date(Math.max(...leaves.map(k => k.actual_end!.getTime())))
       : undefined,
   }
 }
@@ -187,20 +206,61 @@ export function setTaskDates(
   return { ok: true, tasks: recomputeAll(next) }
 }
 
-/** Supprime un lot (avec ses tâches) ou une tâche seule. */
+/** Crée une sous-tâche rattachée à une tâche existante (depth 1, id = parentTaskId). */
+export function createSubTask(tasks: GanttTask[], parentId: string, input: TaskInput): PlanningResult {
+  const title = input.title.trim()
+  if (!title) return { ok: false, tasks, error: 'title_required' }
+
+  let parentTask: GanttTask | undefined
+  for (const lot of tasks) {
+    const found = (lot.children ?? []).find(t => t.id === parentId)
+    if (found) { parentTask = found; break }
+  }
+  if (!parentTask) return { ok: false, tasks, error: 'not_found' }
+
+  const start = startOfDay(input.start)
+  const end = input.end ? startOfDay(input.end) : endFromDuration(start, input.duration ?? 3)
+  const safeEnd = end.getTime() < start.getTime() ? start : end
+
+  const sub: GanttTask = {
+    id: uid('ST-'),
+    parent_id: parentId,
+    lot_id: parentTask.lot_id,
+    title,
+    planned_start: start,
+    planned_end: safeEnd,
+    planned_duration: durationBetween(start, safeEnd),
+    progress: 0,
+    status: 'not-started',
+    priority: 'medium',
+    dependencies: [],
+    is_milestone: input.is_milestone ?? false,
+    is_critical: false,
+  }
+
+  const next = tasks.map(lot => ({
+    ...lot,
+    children: (lot.children ?? []).map(t =>
+      t.id === parentId ? { ...t, children: [...(t.children ?? []), sub] } : t
+    ),
+  }))
+
+  return { ok: true, tasks: recomputeAll(next), task: sub }
+}
+
+/** Supprime un lot (avec ses tâches), une tâche, ou une sous-tâche. */
 export function removeTask(tasks: GanttTask[], id: string): PlanningResult {
   if (tasks.some(t => t.id === id)) {
     return { ok: true, tasks: tasks.filter(t => t.id !== id) }
   }
   let found = false
-  const next = tasks.map(t => {
-    if (!t.children?.length) return t
-    const kids = t.children.filter(c => {
-      if (c.id === id) { found = true; return false }
-      return true
+  const removeFrom = (list: GanttTask[]): GanttTask[] =>
+    list.flatMap(t => {
+      if (t.id === id) { found = true; return [] }
+      if (t.children?.length) return [{ ...t, children: removeFrom(t.children) }]
+      return [t]
     })
-    return kids.length === t.children.length ? t : { ...t, children: kids }
-  })
+  const next = tasks.map(t => t.children?.length ? { ...t, children: removeFrom(t.children) } : t)
   if (!found) return { ok: false, tasks, error: 'not_found' }
   return { ok: true, tasks: recomputeAll(next) }
 }

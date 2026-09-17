@@ -1,10 +1,10 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Trash2, Flag, X, Pencil } from 'lucide-react'
+import { Plus, Trash2, Flag, X, Pencil, ChevronRight, ChevronDown } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { getGanttTasks, saveGanttTasks, getHolidays, saveHolidays, Holiday } from '../../lib/repo'
 import { endDrift, startDrift } from '../../lib/actualDates'
 import {
-  PlanningError, PLANNING_ERROR_LABEL, createLot, createTask, renameTask,
+  PlanningError, PLANNING_ERROR_LABEL, createLot, createTask, createSubTask, renameTask,
   setTaskDates, removeTask,
 } from '../../lib/planning'
 import { SavedIndicator } from '../common/SavedIndicator'
@@ -51,6 +51,10 @@ export function PlanningConfig() {
   const [lotForm, setLotForm] = useState<{ code: string; title: string } | null>(null)
   // Création de tâche, par lot (id du lot → brouillon ouvert)
   const [taskDraft, setTaskDraft] = useState<{ lotId: string; draft: DraftTask } | null>(null)
+  // Création de sous-tâche, par tâche (id de la tâche parente)
+  const [subDraft, setSubDraft] = useState<{ parentId: string; draft: DraftTask } | null>(null)
+  // Tâches dont les sous-tâches sont affichées
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [error, setError] = useState<PlanningError | null>(null)
   const [confirm, setConfirm] = useState<string | null>(null)
 
@@ -82,6 +86,21 @@ export function PlanningConfig() {
       is_milestone: draft.milestone,
     })
     if (apply(res)) setTaskDraft({ lotId, draft: emptyDraft() })
+  }
+
+  const submitSubTask = () => {
+    if (!subDraft) return
+    const { parentId, draft } = subDraft
+    const res = createSubTask(workTasks, parentId, {
+      title: draft.title,
+      start: parse(draft.start),
+      duration: Math.max(1, parseInt(draft.duration, 10) || 1),
+      is_milestone: draft.milestone,
+    })
+    if (apply(res)) {
+      setSubDraft({ parentId, draft: emptyDraft() })
+      setExpandedTasks(prev => new Set([...prev, parentId]))
+    }
   }
 
   const setStart = (id: string, value: string) => {
@@ -252,50 +271,132 @@ export function PlanningConfig() {
                       </td></tr>
                     )}
 
-                    {(lot.children ?? []).map(t => (
-                      <tr key={t.id}>
-                        <td style={{ ...td, ...stickyLeft, textAlign: 'left', background: '#fff' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            {t.is_milestone && <Flag size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
-                            <input value={t.title} onChange={e => rename(t.id, e.target.value)}
-                              readOnly={!editing}
-                              style={{ ...cellInput, width: '100%', minWidth: '150px', border: '1px solid transparent', background: 'transparent', cursor: editing ? 'text' : 'default' }}
-                              onFocus={e => { if (editing) e.currentTarget.style.border = '1px solid var(--line)' }}
-                              onBlur={e => (e.currentTarget.style.border = '1px solid transparent')} />
-                          </div>
-                        </td>
-                        <td style={{ ...td, color: 'var(--accent)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          S{weekOf(t.planned_start)}–S{weekOf(t.planned_end)}
-                        </td>
-                        <td style={td}>
-                          <input type="date" value={iso(t.planned_start)} onChange={e => setStart(t.id, e.target.value)} disabled={!editing} style={{ ...cellInput, opacity: editing ? 1 : 0.7 }} />
-                        </td>
-                        <td style={td}>
-                          <input type="date" value={iso(t.planned_end)} onChange={e => setEnd(t.id, e.target.value)} disabled={!editing} style={{ ...cellInput, opacity: editing ? 1 : 0.7 }} />
-                        </td>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.planned_duration} j</td>
-                        <td style={{ ...td, fontWeight: 600 }}>{t.progress}%</td>
-                        <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                          {fmt(t.actual_start)}
-                          {startDrift(t) !== null && startDrift(t) !== 0 && (
-                            <div style={{ fontSize: '10px' }}><DriftCell value={startDrift(t)} /></div>
-                          )}
-                        </td>
-                        <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.actual_end)}</td>
-                        <td style={td}><DriftCell value={endDrift(t)} /></td>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                          {editing && <button onClick={() => setConfirm(t.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer la tâche"><Trash2 size={13} /></button>}
-                        </td>
-                      </tr>
-                    ))}
+                    {(lot.children ?? []).map(t => {
+                      const hasSubs = (t.children ?? []).length > 0
+                      const isExpanded = expandedTasks.has(t.id)
+                      return (
+                        <Fragment key={t.id}>
+                          <tr>
+                            <td style={{ ...td, ...stickyLeft, textAlign: 'left', background: '#fff' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                {/* Toggle sous-tâches */}
+                                {hasSubs ? (
+                                  <button onClick={() => setExpandedTasks(prev => { const n = new Set(prev); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n })}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, color: 'var(--accent)', display: 'flex', flexShrink: 0 }}>
+                                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                  </button>
+                                ) : <span style={{ width: '14px', flexShrink: 0 }} />}
+                                {t.is_milestone && <Flag size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+                                <input value={t.title} onChange={e => rename(t.id, e.target.value)}
+                                  readOnly={!editing}
+                                  style={{ ...cellInput, width: '100%', minWidth: '140px', border: '1px solid transparent', background: 'transparent', cursor: editing ? 'text' : 'default' }}
+                                  onFocus={e => { if (editing) e.currentTarget.style.border = '1px solid var(--line)' }}
+                                  onBlur={e => (e.currentTarget.style.border = '1px solid transparent')} />
+                                {hasSubs && <span style={{ fontSize: '10px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>({(t.children ?? []).length} s-t)</span>}
+                              </div>
+                            </td>
+                            <td style={{ ...td, color: 'var(--accent)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              S{weekOf(t.planned_start)}–S{weekOf(t.planned_end)}
+                            </td>
+                            <td style={td}>
+                              <input type="date" value={iso(t.planned_start)} onChange={e => setStart(t.id, e.target.value)} disabled={!editing || hasSubs} style={{ ...cellInput, opacity: (editing && !hasSubs) ? 1 : 0.7 }} />
+                            </td>
+                            <td style={td}>
+                              <input type="date" value={iso(t.planned_end)} onChange={e => setEnd(t.id, e.target.value)} disabled={!editing || hasSubs} style={{ ...cellInput, opacity: (editing && !hasSubs) ? 1 : 0.7 }} />
+                            </td>
+                            <td style={{ ...td, whiteSpace: 'nowrap' }}>{t.planned_duration} j</td>
+                            <td style={{ ...td, fontWeight: 600 }}>{t.progress}%</td>
+                            <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                              {fmt(t.actual_start)}
+                              {startDrift(t) !== null && startDrift(t) !== 0 && (
+                                <div style={{ fontSize: '10px' }}><DriftCell value={startDrift(t)} /></div>
+                              )}
+                            </td>
+                            <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.actual_end)}</td>
+                            <td style={td}><DriftCell value={endDrift(t)} /></td>
+                            <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                              {editing && <button onClick={() => { setSubDraft({ parentId: t.id, draft: emptyDraft() }); setError(null) }} style={miniBtn} title="Ajouter une sous-tâche"><Plus size={13} /></button>}
+                              {editing && <button onClick={() => setConfirm(t.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer la tâche"><Trash2 size={13} /></button>}
+                            </td>
+                          </tr>
 
-                    {confirm && (lot.children ?? []).some(c => c.id === confirm) && (
-                      <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec' }}>
-                        <span style={{ fontSize: '11px', color: '#7a1c13', marginRight: '10px' }}>Supprimer cette tâche ?</span>
-                        <button onClick={() => remove(confirm)} style={dangerBtn}>Supprimer</button>
-                        <button onClick={() => setConfirm(null)} style={ghostBtn}>Annuler</button>
-                      </td></tr>
-                    )}
+                          {/* Sous-tâches */}
+                          {isExpanded && (t.children ?? []).map(st => (
+                            <tr key={st.id} style={{ background: '#f8fafc' }}>
+                              <td style={{ ...td, ...stickyLeft, textAlign: 'left', background: '#f8fafc', paddingLeft: '28px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--muted)', flexShrink: 0 }} />
+                                  {st.is_milestone && <Flag size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+                                  <input value={st.title} onChange={e => rename(st.id, e.target.value)}
+                                    readOnly={!editing}
+                                    style={{ ...cellInput, width: '100%', minWidth: '120px', border: '1px solid transparent', background: 'transparent', cursor: editing ? 'text' : 'default', fontSize: '11px' }}
+                                    onFocus={e => { if (editing) e.currentTarget.style.border = '1px solid var(--line)' }}
+                                    onBlur={e => (e.currentTarget.style.border = '1px solid transparent')} />
+                                </div>
+                              </td>
+                              <td style={{ ...td, color: 'var(--accent)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                                S{weekOf(st.planned_start)}–S{weekOf(st.planned_end)}
+                              </td>
+                              <td style={td}>
+                                <input type="date" value={iso(st.planned_start)} onChange={e => setStart(st.id, e.target.value)} disabled={!editing} style={{ ...cellInput, opacity: editing ? 1 : 0.7, fontSize: '11px' }} />
+                              </td>
+                              <td style={td}>
+                                <input type="date" value={iso(st.planned_end)} onChange={e => setEnd(st.id, e.target.value)} disabled={!editing} style={{ ...cellInput, opacity: editing ? 1 : 0.7, fontSize: '11px' }} />
+                              </td>
+                              <td style={{ ...td, whiteSpace: 'nowrap', fontSize: '11px' }}>{st.planned_duration} j</td>
+                              <td style={{ ...td, fontWeight: 600, fontSize: '11px' }}>{st.progress}%</td>
+                              <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap', fontSize: '11px' }}>{fmt(st.actual_start)}</td>
+                              <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap', fontSize: '11px' }}>{fmt(st.actual_end)}</td>
+                              <td style={td}><DriftCell value={endDrift(st)} /></td>
+                              <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                                {editing && <button onClick={() => setConfirm(st.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer"><Trash2 size={12} /></button>}
+                              </td>
+                            </tr>
+                          ))}
+
+                          {/* Formulaire nouvelle sous-tâche */}
+                          {subDraft?.parentId === t.id && (
+                            <tr><td colSpan={10} style={{ padding: '10px', background: '#eff6ff', borderBottom: '1px solid var(--line)' }}>
+                              <div style={{ paddingLeft: '18px' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 700, marginBottom: '6px' }}>Nouvelle sous-tâche de « {t.title} »</div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <input autoFocus value={subDraft.draft.title} placeholder="Intitulé"
+                                    onChange={e => setSubDraft({ parentId: t.id, draft: { ...subDraft.draft, title: e.target.value } })}
+                                    onKeyDown={e => { if (e.key === 'Enter') submitSubTask() }}
+                                    style={{ ...inp, flex: '2 1 180px' }} />
+                                  <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Début</label>
+                                  <input type="date" value={subDraft.draft.start}
+                                    onChange={e => setSubDraft({ parentId: t.id, draft: { ...subDraft.draft, start: e.target.value } })} style={inp} />
+                                  <label style={{ fontSize: '11px', color: 'var(--muted)' }}>Durée (j)</label>
+                                  <input type="number" min={1} value={subDraft.draft.duration}
+                                    onChange={e => setSubDraft({ parentId: t.id, draft: { ...subDraft.draft, duration: e.target.value } })}
+                                    style={{ ...inp, width: '56px' }} />
+                                  <button onClick={submitSubTask} style={primaryBtn}>Ajouter</button>
+                                  <button onClick={() => setSubDraft(null)} style={ghostBtn}>Fermer</button>
+                                </div>
+                                {error && subDraft?.parentId === t.id && <div style={errMsg}>{PLANNING_ERROR_LABEL[error]}</div>}
+                              </div>
+                            </td></tr>
+                          )}
+
+                          {/* Confirmation suppression tâche ou sous-tâche */}
+                          {confirm === t.id && (
+                            <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec' }}>
+                              <span style={{ fontSize: '11px', color: '#7a1c13', marginRight: '10px' }}>Supprimer cette tâche et ses {(t.children ?? []).length} sous-tâche(s) ?</span>
+                              <button onClick={() => remove(t.id)} style={dangerBtn}>Supprimer</button>
+                              <button onClick={() => setConfirm(null)} style={ghostBtn}>Annuler</button>
+                            </td></tr>
+                          )}
+                          {confirm && (t.children ?? []).some(st => st.id === confirm) && (
+                            <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec', paddingLeft: '28px' }}>
+                              <span style={{ fontSize: '11px', color: '#7a1c13', marginRight: '10px' }}>Supprimer cette sous-tâche ?</span>
+                              <button onClick={() => remove(confirm)} style={dangerBtn}>Supprimer</button>
+                              <button onClick={() => setConfirm(null)} style={ghostBtn}>Annuler</button>
+                            </td></tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
 
                     {/* Ligne de saisie d'une nouvelle tâche */}
                     {taskDraft?.lotId === lot.id && (

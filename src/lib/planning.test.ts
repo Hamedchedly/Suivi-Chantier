@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   durationBetween, endFromDuration, recomputeLot, recomputeAll,
-  createLot, createTask, renameTask, setTaskDates, removeTask, leafIds,
+  createLot, createTask, createSubTask, renameTask, setTaskDates, removeTask, leafIds,
 } from './planning'
 import { GanttTask } from '../types/gantt'
 
@@ -156,5 +156,62 @@ describe('leafIds & recomputeAll', () => {
   it('recalcule tous les lots sans toucher aux feuilles orphelines', () => {
     const t = task('solo', { start: '2026-01-01', end: '2026-01-05' })
     expect(recomputeAll([t])).toEqual([t])
+  })
+})
+
+describe('createSubTask', () => {
+  const d = (s: string) => { const [y, m, day] = s.split('-').map(Number); return new Date(y, m - 1, day) }
+  let tasks = createLot([], { code: 'L01', title: 'Gros-œuvre' }).tasks
+  const lotId = tasks[0].id
+  tasks = createTask(tasks, lotId, { title: 'Fondations', start: d('2026-01-05'), duration: 10 }).tasks
+  const taskId = tasks[0].children![0].id
+
+  it('crée une sous-tâche sous la tâche parente', () => {
+    const r = createSubTask(tasks, taskId, { title: 'Fouilles', start: d('2026-01-05'), duration: 3 })
+    expect(r.ok).toBe(true)
+    expect(r.tasks[0].children![0].children).toHaveLength(1)
+    expect(r.tasks[0].children![0].children![0].title).toBe('Fouilles')
+  })
+
+  it('hérite du lot_id de la tâche parente', () => {
+    const r = createSubTask(tasks, taskId, { title: 'Béton', start: d('2026-01-08'), duration: 5 })
+    expect(r.tasks[0].children![0].children![0].lot_id).toBe('L01')
+  })
+
+  it('recalcule la tâche parente depuis ses sous-tâches', () => {
+    let t = createSubTask(tasks, taskId, { title: 'A', start: d('2026-01-05'), duration: 3 }).tasks
+    t = createSubTask(t, taskId, { title: 'B', start: d('2026-01-10'), duration: 4 }).tasks
+    const parent = t[0].children![0]
+    // Planned_start should be the min of sub-tasks
+    expect(parent.planned_start).toEqual(d('2026-01-05'))
+  })
+
+  it('refuse titre vide', () => {
+    expect(createSubTask(tasks, taskId, { title: '  ', start: d('2026-01-05') }).error).toBe('title_required')
+  })
+
+  it('refuse parentId inconnu', () => {
+    expect(createSubTask(tasks, 'nope', { title: 'X', start: d('2026-01-05') }).error).toBe('not_found')
+  })
+})
+
+describe('removeTask récursif', () => {
+  const d = (s: string) => { const [y, m, day] = s.split('-').map(Number); return new Date(y, m - 1, day) }
+  let tasks = createLot([], { code: 'L01', title: 'Lot' }).tasks
+  const lotId = tasks[0].id
+  tasks = createTask(tasks, lotId, { title: 'Tâche', start: d('2026-01-05'), duration: 10 }).tasks
+  const taskId = tasks[0].children![0].id
+  tasks = createSubTask(tasks, taskId, { title: 'Sous-tâche', start: d('2026-01-05'), duration: 3 }).tasks
+  const subId = tasks[0].children![0].children![0].id
+
+  it('supprime une sous-tâche profonde', () => {
+    const r = removeTask(tasks, subId)
+    expect(r.ok).toBe(true)
+    expect(r.tasks[0].children![0].children ?? []).toHaveLength(0)
+  })
+
+  it('supprime une tâche avec ses sous-tâches', () => {
+    const r = removeTask(tasks, taskId)
+    expect(r.tasks[0].children).toHaveLength(0)
   })
 })
