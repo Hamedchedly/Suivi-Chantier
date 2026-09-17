@@ -265,6 +265,13 @@ export function removeTask(tasks: GanttTask[], id: string): PlanningResult {
   return { ok: true, tasks: recomputeAll(next) }
 }
 
+/** Assigne la liste de prédécesseurs d'une tâche (ID quelconque dans l'arbre). */
+export function setTaskDependencies(tasks: GanttTask[], id: string, deps: string[]): PlanningResult {
+  const { tasks: next, found } = mapTask(tasks, id, t => ({ ...t, dependencies: deps }))
+  if (!found) return { ok: false, tasks, error: 'not_found' }
+  return { ok: true, tasks: next }
+}
+
 /** Identifiants de toutes les tâches feuilles — pour purger les liens orphelins. */
 export function leafIds(tasks: GanttTask[]): string[] {
   return tasks.flatMap(t => (t.children ?? []).map(c => c.id))

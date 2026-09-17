@@ -1,11 +1,11 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Plus, Trash2, Flag, X, Pencil, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Flag, X, Pencil, ChevronRight, ChevronDown, Link2 } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { getGanttTasks, saveGanttTasks, getHolidays, saveHolidays, Holiday } from '../../lib/repo'
 import { endDrift, startDrift } from '../../lib/actualDates'
 import {
   PlanningError, PLANNING_ERROR_LABEL, createLot, createTask, createSubTask, renameTask,
-  setTaskDates, removeTask,
+  setTaskDates, removeTask, setTaskDependencies,
 } from '../../lib/planning'
 import { SavedIndicator } from '../common/SavedIndicator'
 
@@ -55,6 +55,7 @@ export function PlanningConfig() {
   const [subDraft, setSubDraft] = useState<{ parentId: string; draft: DraftTask } | null>(null)
   // Tâches dont les sous-tâches sont affichées
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  const [depPanel, setDepPanel] = useState<string | null>(null)
   const [error, setError] = useState<PlanningError | null>(null)
   const [confirm, setConfirm] = useState<string | null>(null)
 
@@ -125,6 +126,24 @@ export function PlanningConfig() {
   const removeHoliday = (i: number) => setHolidays(prev => prev.filter((_, idx) => idx !== i))
 
   const leaves = workTasks.flatMap(lot => (lot.children ?? []).map(t => ({ lot, t })))
+
+  // Flat list of every task/sub-task for the dependency selector
+  const allSelectableTasks = workTasks.flatMap(lot =>
+    (lot.children ?? []).flatMap(t => [
+      { id: t.id, label: `[${lot.lot_id}] ${t.title}` },
+      ...(t.children ?? []).map(st => ({ id: st.id, label: `[${lot.lot_id}] ${t.title} › ${st.title}` })),
+    ])
+  )
+  const taskLabel = (id: string) => allSelectableTasks.find(x => x.id === id)?.label ?? id
+
+  const toggleDep = (taskId: string, depId: string, add: boolean) => {
+    const task = workTasks.flatMap(l => (l.children ?? []).flatMap(t => [t, ...(t.children ?? [])])).find(t => t.id === taskId)
+    if (!task) return
+    const next = add
+      ? [...new Set([...task.dependencies, depId])]
+      : task.dependencies.filter(d => d !== depId)
+    setWorkTasks(prev => setTaskDependencies(prev, taskId, next).tasks)
+  }
 
   return (
     <div style={{ maxWidth: '1040px' }}>
@@ -315,6 +334,7 @@ export function PlanningConfig() {
                             <td style={{ ...td, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{fmt(t.actual_end)}</td>
                             <td style={td}><DriftCell value={endDrift(t)} /></td>
                             <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                              {editing && <button onClick={() => setDepPanel(prev => prev === t.id ? null : t.id)} style={{ ...miniBtn, color: depPanel === t.id ? 'var(--accent)' : 'var(--muted)' }} title="Prédécesseurs"><Link2 size={13} /></button>}
                               {editing && <button onClick={() => { setSubDraft({ parentId: t.id, draft: emptyDraft() }); setError(null) }} style={miniBtn} title="Ajouter une sous-tâche"><Plus size={13} /></button>}
                               {editing && <button onClick={() => setConfirm(t.id)} style={{ ...miniBtn, color: '#b42318' }} title="Supprimer la tâche"><Trash2 size={13} /></button>}
                             </td>
@@ -379,6 +399,31 @@ export function PlanningConfig() {
                             </td></tr>
                           )}
 
+                          {/* Panneau dépendances */}
+                          {depPanel === t.id && (() => {
+                            const deps = t.dependencies ?? []
+                            const available = allSelectableTasks.filter(x => x.id !== t.id && !deps.includes(x.id))
+                            return (
+                              <tr><td colSpan={10} style={{ padding: '10px 12px', background: '#f0f9ff', borderBottom: '1px solid var(--line)' }}>
+                                <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  <Link2 size={12} /> Prédécesseurs de « {t.title} »
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: deps.length ? '8px' : '0' }}>
+                                  {deps.length === 0 && <span style={{ fontSize: '11px', color: 'var(--muted)' }}>Aucun prédécesseur.</span>}
+                                  {deps.map(depId => (
+                                    <span key={depId} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', background: '#bae6fd', borderRadius: '20px', fontSize: '11px', color: '#0c4a6e' }}>
+                                      {taskLabel(depId)}
+                                      <button onClick={() => toggleDep(t.id, depId, false)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 0 0 2px', color: '#0369a1', display: 'flex', lineHeight: 1 }}><X size={11} /></button>
+                                    </span>
+                                  ))}
+                                </div>
+                                {available.length > 0 && (
+                                  <DepAdder available={available} onAdd={(depId) => toggleDep(t.id, depId, true)} />
+                                )}
+                              </td></tr>
+                            )
+                          })()}
+
                           {/* Confirmation suppression tâche ou sous-tâche */}
                           {confirm === t.id && (
                             <tr><td colSpan={10} style={{ padding: '8px 10px', background: '#fdecec' }}>
@@ -439,6 +484,21 @@ export function PlanningConfig() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function DepAdder({ available, onAdd }: { available: { id: string; label: string }[]; onAdd: (id: string) => void }) {
+  const [selected, setSelected] = useState(available[0]?.id ?? '')
+  const cur = available.find(x => x.id === selected) ? selected : (available[0]?.id ?? '')
+  return (
+    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+      <select value={cur} onChange={e => setSelected(e.target.value)} style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '11px', maxWidth: '280px' }}>
+        {available.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+      </select>
+      <button onClick={() => { onAdd(cur); setSelected(available.find(x => x.id !== cur)?.id ?? '') }} style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', background: '#0369a1', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+        Ajouter
+      </button>
     </div>
   )
 }
