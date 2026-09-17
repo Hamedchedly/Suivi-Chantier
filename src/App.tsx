@@ -30,7 +30,7 @@ import { runBackHandler } from './lib/backHandler'
 import {
   getUsers, saveUsers, getSession, saveSession, logActivity,
   getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, deleteProjectData,
-  getTrash, saveTrash,
+  getTrash, saveTrash, getAdminMessages, type AdminMessage,
 } from './lib/repo'
 import { User, Session, findUser, isSuperadmin, hasFeature, type Feature } from './lib/auth'
 import { Project, TrashedProject, findProject, projectLabel, projectSubtitle, resolveCurrent } from './lib/projects'
@@ -77,6 +77,10 @@ export default function App() {
   const [preAuth, setPreAuth] = useState<PreAuth>('landing')
   const [authNotice, setAuthNotice] = useState<string | null>(null)
   const [recovery, setRecovery] = useState(false) // lien de réinitialisation suivi
+  const [adminMsgs, setAdminMsgs] = useState<AdminMessage[]>(getAdminMessages)
+  const [overlayDismissed, setOverlayDismissed] = useState(() => {
+    try { return sessionStorage.getItem('sc_overlay_seen') === '1' } catch { return false }
+  })
 
   useEffect(() => {
     if (!isSupabaseConfigured) return
@@ -139,9 +143,15 @@ export default function App() {
     ? findUser(users, session.impersonatorId) ?? null : null
   const project = findProject(projects, projectId)
 
+  // Reload admin messages when user navigates (they may have changed in Comptes).
+  useEffect(() => { setAdminMsgs(getAdminMessages()) }, [currentPage])
+
   const signIn = (u: User) => {
     setSession({ userId: u.id, at: new Date().toISOString() })
     setCurrentPage('home')
+    // Allow overlay to show again for this session after a new sign-in.
+    try { sessionStorage.removeItem('sc_overlay_seen') } catch { /* noop */ }
+    setOverlayDismissed(false)
   }
 
   const signOut = () => {
@@ -209,7 +219,7 @@ export default function App() {
   // Back button: step back inside the app instead of closing it. A spare
   // history entry is kept ahead of us; each Back consumes it and we push a new
   // one, until there is nothing left to step back to.
-  useEffect(() => { try { localStorage.setItem('sc_nav_page', currentPage) } catch {} }, [currentPage])
+  useEffect(() => { try { localStorage.setItem('sc_nav_page', currentPage) } catch { /* noop */ } }, [currentPage])
 
   const pageRef = useRef(currentPage)
   pageRef.current = currentPage
@@ -351,6 +361,12 @@ export default function App() {
             </button>
           </div>
         )}
+        {/* Bandeau fixe admin */}
+        {adminMsgs.filter(m => m.active && m.kind === 'banner').map(m => (
+          <div key={m.id} style={{ padding: '8px 16px', background: '#c2410c', color: '#fff', fontSize: '12px', fontWeight: 600, textAlign: 'center', lineHeight: 1.4 }}>
+            {m.text}
+          </div>
+        ))}
         <Topbar title={meta.title} sub={meta.sub} right={accountMenu} />
         <div className="app-body">
           {page === 'projets' && (
@@ -398,6 +414,33 @@ export default function App() {
           {allowed('config') && page === 'config'   && <Config project={project ?? null} onProjectChange={setProjects} projects={projects} />}
         </div>
       </div>
+
+      {/* Bandeau défilant admin (ticker) */}
+      {adminMsgs.filter(m => m.active && m.kind === 'ticker').map(m => (
+        <div key={m.id} style={{ position: 'fixed', bottom: '56px', left: 0, right: 0, zIndex: 90, background: '#065f46', color: '#ecfdf5', fontSize: '12px', fontWeight: 600, padding: '6px 0', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'inline-block', animation: 'sc-ticker 20s linear infinite', paddingLeft: '100%' }}>
+            {m.text}&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;{m.text}
+          </span>
+        </div>
+      ))}
+
+      {/* Overlay admin (une fois par session) */}
+      {!overlayDismissed && adminMsgs.filter(m => m.active && m.kind === 'overlay').slice(0, 1).map(m => (
+        <div key={m.id} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '10px' }}>
+              Message de l'administrateur
+            </div>
+            <div style={{ fontSize: '14px', color: '#1e293b', lineHeight: 1.6, marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{m.text}</div>
+            <button onClick={() => {
+              try { sessionStorage.setItem('sc_overlay_seen', '1') } catch { /* noop */ }
+              setOverlayDismissed(true)
+            }} style={{ width: '100%', padding: '12px', borderRadius: '9px', border: 'none', background: '#02457A', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>
+              J'ai lu ce message
+            </button>
+          </div>
+        </div>
+      ))}
 
       <Navigation currentPage={page} onPageChange={go} onOpenGestion={() => setGestionOpen(true)} canAccess={allowed} />
       <GestionSheet open={gestionOpen} currentPage={page} onClose={() => setGestionOpen(false)} onPick={go} canAccess={allowed} />

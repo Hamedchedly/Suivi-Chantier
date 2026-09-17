@@ -41,6 +41,15 @@ import type { Project, TrashedProject } from './projects'
 import { resolveCurrent } from './projects'
 import { loadState, saveState, removeState } from './storage'
 
+// ── Messages administrateur ──────────────────────────────────────────────────
+export interface AdminMessage {
+  id: string
+  kind: 'overlay' | 'banner' | 'ticker'
+  text: string
+  active: boolean
+  createdAt: string
+}
+
 // ── Clés globales (hors projet) ─────────────────────────────────────────────
 const GLOBAL = {
   users: 'sc-users-v1',
@@ -48,6 +57,7 @@ const GLOBAL = {
   projects: 'sc-projects-v1',
   currentProject: 'sc-current-project-v1',
   trash: 'sc-trash-v1',
+  adminMessages: 'sc-admin-messages-v1',
 } as const
 
 // ── Clés cloisonnées par projet (suffixées `::<projectId>`) ─────────────────
@@ -426,4 +436,13 @@ export function getMeetings(): Meeting[] {
 }
 export function saveMeetings(m: Meeting[]): void {
   saveState(k(SCOPED.meetings), m)
+}
+
+// ── Messages administrateur (globaux, toutes opérations) ────────────────────
+
+export function getAdminMessages(): AdminMessage[] {
+  return loadState<AdminMessage[]>(GLOBAL.adminMessages, [])
+}
+export function saveAdminMessages(msgs: AdminMessage[]): void {
+  saveState(GLOBAL.adminMessages, msgs)
 }

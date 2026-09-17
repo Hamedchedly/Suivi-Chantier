@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   UserPlus, Shield, User as UserIcon, LogIn, Trash2, KeyRound, Ban, Check,
-  ShieldAlert, ShieldCheck, X, SlidersHorizontal,
+  ShieldAlert, ShieldCheck, X, SlidersHorizontal, MessageSquare, Plus, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import {
   User, UserRole, ROLE_LABEL, AUTH_ERROR_LABEL, AuthError,
@@ -11,7 +11,7 @@ import {
 import {
   adminListUsers, adminCreateUser, adminSetPassword, adminUpdateUser, adminDeleteUser,
 } from '../../lib/supabaseAuth'
-import { logActivity } from '../../lib/repo'
+import { logActivity, getAdminMessages, saveAdminMessages, AdminMessage } from '../../lib/repo'
 import { badge, sectionLabel, input, ghostBtn, bigBtnInline, linkBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
 
@@ -147,6 +147,8 @@ export function Comptes({ users, currentUser, onChange, onImpersonate, remote }:
 
       <div style={sectionLabel}>Comptes ({shown.length})</div>
       {shown.length === 0 && <Empty>{busy ? 'Chargement…' : 'Aucun compte.'}</Empty>}
+
+      <AdminMessagesSection />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {shown.map(u => {
@@ -310,6 +312,104 @@ function PasswordForm({ onCancel, onSet }: { onCancel: () => void; onSet: (pw: s
         style={{ ...input, flex: 1 }} />
       <button disabled={!pw} onClick={() => onSet(pw)} style={{ ...ghostBtn, opacity: pw ? 1 : 0.5 }}>Définir</button>
       <button onClick={onCancel} style={ghostBtn}><X size={14} /></button>
+    </div>
+  )
+}
+
+const KIND_LABEL: Record<AdminMessage['kind'], string> = {
+  overlay: 'Overlay connexion',
+  banner: 'Bandeau fixe',
+  ticker: 'Bandeau défilant',
+}
+const KIND_COLOR: Record<AdminMessage['kind'], { bg: string; color: string }> = {
+  overlay: { bg: '#ede9fe', color: '#6d28d9' },
+  banner:  { bg: '#fff7ed', color: '#c2410c' },
+  ticker:  { bg: '#ecfdf5', color: '#065f46' },
+}
+
+function AdminMessagesSection() {
+  const [msgs, setMsgs] = useState<AdminMessage[]>(() => getAdminMessages())
+  const [newText, setNewText] = useState('')
+  const [newKind, setNewKind] = useState<AdminMessage['kind']>('banner')
+  const [adding, setAdding] = useState(false)
+
+  const save = (next: AdminMessage[]) => { setMsgs(next); saveAdminMessages(next) }
+
+  const toggle = (id: string) =>
+    save(msgs.map(m => m.id === id ? { ...m, active: !m.active } : m))
+
+  const remove = (id: string) => save(msgs.filter(m => m.id !== id))
+
+  const add = () => {
+    if (!newText.trim()) return
+    save([...msgs, {
+      id: `msg-${Date.now()}`,
+      kind: newKind,
+      text: newText.trim(),
+      active: true,
+      createdAt: new Date().toISOString(),
+    }])
+    setNewText(''); setAdding(false)
+  }
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <MessageSquare size={14} /> Messages administrateur
+      </div>
+      <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px', lineHeight: 1.5 }}>
+        Overlay = pop-up à la connexion (une fois par session) · Bandeau fixe = barre permanente · Bandeau défilant = ticker en bas.
+      </div>
+
+      {msgs.length === 0 && !adding && <Empty>Aucun message configuré.</Empty>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '10px' }}>
+        {msgs.map(m => {
+          const kc = KIND_COLOR[m.kind]
+          return (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '9px', border: `1px solid var(--line)`, background: m.active ? '#fff' : '#f8fafc', opacity: m.active ? 1 : 0.6 }}>
+              <span style={{ ...badge, ...kc, flexShrink: 0 }}>{KIND_LABEL[m.kind]}</span>
+              <span style={{ flex: 1, fontSize: '13px', color: 'var(--ink)', wordBreak: 'break-word' }}>{m.text}</span>
+              <button onClick={() => toggle(m.id)} title={m.active ? 'Désactiver' : 'Activer'} style={{ border: 'none', background: 'none', cursor: 'pointer', color: m.active ? 'var(--ok)' : 'var(--muted)', display: 'flex' }}>
+                {m.active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+              </button>
+              <button onClick={() => remove(m.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626', display: 'flex' }}>
+                <Trash2 size={15} />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {adding ? (
+        <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--line)', background: '#f8fafc' }}>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+            {(['overlay', 'banner', 'ticker'] as AdminMessage['kind'][]).map(k => (
+              <button key={k} onClick={() => setNewKind(k)} style={{
+                flex: 1, padding: '8px 4px', borderRadius: '7px', cursor: 'pointer',
+                fontSize: '11px', fontWeight: 700,
+                border: newKind === k ? '2px solid var(--accent)' : '1px solid var(--line)',
+                background: newKind === k ? 'var(--sky-soft)' : '#fff',
+                color: newKind === k ? 'var(--navy)' : 'var(--muted)',
+              }}>{KIND_LABEL[k]}</button>
+            ))}
+          </div>
+          <textarea value={newText} onChange={e => setNewText(e.target.value)}
+            placeholder="Texte du message…" rows={3}
+            style={{ ...input, width: '100%', resize: 'vertical', marginBottom: '8px' }} />
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+            <button onClick={() => setAdding(false)} style={linkBtn}>Annuler</button>
+            <button disabled={!newText.trim()} onClick={add}
+              style={{ ...bigBtnInline, background: 'var(--navy)', padding: '9px 14px', fontSize: '12px', opacity: newText.trim() ? 1 : 0.5 }}>
+              Ajouter
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} style={{ ...ghostBtn, gap: '6px' }}>
+          <Plus size={14} /> Nouveau message
+        </button>
+      )}
     </div>
   )
 }

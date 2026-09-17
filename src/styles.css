@@ -325,6 +325,12 @@ section { margin-bottom: 24px }
 .task-slider:disabled { cursor: default }
 .task-slider:disabled::-webkit-slider-thumb { display: none }
 
+/* ── Ticker défilant admin ───────────────────────────────────────────────────── */
+@keyframes sc-ticker {
+  from { transform: translateX(0) }
+  to   { transform: translateX(-50%) }
+}
+
 /* ── Tablette & desktop : side-nav latérale, contenu plafonné (dès 768px) ─── */
 @media (min-width: 768px) {
   .app-wrapper { flex-direction: row }
