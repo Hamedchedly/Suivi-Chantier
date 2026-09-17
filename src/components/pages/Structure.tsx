@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Building2, ChevronDown, ChevronRight, DoorClosed, Layers, Pencil, Plus,
   Trees, Trash2, Users, X, MoreHorizontal,
@@ -9,7 +9,8 @@ import {
   unitPath, isLinked, unitIdsForTask, taskIdsForUnit, pruneLinks,
 } from '../../lib/units'
 import { GanttTask } from '../../types/gantt'
-import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks, saveGanttTasks } from '../../lib/repo'
+import { Reserve } from '../../lib/reserves'
+import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks, saveGanttTasks, getReserves } from '../../lib/repo'
 import { SavedIndicator } from '../common/SavedIndicator'
 
 const KIND_ICON: Record<UnitKind, typeof Building2> = {
@@ -20,7 +21,7 @@ const KIND_ICON: Record<UnitKind, typeof Building2> = {
   exterior: Trees,
 }
 
-type Mode = 'zones' | 'taches'
+type Mode = 'zones' | 'taches' | 'vue'
 
 export function Structure() {
   const [units, setUnits] = useState<Unit[]>(getUnits)
@@ -56,6 +57,19 @@ export function Structure() {
     [gantt],
   )
   useEffect(() => { saveGanttTasks(gantt) }, [gantt])
+
+  const [reserves] = useState<Reserve[]>(getReserves)
+
+  const taskStatsForUnit = (uid: string) => {
+    const taskIds = taskIdsForUnit(links, uid)
+    if (taskIds.length === 0) return null
+    const matched = leaves.filter(l => taskIds.includes(l.task.id))
+    const avg = Math.round(matched.reduce((s, l) => s + l.task.progress, 0) / matched.length)
+    return { count: matched.length, avg, tasks: matched }
+  }
+
+  const openReservesForUnit = (uid: string) =>
+    reserves.filter(r => r.logementId === uid && r.status === 'open').length
 
   /** Coche/décoche en bloc un ensemble de tâches pour une (ou plusieurs) unité(s). */
   const setLinksFor = (taskIds: string[], unitId: string, on: boolean) => {
@@ -316,6 +330,66 @@ export function Structure() {
     </div>
   )
 
+  function renderOverviewUnit(unit: Unit, depth: number): React.ReactNode {
+    const kids = childrenOf(units, unit.id)
+    const Icon = KIND_ICON[unit.kind]
+    const open = expanded.has(unit.id)
+    const stats = taskStatsForUnit(unit.id)
+    const openRes = openReservesForUnit(unit.id)
+
+    return (
+      <div key={unit.id}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '7px 8px', paddingLeft: `${8 + depth * 16}px`,
+          borderRadius: '8px', marginBottom: '2px',
+        }}>
+          <button
+            onClick={() => kids.length && toggleExpand(unit.id)}
+            style={{ ...iconBtn, visibility: kids.length ? 'visible' : 'hidden' }}
+          >
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+          <Icon size={15} style={{ color: 'var(--navy)', flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--navy)' }}>
+            {unit.name}
+            {unit.code && <span style={{ fontSize: '11px', color: 'var(--muted)' }}> · {unit.code}</span>}
+            <span style={{ fontSize: '10px', color: 'var(--muted)' }}> {UNIT_KIND_LABEL[unit.kind]}</span>
+          </span>
+          {stats && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <div style={{ width: '64px', height: '6px', borderRadius: '3px', background: '#e2e8f0', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${stats.avg}%`, borderRadius: '3px', background: stats.avg === 100 ? '#10b981' : 'var(--accent)' }} />
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: stats.avg === 100 ? '#10b981' : 'var(--accent)', minWidth: '28px', textAlign: 'right' }}>
+                {stats.avg}%
+              </span>
+              <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{stats.count} tâche{stats.count > 1 ? 's' : ''}</span>
+            </div>
+          )}
+          {openRes > 0 && (
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#b45309', background: '#fff7ed', borderRadius: '6px', padding: '2px 6px', flexShrink: 0 }}>
+              {openRes} réserve{openRes > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        {stats && open && (
+          <div style={{ marginLeft: `${8 + (depth + 1) * 16}px`, marginBottom: '4px' }}>
+            {stats.tasks.map(l => (
+              <div key={l.task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', fontSize: '12px', color: 'var(--navy)', borderLeft: '2px solid var(--line)', marginBottom: '2px', borderRadius: '0 4px 4px 0' }}>
+                <span style={{ flex: 1, color: 'var(--muted)' }}>{l.lot.title} › {l.task.title}</span>
+                <span style={{ fontWeight: 700, color: l.task.progress === 100 ? '#10b981' : 'var(--accent)', minWidth: '32px', textAlign: 'right', fontSize: '11px' }}>
+                  {l.task.progress}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {open && kids.map(c => renderOverviewUnit(c, depth + 1))}
+      </div>
+    )
+  }
+
   function renderZoneChecks(list: Unit[], depth: number, t: GanttTask): React.ReactNode {
     return list.map(unitItem => {
       const Icon = KIND_ICON[unitItem.kind]
@@ -340,7 +414,7 @@ export function Structure() {
     <div style={{ padding: '14px', paddingBottom: '80px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px', flex: '0 1 420px' }}>
-        {([['zones', 'Par bâtiment / zone'], ['taches', 'Par tâche']] as const).map(([id, label]) => (
+        {([['zones', 'Par bâtiment / zone'], ['taches', 'Par tâche'], ['vue', 'Vue d\'ensemble']] as const).map(([id, label]) => (
           <button key={id} onClick={() => setMode(id)} style={{
             flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontSize: '13px', fontWeight: 600,
             cursor: 'pointer', background: mode === id ? '#fff' : 'transparent',
@@ -380,7 +454,20 @@ export function Structure() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px', alignItems: 'start' }}>
+      {mode === 'vue' && (
+        <div style={{ ...panel, padding: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <strong style={{ flex: 1, fontSize: '14px', color: 'var(--navy)' }}>Vue d'ensemble — Bâtiments et avancement</strong>
+            <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+              {links.length} rattachement{links.length > 1 ? 's' : ''} · {reserves.filter(r => r.status === 'open').length} réserve{reserves.filter(r => r.status === 'open').length > 1 ? 's' : ''} ouverte{reserves.filter(r => r.status === 'open').length > 1 ? 's' : ''}
+            </span>
+          </div>
+          {units.length === 0 && <div style={hint}>Aucun bâtiment. Passez en mode « Par bâtiment / zone » pour décrire la structure.</div>}
+          {roots(units).map(u => renderOverviewUnit(u, 0))}
+        </div>
+      )}
+
+      <div style={{ display: mode === 'vue' ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px', alignItems: 'start' }}>
         {/* Colonne de gauche : l'entrée choisie par l'utilisateur */}
         <div style={{ ...panel, padding: '10px' }}>
           {mode === 'zones' ? (
