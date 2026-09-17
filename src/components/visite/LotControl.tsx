@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon,
+  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
@@ -50,12 +50,14 @@ interface Props {
   prevLot: { lotId: string; label: string } | null
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
+  /** Ajouter une tâche dans le planning pour ce lot depuis la visite. */
+  onAddPlanTask?: (title: string, start: string, duration: number) => void
 }
 
 export function LotControl(props: Props) {
   const { zone, lotId, tasks, lots, commitments, photos, reserves, blockerOptions,
     readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack,
-    prevLot, nextLot, onGoToLot } = props
+    prevLot, nextLot, onGoToLot, onAddPlanTask } = props
 
   // Scroll to top whenever we land on a new lot
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }) }, [])
@@ -63,6 +65,18 @@ export function LotControl(props: Props) {
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksWorksProgress(tasks)
   const company = lotCompany(lots, lotId)
+
+  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
+  const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string } | null>(null)
+  const [addedName, setAddedName] = useState<string | null>(null)
+
+  const submitAdd = () => {
+    if (!addForm || !addForm.title.trim() || !onAddPlanTask) return
+    onAddPlanTask(addForm.title.trim(), addForm.start, Math.max(1, parseInt(addForm.duration, 10) || 5))
+    setAddedName(addForm.title.trim())
+    setAddForm({ title: '', start: addForm.start, duration: '5' })
+    setTimeout(() => setAddedName(null), 3000)
+  }
 
   return (
     <div style={{ padding: '12px', paddingBottom: '90px' }}>
@@ -115,6 +129,54 @@ export function LotControl(props: Props) {
           onRemoveRemark={onRemoveRemark}
         />
       ))}
+
+      {/* Ajouter une tâche au planning pour ce lot */}
+      {onAddPlanTask && !readOnly && (
+        <div style={{ marginTop: '12px', marginBottom: '4px', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
+          <button
+            onClick={() => setAddForm(f => f ? null : { title: '', start: todayIso(), duration: '5' })}
+            style={{ display: 'flex', alignItems: 'center', gap: '7px', width: '100%', padding: '10px 12px', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--navy)', textAlign: 'left' }}
+          >
+            <Plus size={14} color="var(--accent)" />
+            Ajouter une tâche à ce lot
+            <ChevronRight size={13} color="var(--muted)" style={{ marginLeft: 'auto', transform: addForm ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+          </button>
+          {addForm && (
+            <div style={{ padding: '10px 12px', background: '#fff', borderTop: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              {addedName && (
+                <div style={{ fontSize: '11px', color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle2 size={12} /> « {addedName} » ajouté au planning.
+                </div>
+              )}
+              <input
+                autoFocus
+                value={addForm.title}
+                placeholder="Intitulé de la tâche"
+                onChange={e => setAddForm({ ...addForm, title: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Enter') submitAdd() }}
+                style={{ ...input, fontSize: '12px' }}
+              />
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  Début
+                  <input type="date" value={addForm.start} onChange={e => setAddForm({ ...addForm, start: e.target.value })} style={{ ...input, fontSize: '12px' }} />
+                </label>
+                <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  Durée (j)
+                  <input type="number" min={1} value={addForm.duration} onChange={e => setAddForm({ ...addForm, duration: e.target.value })} style={{ ...input, width: '56px', fontSize: '12px' }} />
+                </label>
+              </div>
+              <button
+                onClick={submitAdd}
+                disabled={!addForm.title.trim()}
+                style={{ ...ghostBtn, background: addForm.title.trim() ? 'var(--accent)' : '#e5e7eb', color: addForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, alignSelf: 'flex-start' }}
+              >
+                Ajouter
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Walk the lots without going back to the list each time */}
       <div style={{ marginTop: '20px' }}>

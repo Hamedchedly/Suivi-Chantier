@@ -26,6 +26,8 @@ interface Props {
   onProgress?: (taskId: string, progress: number) => void
   /** Modifie les dates planifiées (déclenche l'auto-planification). */
   onDates?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
+  /** Permet de corriger la date de fin réelle (tâches historiques). */
+  onActualEnd?: (taskId: string, date: Date | null) => void
   /** Marge totale (jours) issue du CPM — absente pour les regroupements. */
   totalFloat?: number
 }
@@ -36,7 +38,7 @@ const isoDate = (d: Date) => {
 }
 const parseDate = (s: string) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
 
-export function TaskDetail({ task, onClose, onProgress, onDates, totalFloat }: Props) {
+export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, totalFloat }: Props) {
   const editable = !!onDates && !task.children?.length
   const drift = driftDays(task)
   const st = STATUS_LABEL[task.status] ?? STATUS_LABEL['not-started']
@@ -94,9 +96,41 @@ export function TaskDetail({ task, onClose, onProgress, onDates, totalFloat }: P
               <Row label="Contractuel — fin" value={fmt(task.planned_end)} />
             </>
           )}
-          {/* Le réel ne se saisit pas : il suit l'avancement constaté. */}
           <Row label="Réel — début" value={fmt(task.actual_start)} />
-          <Row label="Réel — fin" value={task.actual_end ? fmt(task.actual_end) : (task.actual_start ? 'en cours' : '—')} />
+          {onActualEnd && task.actual_end ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Réel — fin</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <input
+                  type="date"
+                  value={isoDate(task.actual_end)}
+                  onChange={e => e.target.value && onActualEnd(task.id, parseDate(e.target.value))}
+                  style={{ width: '140px', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}
+                />
+                <button
+                  onClick={() => onActualEnd(task.id, null)}
+                  title="Effacer la date réelle de fin"
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, padding: '2px 4px' }}
+                >✕</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', padding: '5px 0' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Réel — fin</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)' }}>
+                  {task.actual_end ? fmt(task.actual_end) : (task.actual_start ? 'en cours' : '—')}
+                </span>
+                {onActualEnd && !task.actual_end && task.actual_start && (
+                  <button
+                    onClick={() => onActualEnd(task.id, new Date())}
+                    title="Saisir la date de fin réelle"
+                    style={{ border: '1px solid var(--line)', background: '#f8fafc', cursor: 'pointer', color: 'var(--navy)', fontSize: 11, padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}
+                  >+ fin réelle</button>
+                )}
+              </div>
+            </div>
+          )}
           <Row label="Écart / contractuel" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
           {totalFloat !== undefined && (
             <Row

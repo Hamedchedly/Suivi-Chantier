@@ -300,11 +300,18 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               <div style={{ width: 14 }} />
             )}
             <span
-              onClick={() => onTaskClick?.(task)}
-              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: onTaskClick ? 'pointer' : 'default' }}
+              onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
+              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default' }}
             >
               {task.title}
             </span>
+            {hasChildren && onTaskClick && (
+              <button
+                onClick={e => { e.stopPropagation(); onTaskClick(task) }}
+                title="Détails du lot"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
+              >ⓘ</button>
+            )}
           </div>
         </td>
 

@@ -297,6 +297,10 @@ export function Gantt() {
             handleTaskUpdate(id, updates)
             setDetailTask(t => (t && t.id === id ? { ...t, ...updates } : t))
           }}
+          onActualEnd={(id, date) => {
+            handleTaskUpdate(id, { actual_end: date ?? undefined })
+            setDetailTask(t => (t && t.id === id ? { ...t, actual_end: date ?? undefined } : t))
+          }}
           totalFloat={cpm.nodes.get(detailTask.id)?.totalFloat}
         />
       )}
