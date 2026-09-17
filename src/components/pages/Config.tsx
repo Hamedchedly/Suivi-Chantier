@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Download, Upload, Plus, Trash2 } from 'lucide-react'
-import { LotContact, getLotsConfig, saveLotsConfig } from '../../lib/repo'
+import { LotContact, getLotsConfig, saveLotsConfig, getProjectRules, saveProjectRules } from '../../lib/repo'
 import { PlanningConfig } from './PlanningConfig'
 import { Project, updateProject } from '../../lib/projects'
 import { SavedIndicator } from '../common/SavedIndicator'
@@ -17,10 +17,16 @@ interface ConfigProps {
 export function Config({ project, projects, onProjectChange }: ConfigProps) {
   const [activeTab, setActiveTab] = useState<ConfigTab>('project')
   const [lots, setLots] = useState<LotContact[]>(getLotsConfig)
+  const [rules, setRules] = useState<string[]>(getProjectRules)
+  const [newRule, setNewRule] = useState('')
 
   useEffect(() => {
     saveLotsConfig(lots)
   }, [lots])
+
+  useEffect(() => {
+    saveProjectRules(rules)
+  }, [rules])
 
   const updateLot = (id: string, field: keyof LotContact, value: string) => {
     setLots(prev => prev.map(l => (l.id === id ? { ...l, [field]: value } : l)))
@@ -197,6 +203,46 @@ export function Config({ project, projects, onProjectChange }: ConfigProps) {
                   boxSizing: 'border-box',
                 }}
               />
+            </div>
+
+            {/* P9 — Règles/consignes projet intégrées à tous les exports PDF */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid #e4ecf2', paddingTop: '16px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b7183', display: 'block', marginBottom: '6px' }}>
+                Règles et consignes du projet
+                <span style={{ fontWeight: 400, marginLeft: '6px' }}>(affichées automatiquement sur chaque export PDF)</span>
+              </label>
+              {rules.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                  {rules.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e4ecf2', fontSize: '12px' }}>
+                      <span style={{ flex: 1, color: '#1f2937' }}>{r}</span>
+                      <button
+                        onClick={() => setRules(prev => prev.filter((_, j) => j !== i))}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 2px', flexShrink: 0 }}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  value={newRule}
+                  onChange={e => setNewRule(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newRule.trim()) { setRules(p => [...p, newRule.trim()]); setNewRule('') } }}
+                  placeholder="ex. Toute intervention doit être signalée 48 h à l'avance…"
+                  style={{ flex: 1, padding: '9px 12px', borderRadius: '6px', border: '1px solid #d1dce5', fontSize: '12px', boxSizing: 'border-box' }}
+                />
+                <button
+                  onClick={() => { if (newRule.trim()) { setRules(p => [...p, newRule.trim()]); setNewRule('') } }}
+                  disabled={!newRule.trim()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '9px 14px', borderRadius: '6px', border: 'none', background: '#02457A', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: newRule.trim() ? 'pointer' : 'default', opacity: newRule.trim() ? 1 : 0.4 }}
+                >
+                  <Plus size={14} /> Ajouter
+                </button>
+              </div>
             </div>
 
             <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>

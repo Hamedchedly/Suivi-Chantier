@@ -85,6 +85,7 @@ const SCOPED = {
   commitments: 'sc-commitments-v1',
   visitKinds: 'sc-visit-kinds-v1',
   projectMemo: 'sc-project-memo-v1',
+  projectRules: 'sc-project-rules-v1',
   planningHistory: 'sc-planning-history-v1',
   changeLog: 'sc-change-log-v1',
 } as const
@@ -299,6 +300,15 @@ export function getProjectMemo(): string {
 
 export function saveProjectMemo(memo: string): void {
   saveState(k(SCOPED.projectMemo), memo)
+}
+
+/** Règles/consignes projet affichées automatiquement en tête de chaque CR PDF. */
+export function getProjectRules(): string[] {
+  return loadState<string[]>(k(SCOPED.projectRules), [])
+}
+
+export function saveProjectRules(rules: string[]): void {
+  saveState(k(SCOPED.projectRules), rules)
 }
 
 // ── Comptes & session ───────────────────────────────────────────────────────

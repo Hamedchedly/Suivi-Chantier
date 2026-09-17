@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, ChevronLeft, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList,
+  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
@@ -87,7 +87,13 @@ export function LotControl(props: Props) {
 
       {tasks.length === 0 && <Empty>Aucune tâche planifiée pour ce lot dans ce logement.</Empty>}
 
-      {tasks.map(t => (
+      {[...tasks]
+        .sort((a, b) => {
+          // Non-terminées en premier, terminées ensuite, N/A tout à la fin
+          const rank = (t: VisitTaskCheck) => t.state === 'na' ? 3 : (t.state === 'ok' ? 2 : 0)
+          return rank(a) - rank(b)
+        })
+        .map(t => (
         <TaskCard
           key={t.taskId}
           task={t}
@@ -138,7 +144,7 @@ export function LotControl(props: Props) {
 
 // ── One task ─────────────────────────────────────────────────────────────────
 
-type Panel = null | 'menu' | 'observation' | 'action' | 'engagement' | 'blockers'
+type Panel = null | 'menu' | 'photo' | 'observation' | 'action' | 'engagement' | 'blockers'
 
 function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark }: {
   task: VisitTaskCheck
@@ -157,7 +163,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onRemoveRemark: (id: string) => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [collapsed, setCollapsed] = useState(
+    () => task.state === 'ok' || (task.state !== 'na' && (task.progress ?? 0) >= 100),
+  )
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
   const gap = progressGap(task)
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
@@ -179,12 +189,44 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const patchBlockers = (blockedBy: string[]) =>
     onPatch({ blockedBy: blockedBy.length ? blockedBy : undefined, state: stateAfterEdit({ ...task, blockedBy }) })
 
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) onAddPhoto(f)
+    if (e.target) e.target.value = ''
+    setPanel(null)
+  }
+
+  // P3 — Tâche terminée : affichage compact, dépliable au clic
+  if (collapsed && !isNa) {
+    return (
+      <div
+        onClick={() => setCollapsed(false)}
+        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '10px' }}
+      >
+        <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#15803d' }}>
+          {taskTitle(task.title, zone.refId)}
+        </span>
+        {photoCount > 0 && <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '9px' }}>{photoCount}📷</span>}
+        {remarks.length > 0 && <span style={{ ...badge, background: '#fef3c7', color: '#92400e', fontSize: '9px' }}>{remarks.length} note{remarks.length > 1 ? 's' : ''}</span>}
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>{task.progress ?? 100}%</span>
+        <ChevronDown size={13} color="#86efac" />
+      </div>
+    )
+  }
+
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: '12px', background: '#fff', padding: '14px', marginBottom: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px' }}>
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
+        {/* Replier si la tâche était terminée */}
+        {(task.state === 'ok' || (task.progress ?? 0) >= 100) && (
+          <button onClick={() => setCollapsed(true)} title="Replier" style={miniBtn('#15803d', false)}>
+            <Check size={14} />
+          </button>
+        )}
         {!readOnly && (
           <>
             <button onClick={() => setPanel(p => p === 'engagement' ? null : 'engagement')}
@@ -208,8 +250,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       {isNa ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '9px', background: '#f1f5f9', border: '1px solid var(--line)', marginBottom: '10px' }}>
           <CircleSlash size={15} color="#64748b" />
-          <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
-            Non applicable — exclue de l'avancement
+          <span
+            style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#64748b' }}
+            title="Cette tâche ne concerne pas ce logement / cette zone et est exclue du calcul d'avancement."
+          >
+            N/A — non concerné par ce logement
           </span>
           {!readOnly && (
             <button onClick={() => onPatch({ state: task.progress === undefined ? 'not_checked' : 'ok' })}
@@ -234,33 +279,33 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         </div>
       )}
 
-      {/* The bar carries the plan; only the gap itself needs spelling out */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10px', marginTop: '6px', marginBottom: '10px' }}>
-        {!isNa && planned !== undefined && (
-          <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <span style={markDot('#0284c7')} /> prévu {planned}%
-          </span>
-        )}
-        {!isNa && prev !== undefined && (
-          <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            <span style={markDot('#f59e0b')} /> réunion préc. {prev}%{!checked && ' · départ du curseur'}
-          </span>
-        )}
-        {!isNa && gap !== null && gap !== 0 && (
-          <span style={{ color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 700 }}>
-            {gap < 0 ? `${-gap} pts de retard` : `${gap} pts d'avance`}
-          </span>
-        )}
-        {!isNa && gap === 0 && <span style={{ color: '#15803d', fontWeight: 700 }}>conforme au prévu</span>}
-        {delta !== null && delta !== 0 && (
-          <span style={{ color: 'var(--muted)' }}>
-            <strong style={{ color: delta > 0 ? '#15803d' : '#dc2626', marginLeft: '3px' }}>
-              {delta > 0 ? <ArrowUp size={10} style={{ verticalAlign: '-1px' }} /> : <ArrowDown size={10} style={{ verticalAlign: '-1px' }} />}
-              {delta > 0 ? `+${delta}` : delta} pts
-            </strong> depuis le {fmtFr(previous!.date)}
-          </span>
-        )}
-      </div>
+      {/* Contexte d'avancement — compact, sans doublon */}
+      {!isNa && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '10px', marginTop: '4px', marginBottom: '10px' }}>
+          {/* Écart vs planning : principal indicateur */}
+          {gap !== null && gap !== 0 && planned !== undefined && (
+            <span style={{ color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 700 }}>
+              {gap < 0 ? `${-gap} pts de retard sur le prévu (${planned}%)` : `+${gap} pts d'avance sur le prévu (${planned}%)`}
+            </span>
+          )}
+          {gap === 0 && planned !== undefined && (
+            <span style={{ color: '#15803d', fontWeight: 600 }}>Conforme au prévu ({planned}%)</span>
+          )}
+          {/* Évolution depuis la dernière visite (seulement si le curseur a été bougé) */}
+          {delta !== null && delta !== 0 && checked && (
+            <span style={{ color: delta > 0 ? '#15803d' : '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+              {delta > 0
+                ? <ArrowUp size={9} style={{ verticalAlign: '-1px' }} />
+                : <ArrowDown size={9} style={{ verticalAlign: '-1px' }} />}
+              <strong>{delta > 0 ? `+${delta}` : `${delta}`} pts</strong> depuis le {fmtFr(previous!.date)}
+            </span>
+          )}
+          {/* Point de départ affiché quand la tâche n'a pas encore été vérifiée aujourd'hui */}
+          {prev !== undefined && !checked && planned === undefined && (
+            <span style={{ color: 'var(--muted)' }}>Dernier constat : {prev}% — {fmtFr(previous!.date)}</span>
+          )}
+        </div>
+      )}
 
       {/* Recorded on this task */}
       {(task.promisedWeek || blockers.length > 0 || photoCount > 0) && (
@@ -310,13 +355,14 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
       {!readOnly && (
         <>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) onAddPhoto(f); if (fileRef.current) fileRef.current.value = ''; setPanel(null) }} />
+          {/* P1 — Deux inputs distincts : appareil photo vs galerie */}
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFile} />
+          <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
 
           {/* Three things to declare, reachable in one tap each */}
           {panel === null && (
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={() => fileRef.current?.click()} style={actBtn('#02457A')}>
+              <button onClick={() => setPanel('photo')} style={actBtn('#02457A')}>
                 <Camera size={16} /> Photo
               </button>
               <button onClick={() => setPanel('action')} style={actBtn('#b45309')}>
@@ -326,6 +372,30 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 style={actBtn(blockers.length ? '#b91c1c' : '#94a3b8', blockers.length > 0)}>
                 <Ban size={16} /> Blocage
               </button>
+            </div>
+          )}
+
+          {/* Sélecteur photo : appareil photo ou galerie */}
+          {panel === 'photo' && (
+            <div style={{ ...panelBox, borderColor: '#bae6fd', background: '#f0f9ff' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#0369a1', marginBottom: '10px' }}>Ajouter une photo</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 14px', borderRadius: '10px', border: '1px solid #7dd3fc', background: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#0369a1' }}
+                >
+                  <Camera size={20} color="#0369a1" />
+                  <span>📷 Prendre une photo</span>
+                </button>
+                <button
+                  onClick={() => galleryRef.current?.click()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 14px', borderRadius: '10px', border: '1px solid #a5f3fc', background: '#fff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#0e7490' }}
+                >
+                  <ImageIcon size={20} color="#0e7490" />
+                  <span>🖼 Choisir une photo existante</span>
+                </button>
+              </div>
+              <button onClick={() => setPanel(null)} style={{ ...ghostBtn, marginTop: '10px', width: '100%', justifyContent: 'center' }}>Annuler</button>
             </div>
           )}
 

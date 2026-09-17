@@ -23,6 +23,7 @@ import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
   getCommitments, saveCommitments, getLotsConfig, getVisitKinds, saveVisitKinds,
   logActivity, getZoneRefs, getUnits, getTaskUnits, type LotContact,
+  getProjectRules,
 } from '../../lib/repo'
 import { getProjects, getCurrentProjectId } from '../../lib/repo'
 import { findProject, projectLabel, projectSubtitle } from '../../lib/projects'
@@ -927,9 +928,60 @@ function CrEditor(props: {
       <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 6px' }}>
         {visitKindLabel(visit)} — {locked ? 'document diffusé, verrouillé.' : 'brouillon éditable, relisez puis validez avant diffusion.'}
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
-        <Clock size={12} /> {fmtTime(visit.startedAt)} → {fmtTime(visit.endedAt)} · {fmtDuration(visitStats(visit, reserves, photos.length).durationMin)}
-      </div>
+      {/* P6 — Horaires modifiables avant diffusion */}
+      {!locked ? (
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#f8fafc', fontSize: '12px' }}>
+          <Clock size={13} color="var(--muted)" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--muted)' }}>
+            Date
+            <input
+              type="date"
+              value={visit.date}
+              onChange={e => onUpdate(v => ({ ...v, date: e.target.value }))}
+              style={{ ...input, padding: '4px 7px', fontSize: '12px', width: '130px' }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--muted)' }}>
+            Début
+            <input
+              type="time"
+              value={visit.startedAt ? new Date(visit.startedAt).toTimeString().slice(0, 5) : ''}
+              onChange={e => {
+                if (!e.target.value) return
+                const [h, m] = e.target.value.split(':')
+                const d = new Date(visit.startedAt ?? Date.now())
+                d.setHours(Number(h), Number(m), 0, 0)
+                onUpdate(v => ({ ...v, startedAt: d.toISOString() }))
+              }}
+              style={{ ...input, padding: '4px 7px', fontSize: '12px', width: '90px' }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--muted)' }}>
+            Fin
+            <input
+              type="time"
+              value={visit.endedAt ? new Date(visit.endedAt).toTimeString().slice(0, 5) : ''}
+              onChange={e => {
+                if (!e.target.value) return
+                const [h, m] = e.target.value.split(':')
+                const d = new Date(visit.endedAt ?? Date.now())
+                d.setHours(Number(h), Number(m), 0, 0)
+                onUpdate(v => ({ ...v, endedAt: d.toISOString() }))
+              }}
+              style={{ ...input, padding: '4px 7px', fontSize: '12px', width: '90px' }}
+            />
+          </label>
+          {visit.startedAt && visit.endedAt && (
+            <span style={{ color: 'var(--muted)', fontSize: '11px' }}>
+              · {fmtDuration(visitStats(visit, reserves, photos.length).durationMin)}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
+          <Clock size={12} /> {fmtTime(visit.startedAt)} → {fmtTime(visit.endedAt)} · {fmtDuration(visitStats(visit, reserves, photos.length).durationMin)}
+        </div>
+      )}
 
       {locked && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '8px', background: '#ede9fe', color: '#6d28d9', fontSize: '12px', fontWeight: 600, marginBottom: '14px' }}>
@@ -1098,6 +1150,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
   const crPhotos = photos.filter(p => p.includeInCr)
   const general = generalNotes(visit)
   const sessionCommitments = commitments.filter(c => c.visitId === visit.id)
+  const projectRules = getProjectRules()
   const stats = visitStats(visit, allReserves, crPhotos.length)
   const changes = visitChanges(visit, visits, allReserves)
   const observations = reserves.filter(r => reserveKind(r) === 'observation')
@@ -1149,6 +1202,17 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
           )}
         </RSection>
 
+        {/* P9 — Règles/consignes du projet (toujours en tête, après intervenants) */}
+        {projectRules.length > 0 && (
+          <RSection title={`${++s}. Règles et consignes du projet`}>
+            <ul style={{ margin: 0, paddingLeft: '18px' }}>
+              {projectRules.map((r, i) => (
+                <li key={i} style={{ fontSize: '12px', marginBottom: '4px', color: '#1f2937' }}>{r}</li>
+              ))}
+            </ul>
+          </RSection>
+        )}
+
         {(cr.synthese || visit.brief) && (
           <RSection title={`${++s}. Synthèse`}>
             {visit.brief && <p style={{ ...pStyle, marginBottom: '6px', fontStyle: 'italic' }}>{visit.brief}</p>}
@@ -1176,21 +1240,69 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
           </RSection>
         )}
 
-        <RSection title={`${++s}. Relevé d'avancement par zone`}>
-          <table style={tableStyle}>
-            <thead><tr><th style={thStyle}>Bâtiment</th><th style={thStyle}>Zone</th><th style={thStyle}>Travaux</th><th style={thStyle}>Contrôle</th><th style={thStyle}>État</th></tr></thead>
-            <tbody>
-              {visit.zones.map(z => (
-                <tr key={z.refId}>
-                  <td style={tdStyle}>{z.buildingLabel}</td>
-                  <td style={tdStyle}>{z.label}</td>
-                  <td style={tdStyle}>{zoneWorksProgress(z)}%</td>
-                  <td style={tdStyle}>{zoneControlProgress(z)}%</td>
-                  <td style={tdStyle}>{ZONE_META[zoneState(z)].label}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* P5 — Structure Bâtiment → Logement → Lot */}
+        <RSection title={`${++s}. Relevé par logement`}>
+          {(() => {
+            // Group zones by building
+            const buildings = [...new Map(visit.zones.map(z => [z.buildingId, z.buildingLabel])).entries()]
+            return buildings.map(([bid, blabel]) => {
+              const zones = visit.zones.filter(z => z.buildingId === bid)
+              return (
+                <div key={bid} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#02457A', borderBottom: '2px solid #02457A', paddingBottom: '4px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                    {blabel}
+                  </div>
+                  {zones.map(z => {
+                    const lotIds = [...new Set(z.tasks.map(t => t.lotId))]
+                    const zoneReserves = reserves.filter(r => r.logementId === z.refId)
+                    return (
+                      <div key={z.refId} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '3px solid #e4ecf2' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937' }}>{z.label}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}% · {ZONE_META[zoneState(z)].label}</span>
+                        </div>
+                        {lotIds.map(lotId => {
+                          const lotTasks = z.tasks.filter(t => t.lotId === lotId)
+                          const lotReserves = zoneReserves.filter(r => r.lotId === lotId)
+                          const lotObs = lotReserves.filter(r => reserveKind(r) === 'observation')
+                          const lotActions = lotReserves.filter(r => reserveKind(r) === 'action')
+                          const lotProgress = Math.round(
+                            lotTasks.filter(t => t.state !== 'na').reduce((s, t) => s + (t.progress ?? 0), 0) /
+                            Math.max(1, lotTasks.filter(t => t.state !== 'na').length)
+                          )
+                          if (lotTasks.length === 0 && lotReserves.length === 0) return null
+                          return (
+                            <div key={lotId} style={{ marginBottom: '8px', marginLeft: '10px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#018ABE' }}>{lotId} — {lotLabel(lots, lotId)}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--navy)', fontWeight: 600 }}>{lotProgress}%</span>
+                              </div>
+                              {/* Observations + actions regroupées par sujet */}
+                              {lotObs.map(obs => {
+                                const linkedAction = lotActions.find(a => a.taskId === obs.taskId && !a.taskId === false)
+                                return (
+                                  <div key={obs.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
+                                    <div style={{ color: '#5b7183' }}>{obs.description}</div>
+                                  </div>
+                                )
+                              })}
+                              {lotActions.map(act => (
+                                <div key={act.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #f59e0b', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                  <span style={{ color: '#b45309', fontWeight: 800, flexShrink: 0 }}>▶ ACTION :</span>
+                                  <span style={{ color: '#1f2937', fontWeight: 600 }}>{act.description}</span>
+                                  {act.dueDate && <span style={{ color: '#b45309', fontSize: '10px', flexShrink: 0 }}>· {fmtFr(act.dueDate)}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })
+          })()}
         </RSection>
 
         {sessionCommitments.length > 0 && (
