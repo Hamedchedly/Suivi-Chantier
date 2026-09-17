@@ -50,8 +50,8 @@ interface Props {
   prevLot: { lotId: string; label: string } | null
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
-  /** Ajouter une tâche dans le planning pour ce lot depuis la visite. */
-  onAddPlanTask?: (title: string, start: string, duration: number) => void
+  /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. */
+  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string) => void
 }
 
 export function LotControl(props: Props) {
@@ -127,6 +127,7 @@ export function LotControl(props: Props) {
           onAddRemark={onAddRemark}
           onUpdateRemark={onUpdateRemark}
           onRemoveRemark={onRemoveRemark}
+          onAddSubTask={onAddPlanTask ? (title, start, duration) => onAddPlanTask(title, start, duration, t.taskId) : undefined}
         />
       ))}
 
@@ -211,7 +212,7 @@ export function LotControl(props: Props) {
 
 type Panel = null | 'menu' | 'photo' | 'observation' | 'action' | 'engagement' | 'blockers'
 
-function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark }: {
+function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark, onAddSubTask }: {
   task: VisitTaskCheck
   zone: VisitZone
   lots: LotContact[]
@@ -226,6 +227,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onAddRemark: (r: RemarkInput) => void
   onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
+  onAddSubTask?: (title: string, start: string, duration: number) => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const [collapsed, setCollapsed] = useState(
@@ -233,7 +235,18 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   )
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
+  const [subAdded, setSubAdded] = useState<string | null>(null)
   const gap = progressGap(task)
+
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+  const submitSubTask = () => {
+    if (!subForm || !subForm.title.trim() || !onAddSubTask) return
+    onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5))
+    setSubAdded(subForm.title.trim())
+    setSubForm({ title: '', start: subForm.start, duration: '5' })
+    setTimeout(() => setSubAdded(null), 3000)
+  }
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
   const blockers = task.blockedBy ?? []
@@ -294,6 +307,15 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         )}
         {!readOnly && (
           <>
+            {onAddSubTask && (
+              <button
+                onClick={() => setSubForm(f => f ? null : { title: '', start: todayStr, duration: '5' })}
+                title="Ajouter une sous-tâche"
+                style={{ ...miniBtn('#0284c7', !!subForm), fontSize: '10px', gap: '2px' }}
+              >
+                <Plus size={11} />↳
+              </button>
+            )}
             <button onClick={() => setPanel(p => p === 'engagement' ? null : 'engagement')}
               title="Engagement de l'entreprise" style={miniBtn('#6d28d9', !!task.promisedWeek)}>
               <Handshake size={15} />
@@ -415,6 +437,50 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           {remarks.map(r => (
             <RemarkRow key={r.id} remark={r} readOnly={readOnly} onUpdate={onUpdateRemark} onRemove={onRemoveRemark} />
           ))}
+        </div>
+      )}
+
+      {/* Formulaire sous-tâche inline */}
+      {subForm && onAddSubTask && (
+        <div style={{ margin: '4px 0 10px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #bae6fd', background: '#f0f9ff' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#0369a1', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Plus size={12} />↳ Nouvelle sous-tâche
+          </div>
+          {subAdded && (
+            <div style={{ fontSize: '11px', color: 'var(--ok)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <CheckCircle2 size={12} /> « {subAdded} » ajoutée au planning.
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <input
+              autoFocus
+              value={subForm.title}
+              placeholder="Intitulé de la sous-tâche"
+              onChange={e => setSubForm({ ...subForm, title: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') submitSubTask(); if (e.key === 'Escape') setSubForm(null) }}
+              style={{ ...input, fontSize: '12px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Début
+                <input type="date" value={subForm.start} onChange={e => setSubForm({ ...subForm, start: e.target.value })} style={{ ...input, fontSize: '12px' }} />
+              </label>
+              <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Durée (j)
+                <input type="number" min={1} value={subForm.duration} onChange={e => setSubForm({ ...subForm, duration: e.target.value })} style={{ ...input, width: '54px', fontSize: '12px' }} />
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={submitSubTask}
+                disabled={!subForm.title.trim()}
+                style={{ ...ghostBtn, background: subForm.title.trim() ? '#0284c7' : '#e5e7eb', color: subForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700 }}
+              >
+                Ajouter
+              </button>
+              <button onClick={() => setSubForm(null)} style={ghostBtn}>Fermer</button>
+            </div>
+          </div>
         </div>
       )}
 

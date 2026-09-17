@@ -29,7 +29,7 @@ import { getProjects, getCurrentProjectId } from '../../lib/repo'
 import { findProject, projectLabel, projectSubtitle } from '../../lib/projects'
 import { taskConcernsUnit } from '../../lib/units'
 import type { GanttTask } from '../../types/gantt'
-import { createTask } from '../../lib/planning'
+import { createTask, createSubTask } from '../../lib/planning'
 import { SelectionBar } from '../common/SelectionBar'
 import { EMPTY_SELECTION, Selection, toggle, toggleAll, removeSelected } from '../../lib/selection'
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
@@ -249,14 +249,13 @@ export function Visite() {
             prevLot={neighbours.prev}
             nextLot={neighbours.next}
             onGoToLot={id => swap({ v: 'lot', ref: zone.refId, lotId: id })}
-            onAddPlanTask={(title, start, duration) => {
+            onAddPlanTask={(title, start, duration, parentTaskId) => {
               const tasks = getGanttTasks()
               const [y, m, d] = start.split('-').map(Number)
-              const res = createTask(tasks, view.lotId, {
-                title,
-                start: new Date(y, m - 1, d),
-                duration: Math.max(1, duration),
-              })
+              const input = { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) }
+              const res = parentTaskId
+                ? createSubTask(tasks, parentTaskId, input)
+                : createTask(tasks, view.lotId, input)
               if (res.ok) saveGanttTasks(res.tasks)
             }}
           />
