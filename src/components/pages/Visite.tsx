@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Plus, Calendar, ChevronRight, ArrowLeft, ImageIcon, StickyNote, Clock, X,
   CheckCircle2, AlertTriangle, Lock, Send, FileText, Printer, Users, Eye, Flag, ShieldCheck,
-  ListChecks,
+  ListChecks, History,
 } from 'lucide-react'
 import {
-  Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant,
+  Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant, AuditEntry,
   VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
@@ -455,6 +455,7 @@ export function Visite() {
       companies={companiesOf(active)}
       locked={isLockedFor(active, me)}
       canOverride={isDiffused(active) && isSuperadmin(me)}
+      currentUsername={me?.displayName ?? me?.username ?? 'Utilisateur'}
       onBack={back}
       onUpdate={fn => updateVisit(active.id, fn)}
       onUpdatePhoto={updatePhoto}
@@ -793,6 +794,10 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
 // CR editor
 // ═══════════════════════════════════════════════════════════════════════════
 
+const CR_FIELD_LABEL: Record<string, string> = {
+  synthese: 'Synthèse', conclusions: 'Conclusions', nextMeeting: 'Prochaine réunion',
+}
+
 function CrEditor(props: {
   visit: Visit
   lots: LotContact[]
@@ -801,6 +806,7 @@ function CrEditor(props: {
   companies: string[]
   locked: boolean
   canOverride: boolean
+  currentUsername: string
   onBack: () => void
   onUpdate: (fn: (v: Visit) => Visit) => void
   onUpdatePhoto: (p: VisitPhoto) => void
@@ -810,10 +816,33 @@ function CrEditor(props: {
   onReopen: () => void
   onReport: () => void
 }) {
-  const { visit, lots, reserves, photos, companies, locked, canOverride,
+  const { visit, lots, reserves, photos, companies, locked, canOverride, currentUsername,
     onBack, onUpdate, onUpdatePhoto, onNotes, onValidate, onDiffuse, onReopen, onReport } = props
   const cr = visit.cr ?? emptyCr()
-  const setCr = (patch: Partial<typeof cr>) => onUpdate(v => ({ ...v, cr: { ...(v.cr ?? emptyCr()), ...patch } }))
+
+  const setCr = (patch: Partial<typeof cr>) => {
+    const prevCr = visit.cr ?? emptyCr()
+    onUpdate(v => {
+      const newCr = { ...(v.cr ?? emptyCr()), ...patch }
+      // Record audit entries for each changed text field when the CR has been generated.
+      const shouldAudit = v.status !== 'en_cours' && v.status !== 'terminee'
+      const entries: AuditEntry[] = shouldAudit
+        ? (Object.keys(patch) as (keyof typeof patch)[])
+            .filter(k => typeof patch[k] === 'string' && patch[k] !== prevCr[k])
+            .map(k => ({
+              at: new Date().toISOString(),
+              by: currentUsername,
+              field: CR_FIELD_LABEL[k] ?? String(k),
+              from: String(prevCr[k] ?? ''),
+              to: String(patch[k] ?? ''),
+            }))
+        : []
+      return {
+        ...v, cr: newCr,
+        auditLog: entries.length > 0 ? [...(v.auditLog ?? []), ...entries] : (v.auditLog ?? []),
+      }
+    })
+  }
 
   return (
     <div style={{ padding: '12px', paddingBottom: '90px' }}>
@@ -938,6 +967,28 @@ function CrEditor(props: {
       {companies.length > 0 && (
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
           <Users size={12} style={{ verticalAlign: '-2px' }} /> Entreprises concernées : {companies.join(', ')}
+        </div>
+      )}
+
+      {/* Journal des modifications */}
+      {(visit.auditLog ?? []).length > 0 && (
+        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
+          <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <History size={13} /> Journal des modifications ({visit.auditLog!.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {[...visit.auditLog!].reverse().map((e, i) => (
+              <div key={i} style={{ padding: '8px 10px', borderRadius: '7px', background: '#f8fafc', border: '1px solid var(--line)', fontSize: '11px', color: 'var(--ink)' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{e.field}</span>
+                  <span style={{ color: 'var(--muted)' }}>modifié par <strong>{e.by}</strong></span>
+                  <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>{new Date(e.at).toLocaleString('fr', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                </div>
+                {e.from && <div style={{ color: '#b45309', background: '#fff7ed', borderRadius: '4px', padding: '3px 6px', marginBottom: '3px' }}>− {e.from}</div>}
+                {e.to   && <div style={{ color: '#065f46', background: '#ecfdf5', borderRadius: '4px', padding: '3px 6px' }}>+ {e.to}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
