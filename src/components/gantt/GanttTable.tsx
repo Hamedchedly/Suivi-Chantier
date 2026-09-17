@@ -98,6 +98,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const [dragState, setDragState] = useState<DragState>({})
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const didAutoScroll = useRef(false)
   const [depLines, setDepLines] = useState<DepLine[]>([])
   const [svgSize, setSvgSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
 
@@ -197,6 +198,15 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
       }
     }
   }, [dragState.isDragging, handleMouseMove, handleMouseUp])
+
+  // Scroll to current week once after first render where today is in range
+  useEffect(() => {
+    if (didAutoScroll.current || todayLeftPx <= 0) return
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    wrapper.scrollLeft = Math.max(0, todayLeftPx - 80)
+    didAutoScroll.current = true
+  }, [todayLeftPx])
 
   // Measure bar positions from the DOM and derive dependency lines.
   // Robust to responsive column widths and variable row heights.

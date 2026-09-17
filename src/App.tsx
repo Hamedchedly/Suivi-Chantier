@@ -58,7 +58,9 @@ const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('home')
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    try { return (localStorage.getItem('sc_nav_page') as Page) ?? 'home' } catch { return 'home' }
+  })
   const [gestionOpen, setGestionOpen] = useState(false)
   const [users, setUsers] = useState<User[]>(getUsers)
   const [session, setSession] = useState<Session | null>(getSession)
@@ -207,6 +209,8 @@ export default function App() {
   // Back button: step back inside the app instead of closing it. A spare
   // history entry is kept ahead of us; each Back consumes it and we push a new
   // one, until there is nothing left to step back to.
+  useEffect(() => { try { localStorage.setItem('sc_nav_page', currentPage) } catch {} }, [currentPage])
+
   const pageRef = useRef(currentPage)
   pageRef.current = currentPage
   const sheetRef = useRef(gestionOpen)
