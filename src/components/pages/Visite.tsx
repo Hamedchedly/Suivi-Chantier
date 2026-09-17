@@ -28,6 +28,7 @@ import { getProjects, getCurrentProjectId } from '../../lib/repo'
 import { findProject, projectLabel, projectSubtitle } from '../../lib/projects'
 import { taskConcernsUnit } from '../../lib/units'
 import type { GanttTask } from '../../types/gantt'
+import { createTask } from '../../lib/planning'
 import { SelectionBar } from '../common/SelectionBar'
 import { EMPTY_SELECTION, Selection, toggle, toggleAll, removeSelected } from '../../lib/selection'
 import { VisitPhoto, listPhotos, savePhoto, deletePhoto, fileToDataUrl } from '../../lib/photoStore'
@@ -93,6 +94,8 @@ export function Visite() {
   const [picking, setPicking] = useState(false)
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [planForm, setPlanForm] = useState<{ lotId: string; title: string; start: string; duration: string } | null>(null)
+  const [planAdded, setPlanAdded] = useState<string | null>(null) // last-added task title, for flash
 
   const view = stack[stack.length - 1]
   const push = (v: View) => setStack(s => [...s, v])
@@ -203,6 +206,26 @@ export function Visite() {
     }))
     logActivity('visit', `${visitKindLabel(v)} du ${fmtFr(v.date)} terminée — planning mis à jour et figé`)
     setStack([{ v: 'list' }, { v: 'cr' }])
+  }
+
+  const submitPlanTask = () => {
+    if (!planForm || !planForm.title.trim()) return
+    const ganttTasks = getGanttTasks()
+    const lot = ganttTasks.find(l => l.id === planForm.lotId)
+    if (!lot) return
+    const [y, m, d] = planForm.start.split('-').map(Number)
+    const start = new Date(y, m - 1, d)
+    const res = createTask(ganttTasks, planForm.lotId, {
+      title: planForm.title.trim(),
+      start,
+      duration: Math.max(1, parseInt(planForm.duration, 10) || 5),
+    })
+    if (res.ok) {
+      saveGanttTasks(res.tasks)
+      setPlanAdded(planForm.title.trim())
+      setPlanForm({ ...planForm, title: '', duration: '5' })
+      setTimeout(() => setPlanAdded(null), 3000)
+    }
   }
 
   // ── Create ─────────────────────────────────────────────────────────────────
@@ -406,6 +429,56 @@ export function Visite() {
             <ChevronRight size={14} color="var(--muted)" />
           </button>
         </div>
+
+        {/* Ajouter une tâche au planning depuis la visite */}
+        {(() => {
+          const ganttLots = getGanttTasks().filter(l => l.children !== undefined)
+          if (ganttLots.length === 0) return null
+          const defaultLotId = ganttLots[0].id
+          return (
+            <div style={{ marginBottom: '16px', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
+              <button
+                onClick={() => setPlanForm(f => f ? null : { lotId: defaultLotId, title: '', start: active.date, duration: '5' })}
+                style={{ display: 'flex', alignItems: 'center', gap: '7px', width: '100%', padding: '10px 12px', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--navy)', textAlign: 'left' }}
+              >
+                <Plus size={14} color="var(--accent)" />
+                Ajouter une tâche au planning
+                <ChevronRight size={13} color="var(--muted)" style={{ marginLeft: 'auto', transform: planForm ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+              </button>
+              {planForm && (
+                <div style={{ padding: '10px 12px', background: '#fff', borderTop: '1px solid var(--line)' }}>
+                  {planAdded && (
+                    <div style={{ fontSize: '11px', color: 'var(--ok)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle2 size={12} /> « {planAdded} » ajouté au planning.
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                    <select value={planForm.lotId} onChange={e => setPlanForm({ ...planForm, lotId: e.target.value })} style={{ ...input, fontSize: '12px' }}>
+                      {ganttLots.map(l => <option key={l.id} value={l.id}>[{l.lot_id}] {l.title}</option>)}
+                    </select>
+                    <input autoFocus value={planForm.title} placeholder="Intitulé de la tâche"
+                      onChange={e => setPlanForm({ ...planForm, title: e.target.value })}
+                      onKeyDown={e => { if (e.key === 'Enter') submitPlanTask() }}
+                      style={{ ...input, fontSize: '12px' }} />
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        Début
+                        <input type="date" value={planForm.start} onChange={e => setPlanForm({ ...planForm, start: e.target.value })} style={{ ...input, fontSize: '12px' }} />
+                      </label>
+                      <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        Durée (j)
+                        <input type="number" min={1} value={planForm.duration} onChange={e => setPlanForm({ ...planForm, duration: e.target.value })} style={{ ...input, width: '56px', fontSize: '12px' }} />
+                      </label>
+                    </div>
+                    <button onClick={submitPlanTask} disabled={!planForm.title.trim()} style={{ ...ghostBtn, background: planForm.title.trim() ? 'var(--accent)' : '#e5e7eb', color: planForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, alignSelf: 'flex-start' }}>
+                      Ajouter
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {active.status === 'en_cours' && (
           <button
