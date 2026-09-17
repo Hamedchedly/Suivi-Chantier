@@ -170,6 +170,9 @@ export interface Holiday {
   start: Date
   end: Date
   label?: string
+  /** 'conge' = non travaillé (grisé sur le Gantt) ; 'event' = événement spécial (chaleur, pluie…) */
+  kind?: 'conge' | 'event'
+  eventType?: 'chaleur' | 'pluie' | 'autre'
 }
 
 export interface LotContact {

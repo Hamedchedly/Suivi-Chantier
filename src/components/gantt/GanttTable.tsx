@@ -6,7 +6,8 @@ interface GanttTableProps {
   tasks: GanttTask[]
   viewState: GanttViewState
   onToggleExpanded: (taskId: string) => void
-  onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
+  onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) => void
+  onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
   readOnly?: boolean
 }
@@ -93,9 +94,10 @@ function flattenVisible(
   return acc
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onTaskClick, readOnly }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
+  const [editingProgress, setEditingProgress] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -151,11 +153,12 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
 
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
     e.preventDefault()
+    // Drag always moves actual dates; fall back to planned if no actual yet.
     setDragState({
       taskId: task.id,
       startX: e.clientX,
-      originalStart: new Date(task.planned_start),
-      originalEnd: new Date(task.planned_end),
+      originalStart: new Date(task.actual_start ?? task.planned_start),
+      originalEnd: new Date(task.actual_end ?? task.planned_end),
       isDragging: true,
       mode,
     })
@@ -174,13 +177,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
           const msShift = daysShift * msPerDay
           if (prev.mode === 'move') {
             onTaskUpdate(prev.taskId, {
-              planned_start: new Date(prev.originalStart.getTime() + msShift),
-              planned_end: new Date(prev.originalEnd.getTime() + msShift),
+              actual_start: new Date(prev.originalStart.getTime() + msShift),
+              actual_end: new Date(prev.originalEnd.getTime() + msShift),
             })
           } else if (prev.mode === 'resize-start') {
-            onTaskUpdate(prev.taskId, { planned_start: new Date(prev.originalStart.getTime() + msShift) })
+            onTaskUpdate(prev.taskId, { actual_start: new Date(prev.originalStart.getTime() + msShift) })
           } else if (prev.mode === 'resize-end') {
-            onTaskUpdate(prev.taskId, { planned_end: new Date(prev.originalEnd.getTime() + msShift) })
+            onTaskUpdate(prev.taskId, { actual_end: new Date(prev.originalEnd.getTime() + msShift) })
           }
         }
       }
@@ -258,16 +261,16 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     const isExpanded = viewState.expandedTasks.has(task.id)
     const dimmed = !!viewState.highlightCritical && !task.is_critical
 
-    const bar = geom(task.planned_start, task.planned_end)
-    // Le contractuel EST le prévisionnel : la barre de référence affichée sous
-    // la barre pleine est désormais le RÉEL constaté, quand il existe.
-    const base = task.actual_start
-      ? geom(task.actual_start, task.actual_end ?? task.actual_start)
-      : null
+    // Barre principale = dates réelles si elles existent, sinon dates contractuelles.
+    // Référence fine (dessous) = dates contractuelles quand les réelles sont posées.
+    const mainStart = task.actual_start ?? task.planned_start
+    const mainEnd = task.actual_end ?? task.planned_end
+    const bar = geom(mainStart, mainEnd)
+    const base = task.actual_start ? geom(task.planned_start, task.planned_end) : null
 
     const fr = (d: Date) => d.toLocaleDateString('fr')
-    const tooltip = base
-      ? `${task.title} • ${task.progress}%\nContractuel (prévisionnel) : ${fr(task.planned_start)} → ${fr(task.planned_end)}\nRéel : ${fr(task.actual_start!)} → ${task.actual_end ? fr(task.actual_end) : 'en cours'}`
+    const tooltip = task.actual_start
+      ? `${task.title} • ${task.progress}%\nRéel : ${fr(mainStart)} → ${task.actual_end ? fr(mainEnd) : 'en cours'}\nContractuel : ${fr(task.planned_start)} → ${fr(task.planned_end)}`
       : `${task.title} • ${task.progress}%\nContractuel (prévisionnel) : ${fr(task.planned_start)} → ${fr(task.planned_end)}`
 
     return (
@@ -293,7 +296,24 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
           </div>
         </td>
 
-        <td className="gantt-progress-cell">{task.progress}%</td>
+        <td
+          className="gantt-progress-cell"
+          onClick={() => { if (!readOnly && onProgress) setEditingProgress(task.id) }}
+          style={{ cursor: !readOnly && onProgress ? 'pointer' : 'default' }}
+        >
+          {editingProgress === task.id ? (
+            <input
+              type="number" min={0} max={100} step={5}
+              defaultValue={task.progress}
+              autoFocus
+              style={{ width: '46px', fontSize: '11px', textAlign: 'center', border: '1px solid var(--accent)', borderRadius: '4px', padding: '1px 2px' }}
+              onBlur={e => { onProgress?.(task.id, Math.min(100, Math.max(0, Number(e.target.value)))); setEditingProgress(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') { onProgress?.(task.id, Math.min(100, Math.max(0, Number((e.target as HTMLInputElement).value)))); setEditingProgress(null) } else if (e.key === 'Escape') setEditingProgress(null) }}
+            />
+          ) : (
+            <span title={!readOnly && onProgress ? 'Cliquer pour modifier' : undefined}>{task.progress}%</span>
+          )}
+        </td>
 
         <td className="gantt-timeline-cell">
           <div
@@ -323,7 +343,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
                 title={tooltip}
                 style={{
-                  position: 'absolute', left: bar.leftPx - 7, top: 7, width: 14, height: 14,
+                  position: 'absolute', left: bar.leftPx - 7, top: 4, width: 14, height: 14,
                   background: task.progress >= 100 ? '#15803d' : '#02457A',
                   transform: 'rotate(45deg)', borderRadius: 2, zIndex: 3,
                   border: '1.5px solid #fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)',
@@ -339,7 +359,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {editable && (
                   <div
                     onMouseDown={e => handleBarMouseDown(task, e, 'resize-start')}
-                    style={{ position: 'absolute', left: bar.leftPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                    style={{ position: 'absolute', left: bar.leftPx - 4, top: 5, width: 8, height: 12, cursor: 'ew-resize', zIndex: 4 }}
                   />
                 )}
 
@@ -370,7 +390,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 {editable && (
                   <div
                     onMouseDown={e => handleBarMouseDown(task, e, 'resize-end')}
-                    style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 8, width: 8, height: 16, cursor: 'ew-resize', zIndex: 4 }}
+                    style={{ position: 'absolute', left: bar.leftPx + bar.widthPx - 4, top: 5, width: 8, height: 12, cursor: 'ew-resize', zIndex: 4 }}
                   />
                 )}
               </div>

@@ -6,7 +6,7 @@ import {
 import {
   Unit, UnitKind, UnitInput, UnitError, TaskUnitLink, UNIT_KIND_LABEL, ALLOWED_CHILDREN,
   UNIT_ERROR_LABEL, createUnit, renameUnit, deleteUnit, childrenOf, roots, findUnit,
-  unitPath, toggleLink, isLinked, unitIdsForTask, taskIdsForUnit, pruneLinks,
+  unitPath, isLinked, unitIdsForTask, taskIdsForUnit, pruneLinks,
 } from '../../lib/units'
 import { GanttTask } from '../../types/gantt'
 import { getUnits, saveUnits, getTaskUnits, saveTaskUnits, getGanttTasks, saveGanttTasks } from '../../lib/repo'
@@ -28,6 +28,7 @@ export function Structure() {
   const [mode, setMode] = useState<Mode>('zones')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(getUnits().map(u => u.id)))
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
+  const [checkedUnits, setCheckedUnits] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
   // Actions d'une ligne repliées dans un menu « … » pour ne pas saturer le mobile.
   const [menuUnit, setMenuUnit] = useState<string | null>(null)
@@ -56,12 +57,14 @@ export function Structure() {
   )
   useEffect(() => { saveGanttTasks(gantt) }, [gantt])
 
-  /** Coche/décoche en bloc un ensemble de tâches pour une unité donnée. */
-  const setLinksFor = (taskIds: string[], unitId: string, on: boolean) =>
+  /** Coche/décoche en bloc un ensemble de tâches pour une (ou plusieurs) unité(s). */
+  const setLinksFor = (taskIds: string[], unitId: string, on: boolean) => {
+    const targets = checkedUnits.size > 0 ? [...checkedUnits] : [unitId]
     setLinks(prev => {
-      const others = prev.filter(l => !(l.unitId === unitId && taskIds.includes(l.taskId)))
-      return on ? [...others, ...taskIds.map(taskId => ({ taskId, unitId }))] : others
+      const others = prev.filter(l => !(targets.includes(l.unitId) && taskIds.includes(l.taskId)))
+      return on ? [...others, ...targets.flatMap(uid => taskIds.map(taskId => ({ taskId, unitId: uid })))] : others
     })
+  }
 
   /** Saisie manuelle d'une tâche : nouvelle feuille rattachée à un lot, datée par défaut sur aujourd'hui. */
   const addManualTask = (lot: GanttTask, title: string, unitId?: string | null) => {
@@ -129,7 +132,19 @@ export function Structure() {
     setConfirm(null)
   }
 
-  const flip = (taskId: string, unitId: string) => setLinks(prev => toggleLink(prev, taskId, unitId))
+  /** Coche/décoche pour une tâche, appliqué à toutes les unités sélectionnées. */
+  const flip = (taskId: string, unitId: string) => {
+    const targets = checkedUnits.size > 0 ? [...checkedUnits] : [unitId]
+    const on = !isLinked(links, taskId, unitId)
+    setLinks(prev => {
+      let next = prev.filter(l => !(targets.includes(l.unitId) && l.taskId === taskId))
+      if (on) next = [...next, ...targets.map(uid => ({ taskId, unitId: uid }))]
+      return next
+    })
+  }
+
+  const toggleCheckedUnit = (uid: string) =>
+    setCheckedUnits(prev => { const n = new Set(prev); if (n.has(uid)) n.delete(uid); else n.add(uid); return n })
 
   // ── Arbre des unités ──────────────────────────────────────────────────────
   const renderUnit = (unit: Unit, depth: number) => {
@@ -137,6 +152,7 @@ export function Structure() {
     const Icon = KIND_ICON[unit.kind]
     const open = expanded.has(unit.id)
     const selected = selectedUnit === unit.id
+    const checked = checkedUnits.has(unit.id)
     const canHold = ALLOWED_CHILDREN[unit.kind]
     const nTasks = taskIdsForUnit(links, unit.id).length
 
@@ -146,9 +162,12 @@ export function Structure() {
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '7px 8px', paddingLeft: `${8 + depth * 16}px`,
           borderRadius: '8px', marginBottom: '2px',
-          background: selected ? 'var(--sky-soft)' : 'transparent',
-          border: selected ? '1px solid var(--accent)' : '1px solid transparent',
+          background: selected ? 'var(--sky-soft)' : checked ? '#f0f9ff' : 'transparent',
+          border: selected ? '1px solid var(--accent)' : checked ? '1px solid #bae6fd' : '1px solid transparent',
         }}>
+          <input type="checkbox" checked={checked} onChange={() => toggleCheckedUnit(unit.id)}
+            title="Sélectionner pour opération groupée"
+            style={{ width: '14px', height: '14px', cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }} />
           <button
             onClick={() => kids.length && toggleExpand(unit.id)}
             style={{ ...iconBtn, visibility: kids.length ? 'visible' : 'hidden' }}
@@ -221,6 +240,7 @@ export function Structure() {
 
   const allTaskIds = leaves.map(l => l.task.id)
   const allOn = allTaskIds.length > 0 && unit && allTaskIds.every(id => isLinked(links, id, unit.id))
+  const multiCount = checkedUnits.size
   const tasksPanel = (
     <div style={panel}>
       <ManualTaskAdder lots={lots} onCreate={(lot, title) => addManualTask(lot, title, unit?.id)} />
@@ -229,8 +249,13 @@ export function Structure() {
         <>
           <div style={panelHead}>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{unitPath(units, unit.id)}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
               <strong style={{ flex: 1, fontSize: '14px', color: 'var(--navy)' }}>Tâches concernées</strong>
+              {multiCount > 1 && (
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#018ABE', background: '#e0f2fe', borderRadius: '6px', padding: '2px 8px' }}>
+                  {multiCount} logements sélectionnés
+                </span>
+              )}
               {allTaskIds.length > 0 && (
                 <button onClick={() => setLinksFor(allTaskIds, unit.id, !allOn)} style={selAllBtn}>
                   {allOn ? 'Tout décocher' : 'Tout cocher'}
@@ -238,7 +263,9 @@ export function Structure() {
               )}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-              Une tâche cochée sur un bâtiment vaut pour tous les logements qu'il contient.
+              {multiCount > 1
+                ? `Les modifications s'appliquent aux ${multiCount} logements cochés.`
+                : "Une tâche cochée sur un bâtiment vaut pour tous les logements qu'il contient."}
             </div>
           </div>
           {leaves.length === 0 && <div style={hint}>Aucune tâche au planning pour l'instant.</div>}

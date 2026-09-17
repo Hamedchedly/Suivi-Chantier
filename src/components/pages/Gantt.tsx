@@ -100,6 +100,7 @@ export function Gantt() {
   // dérouler ses tâches.
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(() => new Set())
   const [detailTask, setDetailTask] = useState<GanttTask | null>(null)
+  const [showDelays, setShowDelays] = useState(false)
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
@@ -155,11 +156,11 @@ export function Gantt() {
   const drift = useMemo(() => maxDrift(ganttTasks), [ganttTasks])
   const lateCount = useMemo(() => lateTasks(ganttTasks, new Date()).length, [ganttTasks])
 
-  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date }) =>
+  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) =>
     setGanttTasks(prev => {
       const moved = updateTaskInList(prev, id, updates)
-      if (!autoPlan) return moved
-      // Propage la contrainte fin -> début aux successeurs.
+      // Auto-schedule uniquement quand les dates contractuelles changent, pas les réelles.
+      if (!autoPlan || (!updates.planned_start && !updates.planned_end)) return moved
       const { tasks: replanned, shifted } = autoSchedule(moved, calendar)
       if (shifted.length) {
         logActivity('planning', `Auto-planification : ${shifted.length} tâche${shifted.length > 1 ? 's' : ''} décalée${shifted.length > 1 ? 's' : ''} suite au déplacement`)
@@ -202,8 +203,16 @@ export function Gantt() {
       {/* Drift / late banner */}
       {(drift > 0 || lateCount > 0) && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          {drift > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bad-bg)', color: 'var(--bad)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}><AlertTriangle size={14} />Dérive max : +{drift} j vs contractuel</div>}
-          {lateCount > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--warn-bg)', color: 'var(--warn)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>{lateCount} tâche{lateCount > 1 ? 's' : ''} en retard</div>}
+          {drift > 0 && (
+            <button onClick={() => setShowDelays(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bad-bg)', color: 'var(--bad)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+              <AlertTriangle size={14} />Dérive max : +{drift} j vs contractuel
+            </button>
+          )}
+          {lateCount > 0 && (
+            <button onClick={() => setShowDelays(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--warn-bg)', color: 'var(--warn)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+              {lateCount} tâche{lateCount > 1 ? 's' : ''} en retard
+            </button>
+          )}
         </div>
       )}
 
@@ -239,6 +248,7 @@ export function Gantt() {
                 return next
               })}
               onTaskUpdate={handleTaskUpdate}
+              onProgress={handleProgress}
               onTaskClick={setDetailTask}
             />
           </div>
@@ -257,6 +267,111 @@ export function Gantt() {
           totalFloat={cpm.nodes.get(detailTask.id)?.totalFloat}
         />
       )}
+
+      {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+    </div>
+  )
+}
+
+// ── Panneau analyse des retards ────────────────────────────────────────────────
+function DelayPanel({ tasks, onClose }: { tasks: GanttTask[]; onClose: () => void }) {
+  const today = new Date()
+  const fr = (d?: Date) => (d ? d.toLocaleDateString('fr-FR') : '—')
+  const delay = (t: GanttTask) => {
+    if (t.actual_end) return Math.round((t.actual_end.getTime() - t.planned_end.getTime()) / 86400000)
+    if (t.progress >= 100) return 0
+    const late = Math.round((today.getTime() - t.planned_end.getTime()) / 86400000)
+    return late > 0 ? late : 0
+  }
+
+  const byLot = tasks.map(lot => {
+    const leaves = (lot.children ?? []).filter(c => !c.is_milestone)
+    const maxDelay = leaves.reduce((m, c) => Math.max(m, delay(c)), 0)
+    const last = [...leaves].sort((a, b) => b.planned_end.getTime() - a.planned_end.getTime())[0]
+    return { lot, leaves, maxDelay, last }
+  }).filter(r => r.maxDelay > 0 || r.leaves.some(c => delay(c) > 0))
+
+  const allLeaves = tasks.flatMap(lot =>
+    (lot.children ?? []).filter(c => !c.is_milestone).map(t => ({ lot, t }))
+  ).filter(r => delay(r.t) > 0)
+    .sort((a, b) => delay(b.t) - delay(a.t))
+
+  const delayColor = (d: number) => d >= 14 ? '#b42318' : d >= 5 ? '#b45309' : '#92400e'
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.4)' }} onClick={onClose} />
+      <div style={{ position: 'relative', marginTop: 'auto', background: '#fff', borderRadius: '16px 16px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px 10px', borderBottom: '1px solid #e4ecf2' }}>
+          <span style={{ flex: 1, fontWeight: 700, fontSize: '15px', color: '#02457A' }}>Analyse des retards</span>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', color: '#5b7183' }}>✕</button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '12px 16px 24px' }}>
+
+          {/* Par lot / entreprise */}
+          <h4 style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '.05em' }}>Par lot</h4>
+          {byLot.length === 0 ? (
+            <p style={{ fontSize: '13px', color: '#5b7183' }}>Aucun retard constaté.</p>
+          ) : (
+            <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    {['Lot', 'Dernière tâche', 'Fin contractuelle', 'Fin réelle/projetée', 'Dérive finale'].map(h => (
+                      <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 700, color: '#5b7183', borderBottom: '1px solid #e4ecf2', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {byLot.map(({ lot, last, maxDelay }) => (
+                    <tr key={lot.id} style={{ borderBottom: '1px solid #f0f5f9' }}>
+                      <td style={{ padding: '7px 10px', fontWeight: 600, color: '#02457A' }}>{lot.lot_id} · {lot.title}</td>
+                      <td style={{ padding: '7px 10px', color: '#1f2937' }}>{last?.title ?? '—'}</td>
+                      <td style={{ padding: '7px 10px', color: '#5b7183' }}>{fr(last?.planned_end)}</td>
+                      <td style={{ padding: '7px 10px', color: '#5b7183' }}>{last?.actual_end ? fr(last.actual_end) : 'en cours'}</td>
+                      <td style={{ padding: '7px 10px', fontWeight: 700, color: delayColor(maxDelay) }}>+{maxDelay} j</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Par tâche */}
+          <h4 style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '.05em' }}>Par tâche</h4>
+          {allLeaves.length === 0 ? (
+            <p style={{ fontSize: '13px', color: '#5b7183' }}>Aucune tâche en retard.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    {['Lot', 'Tâche', 'Début prévu', 'Fin prévue', 'Début réel', 'Fin réelle/projetée', 'Retard'].map(h => (
+                      <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 700, color: '#5b7183', borderBottom: '1px solid #e4ecf2', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allLeaves.map(({ lot, t }) => {
+                    const d = delay(t)
+                    return (
+                      <tr key={t.id} style={{ borderBottom: '1px solid #f0f5f9' }}>
+                        <td style={{ padding: '7px 10px', color: '#018ABE', fontWeight: 600 }}>{lot.lot_id}</td>
+                        <td style={{ padding: '7px 10px', color: '#1f2937' }}>{t.title}</td>
+                        <td style={{ padding: '7px 10px', color: '#5b7183' }}>{fr(t.planned_start)}</td>
+                        <td style={{ padding: '7px 10px', color: '#5b7183' }}>{fr(t.planned_end)}</td>
+                        <td style={{ padding: '7px 10px', color: '#5b7183' }}>{fr(t.actual_start)}</td>
+                        <td style={{ padding: '7px 10px', color: '#5b7183' }}>{t.actual_end ? fr(t.actual_end) : 'en cours'}</td>
+                        <td style={{ padding: '7px 10px', fontWeight: 700, color: delayColor(d) }}>+{d} j</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
