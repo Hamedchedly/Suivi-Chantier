@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import {
-  ChevronRight, ChevronLeft, Camera, Pencil, Trash2, Check, Plus,
+  ChevronRight, ChevronLeft, ChevronDown, Camera, Pencil, Trash2, Check, Plus,
   Eye, Flag,
 } from 'lucide-react'
 import {
@@ -57,6 +57,7 @@ export function ZoneControl(props: Props) {
     onOpenLot, onAddRemark, onUpdateRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
     onBack, onPrev, onCloseZone } = props
 
+  const [showDoneLots, setShowDoneLots] = useState(false)
   const groups = lotGroups(zone)
   const st = ZONE_META[zoneState(zone)]
   const zoneRemarks = visitReserves.filter(r => r.logementId === zone.refId)
@@ -91,11 +92,10 @@ export function ZoneControl(props: Props) {
 
       <CarriedPoints points={carriedPoints} readOnly={readOnly} onFollowUp={onFollowUp} />
 
-      <div style={sectionLabel}>Lots ({groups.length})</div>
-      {groups.length === 0 && <Empty>Aucune tâche planifiée sur cette zone — vous pouvez tout de même y ajouter des remarques et des photos.</Empty>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {groups.map(g => {
+      {(() => {
+        const activeLots = groups.filter(g => tasksState(g.tasks) !== 'done')
+        const doneLots = groups.filter(g => tasksState(g.tasks) === 'done')
+        const renderLotBtn = (g: typeof groups[0]) => {
           const gs = ZONE_META[tasksState(g.tasks)]
           const pct = tasksWorksProgress(g.tasks)
           const blocked = g.tasks.filter(t => t.state === 'blocked').length
@@ -117,8 +117,36 @@ export function ZoneControl(props: Props) {
               <Bar value={pct} />
             </button>
           )
-        })}
-      </div>
+        }
+        return (
+          <>
+            <div style={sectionLabel}>Lots en cours ({activeLots.length})</div>
+            {activeLots.length === 0 && groups.length === 0 && <Empty>Aucune tâche planifiée sur cette zone — vous pouvez tout de même y ajouter des remarques et des photos.</Empty>}
+            {activeLots.length === 0 && groups.length > 0 && <Empty>Tous les lots sont terminés.</Empty>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {activeLots.map(renderLotBtn)}
+            </div>
+
+            {doneLots.length > 0 && (
+              <div style={{ marginTop: '14px' }}>
+                <button
+                  onClick={() => setShowDoneLots(v => !v)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: '#15803d', fontSize: '12px', fontWeight: 600 }}
+                >
+                  <Check size={13} color="#15803d" />
+                  {doneLots.length} lot{doneLots.length > 1 ? 's' : ''} terminé{doneLots.length > 1 ? 's' : ''}
+                  <ChevronDown size={13} style={{ transform: showDoneLots ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+                </button>
+                {showDoneLots && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', opacity: 0.75 }}>
+                    {doneLots.map(renderLotBtn)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )
+      })()}
 
       {zoneRemarks.length > 0 && (
         <div style={{ marginTop: '16px' }}>

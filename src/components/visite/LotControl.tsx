@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
   X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon,
@@ -56,6 +56,9 @@ export function LotControl(props: Props) {
   const { zone, lotId, tasks, lots, commitments, photos, reserves, blockerOptions,
     readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack,
     prevLot, nextLot, onGoToLot } = props
+
+  // Scroll to top whenever we land on a new lot
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }) }, [])
 
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksWorksProgress(tasks)

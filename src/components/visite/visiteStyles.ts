@@ -69,9 +69,9 @@ export function kindBadge(v: { kind: VisitKind; kindLabel?: string }): { label: 
 }
 
 export const PRIORITY_META: Record<ReservePriority, { label: string; bg: string; fg: string }> = {
-  low: { label: 'Faible', bg: '#eef2f6', fg: '#5b7183' },
-  medium: { label: 'Moyenne', bg: '#fef3c7', fg: '#b45309' },
-  high: { label: 'Haute', bg: '#fdecec', fg: '#dc2626' },
+  low: { label: '', bg: 'transparent', fg: '#5b7183' },
+  medium: { label: '', bg: 'transparent', fg: '#5b7183' },
+  high: { label: 'Important', bg: '#fdecec', fg: '#dc2626' },
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────

@@ -246,17 +246,31 @@ export function buildZonesFromPlanning(
     override: null,
     tasks: leaves
       .filter(t => belongs(t, ref.refId))
-      .map(t => ({
-        taskId: t.id,
-        lotId: t.lot_id,
-        title: t.title,
-        state: 'not_checked' as TaskState,
-        plannedProgress: t.progress,
-        // Contractuel = prévisionnel : à défaut de baseline, on prend planned_end.
-        baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
-        plannedEnd: isoDay(t.planned_end),
-        company: t.company_id,
-      })),
+      .map(t => {
+        // Planned progress = what % should be done by today based on dates,
+        // not the last recorded progress (which would show old observations).
+        const today = new Date()
+        let plannedProgress: number | undefined
+        if (t.planned_start && t.planned_end) {
+          if (today <= t.planned_start) plannedProgress = 0
+          else if (today >= t.planned_end) plannedProgress = 100
+          else {
+            const total = t.planned_end.getTime() - t.planned_start.getTime()
+            const elapsed = today.getTime() - t.planned_start.getTime()
+            plannedProgress = Math.round((elapsed / total) * 100)
+          }
+        }
+        return {
+          taskId: t.id,
+          lotId: t.lot_id,
+          title: t.title,
+          state: 'not_checked' as TaskState,
+          plannedProgress,
+          baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
+          plannedEnd: isoDay(t.planned_end),
+          company: t.company_id,
+        }
+      }),
   }))
 }
 

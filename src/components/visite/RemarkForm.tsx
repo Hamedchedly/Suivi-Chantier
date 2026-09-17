@@ -1,17 +1,11 @@
 import { useState } from 'react'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, AlertTriangle } from 'lucide-react'
 import type { ReservePriority } from '../../lib/reserves'
 import { input, linkBtn, bigBtnInline } from './visiteStyles'
 
-const PRIORITIES: { p: ReservePriority; label: string; color: string }[] = [
-  { p: 'low', label: 'Faible', color: '#5b7183' },
-  { p: 'medium', label: 'Moyenne', color: '#b45309' },
-  { p: 'high', label: 'Haute', color: '#dc2626' },
-]
-
 /**
  * The single form behind every remark — observation or action, freshly raised
- * or being corrected. One shape to learn instead of four.
+ * or being corrected. Priority is simplified to normal vs. important (bold red).
  */
 export function RemarkForm({ kind, company, initial, onSubmit, onCancel }: {
   kind: 'observation' | 'action'
@@ -22,8 +16,12 @@ export function RemarkForm({ kind, company, initial, onSubmit, onCancel }: {
 }) {
   const [text, setText] = useState(initial?.description ?? '')
   const [due, setDue] = useState(initial?.dueDate ?? '')
-  const [priority, setPriority] = useState<ReservePriority>(initial?.priority ?? 'medium')
+  const [important, setImportant] = useState(initial?.priority === 'high')
   const isAction = kind === 'action'
+
+  const handleSubmit = () => {
+    onSubmit(text.trim(), due || undefined, isAction ? (important ? 'high' : 'low') : undefined)
+  }
 
   return (
     <div style={{
@@ -46,24 +44,25 @@ export function RemarkForm({ kind, company, initial, onSubmit, onCancel }: {
             <input type="date" value={due} onChange={e => setDue(e.target.value)} title="Échéance"
               style={{ ...input, flex: 1, padding: '8px 9px' }} />
           </div>
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-            {PRIORITIES.map(({ p, label, color }) => (
-              <button key={p} onClick={() => setPriority(p)}
-                style={{
-                  flex: 1, padding: '9px', borderRadius: '7px', background: '#fff', color,
-                  border: priority === p ? `2px solid ${color}` : '1px solid var(--line)',
-                  fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                }}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => setImportant(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px',
+              padding: '9px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+              border: important ? '2px solid #dc2626' : '1px solid var(--line)',
+              background: important ? '#fdecec' : '#fff',
+              color: important ? '#dc2626' : 'var(--muted)', width: '100%',
+            }}
+          >
+            <AlertTriangle size={14} />
+            {important ? '⚡ Important — en gras rouge dans le CR' : 'Marquer comme important'}
+          </button>
         </>
       )}
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
         <button onClick={onCancel} style={linkBtn}>Annuler</button>
-        <button disabled={!text.trim()} onClick={() => onSubmit(text.trim(), due || undefined, isAction ? priority : undefined)}
+        <button disabled={!text.trim()} onClick={handleSubmit}
           style={{ ...bigBtnInline, background: isAction ? '#b45309' : 'var(--navy)', padding: '10px 15px', fontSize: '13px', opacity: text.trim() ? 1 : 0.5 }}>
           Enregistrer
         </button>

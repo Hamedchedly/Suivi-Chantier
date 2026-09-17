@@ -259,7 +259,7 @@ export function Visite() {
             photos={photos.filter(p => p.zoneRefId === zone.refId)}
             reserves={reservesForVisit(reserves, active.id)}
             blockerOptions={blockerOptions}
-            readOnly={active.status !== 'en_cours'}
+            readOnly={isLockedFor(active, me)}
             previousOf={taskId => previousObservation(visits, active, taskId)}
             onPatchTask={(taskId, patch) => updateZone(zone.refId, z => ({
               ...z, tasks: z.tasks.map(t => t.taskId === taskId ? { ...t, ...patch } : t),
@@ -293,7 +293,7 @@ export function Visite() {
             photos={photos.filter(p => p.zoneRefId === zone.refId)}
             carriedPoints={carriedOverPoints(reserves, zone.refId, active.id)}
             visitReserves={reservesForVisit(reserves, active.id)}
-            readOnly={active.status !== 'en_cours'}
+            readOnly={isLockedFor(active, me)}
             isLast={next === null}
             onOpenLot={lotId => push({ v: 'lot', ref: zone.refId, lotId })}
             onAddRemark={r => addRemark(active, zone, r)}
@@ -536,6 +536,10 @@ export function Visite() {
       onNotes={() => push({ v: 'notes' })}
       onValidate={() => updateVisit(active.id, { status: 'cr_pret' })}
       onReopen={() => updateVisit(active.id, { status: 'terminee' })}
+      onReopenSession={() => {
+        updateVisit(active.id, { status: 'en_cours' })
+        swap({ v: 'session' })
+      }}
       onDiffuse={() => {
         updateVisit(active.id, { status: 'diffuse', diffusedAt: new Date().toISOString() })
         logActivity('doc', `CR de la ${visitKindLabel(active).toLowerCase()} du ${fmtFr(active.date)} diffusé`)
@@ -888,10 +892,11 @@ function CrEditor(props: {
   onValidate: () => void
   onDiffuse: () => void
   onReopen: () => void
+  onReopenSession: () => void
   onReport: () => void
 }) {
   const { visit, lots, reserves, photos, companies, locked, canOverride, currentUsername,
-    onBack, onUpdate, onUpdatePhoto, onNotes, onValidate, onDiffuse, onReopen, onReport } = props
+    onBack, onUpdate, onUpdatePhoto, onNotes, onValidate, onDiffuse, onReopen, onReopenSession, onReport } = props
   const cr = visit.cr ?? emptyCr()
 
   const setCr = (patch: Partial<typeof cr>) => {
@@ -1119,7 +1124,10 @@ function CrEditor(props: {
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
         <button onClick={onReport} style={{ ...ghostBtn, flex: '1 1 140px', justifyContent: 'center', padding: '11px' }}><FileText size={15} /> Aperçu du CR</button>
-        {!locked && visit.status === 'terminee' && <button onClick={onValidate} style={{ ...bigBtnInline, flex: '1 1 140px', background: 'var(--navy)' }}>Valider</button>}
+        {!locked && visit.status === 'terminee' && <>
+          <button onClick={onReopenSession} style={{ ...ghostBtn, flex: '1 1 130px', justifyContent: 'center', padding: '11px' }}>↩ Reprendre la tournée</button>
+          <button onClick={onValidate} style={{ ...bigBtnInline, flex: '1 1 140px', background: 'var(--navy)' }}>Valider le CR</button>
+        </>}
         {!locked && visit.status === 'cr_pret' && <>
           <button onClick={onReopen} style={{ ...ghostBtn, flex: '1 1 100px', justifyContent: 'center', padding: '11px' }}>Rouvrir</button>
           <button onClick={() => { if (window.confirm('Diffuser le CR ? Il sera verrouillé.')) onDiffuse() }}
@@ -1153,8 +1161,13 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
   const projectRules = getProjectRules()
   const stats = visitStats(visit, allReserves, crPhotos.length)
   const changes = visitChanges(visit, visits, allReserves)
-  const observations = reserves.filter(r => reserveKind(r) === 'observation')
-  const actions = reserves.filter(r => reserveKind(r) === 'action')
+  // Zone label lookup — show human label instead of raw refId
+  const zoneLabel = (refId: string) => visit.zones.find(z => z.refId === refId)?.label ?? refId
+  // All open reserves (current visit + previous unresolved), deduplicated
+  const allOpen = allReserves.filter(r => r.status === 'open')
+  const isNew = (r: Reserve) => r.visitId === visit.id
+  const openObservations = allOpen.filter(r => reserveKind(r) === 'observation')
+  const openActions = allOpen.filter(r => reserveKind(r) === 'action')
   const gaps = visit.zones.flatMap(z => z.tasks
     .filter(t => { const g = progressGap(t); return g !== null && g !== 0 })
     .map(t => ({ zone: z.label, task: t, gap: progressGap(t)! })))
@@ -1370,16 +1383,19 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
           </RSection>
         )}
 
-        {observations.length > 0 && (
-          <RSection title={`${++s}. Observations`}>
+        {openObservations.length > 0 && (
+          <RSection title={`${++s}. Observations non levées`}>
+            <p style={{ ...pStyle, fontSize: '10px', color: '#9bb0c2', marginBottom: '8px' }}>
+              Les observations <strong style={{ color: '#0369a1' }}>en bleu gras</strong> sont nouvelles (cette session). Les autres viennent de sessions précédentes.
+            </p>
             <table style={tableStyle}>
               <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Constat</th><th style={thStyle}>Lot</th></tr></thead>
               <tbody>
-                {observations.map(r => (
-                  <tr key={r.id}>
-                    <td style={tdStyle}>{r.number}</td>
-                    <td style={tdStyle}>{r.logementId}</td>
-                    <td style={tdStyle}>{r.description}</td>
+                {openObservations.map(r => (
+                  <tr key={r.id} style={isNew(r) ? { background: '#eff6ff' } : {}}>
+                    <td style={tdStyle}><span style={isNew(r) ? { fontWeight: 700, color: '#0369a1' } : {}}>{r.number}</span></td>
+                    <td style={tdStyle}>{zoneLabel(r.logementId)}</td>
+                    <td style={{ ...tdStyle, ...(isNew(r) ? { fontWeight: 700, color: '#0369a1' } : {}) }}>{r.description}</td>
                     <td style={tdStyle}>{lotLabel(lots, r.lotId)}</td>
                   </tr>
                 ))}
@@ -1389,22 +1405,32 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
         )}
 
         <RSection title={`${++s}. Actions à réaliser`}>
-          {actions.length === 0 ? <p style={pStyle}>Aucune action ouverte issue de cette session.</p> : (
-            <table style={tableStyle}>
-              <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Action</th><th style={thStyle}>Entreprise</th><th style={thStyle}>Échéance</th><th style={thStyle}>Priorité</th></tr></thead>
-              <tbody>
-                {actions.map(r => (
-                  <tr key={r.id}>
-                    <td style={tdStyle}>{r.number}</td>
-                    <td style={tdStyle}>{r.logementId}</td>
-                    <td style={tdStyle}>{r.description}</td>
-                    <td style={tdStyle}>{r.company ?? lotCompany(lots, r.lotId) ?? '—'}</td>
-                    <td style={tdStyle}>{fmtFr(r.dueDate)}</td>
-                    <td style={tdStyle}>{PRIORITY_META[r.priority].label}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {openActions.length === 0 ? <p style={pStyle}>Aucune action ouverte.</p> : (
+            <>
+              <p style={{ ...pStyle, fontSize: '10px', color: '#9bb0c2', marginBottom: '8px' }}>
+                Les actions <strong style={{ color: '#0369a1' }}>en bleu gras</strong> sont nouvelles (cette session). Les autres restent ouvertes des sessions précédentes.
+              </p>
+              <table style={tableStyle}>
+                <thead><tr><th style={thStyle}>N°</th><th style={thStyle}>Localisation</th><th style={thStyle}>Action</th><th style={thStyle}>Entreprise</th><th style={thStyle}>Échéance</th></tr></thead>
+                <tbody>
+                  {openActions.map(r => {
+                    const imp = r.priority === 'high'
+                    const newItem = isNew(r)
+                    return (
+                      <tr key={r.id} style={imp ? { background: '#fff5f5' } : newItem ? { background: '#eff6ff' } : {}}>
+                        <td style={tdStyle}><span style={imp ? { fontWeight: 700, color: '#dc2626' } : newItem ? { fontWeight: 700, color: '#0369a1' } : {}}>{r.number}</span></td>
+                        <td style={tdStyle}>{zoneLabel(r.logementId)}</td>
+                        <td style={{ ...tdStyle, ...(imp ? { fontWeight: 700, color: '#dc2626' } : newItem ? { fontWeight: 700, color: '#0369a1' } : {}) }}>
+                          {imp && '⚡ '}{r.description}
+                        </td>
+                        <td style={tdStyle}>{r.company ?? lotCompany(lots, r.lotId) ?? '—'}</td>
+                        <td style={tdStyle}>{fmtFr(r.dueDate)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
         </RSection>
 
