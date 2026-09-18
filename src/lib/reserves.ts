@@ -45,6 +45,7 @@ export interface Reserve {
   crNo?: number          // n° du CR (= une réunion/visite)
   meetingDate?: string   // ISO yyyy-mm-dd — date de la réunion/visite du CR
   reminder?: boolean     // rappel / mémo important → mis en évidence (rouge)
+  archived?: boolean     // archived items are hidden by default
 }
 
 export const reserveKind = (r: Reserve): ReserveKind => r.kind ?? 'action'

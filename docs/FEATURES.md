@@ -51,6 +51,7 @@
 | **Verrouiller contractuel** | Figer les dates plannifiées actuelles comme baseline immutable | `Gantt.tsx` (lockBaseline button) | `src/lib/forecast.ts` (lockBaseline) |
 | **Méthode de calcul prévision** | Sélection : Rythme réel / Durée contractuelle / Manuel | `TaskDetail.tsx` (forecast_method select) | `src/types/gantt.ts` |
 | **Config planning** | Configuration de la durée des lots, jalons, congés | `PlanningConfig.tsx` | `src/lib/repo.ts` (getHolidays) |
+| **Query params (view state)** | URL `?ganttMode=matrix&ganttGroup=zone&showBaseline=1&showEcarts=1` pour mémoriser toggles | `Gantt.tsx` (useEffect hooks) | URL replaceState |
 
 ---
 
@@ -106,9 +107,11 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Attribution crNo** | À la clôture sans n° CR, attribue le crNo courant automatiquement | `CrTable.tsx` (follow) | — |
 | **Sélecteur visibilité colonnes** | Cocher/décocher les colonnes à afficher : N°CR, Description, Lot/Entreprise, Type, Échéance, Statut | `CrTable.tsx` (showVisibility, columnVis) | localStorage (sc_cr_columns) |
 | **Imprimer journal CR** | Bouton d'impression avec CSS print dédié ; cache les colonnes masquées | `CrTable.tsx` (window.print) | `src/styles.css` (@media print) |
-| **Query params (deep linking)** | URL ?crNo=N pour filtrer directement sur un CR | `CrTable.tsx` (useEffect URLSearchParams) | Window History API |
-| **Mode paysage impression** | Print CSS responsive : portrait par défaut, paysage si sélectionné dans dialogue | `src/styles.css` (@media print and orientation) | @page CSS rules |
-| **Notes & suivi consolidé** | Vue dédiée : tous les follow-ups de toutes les réserves, triés par date, avec recherche | `Notes.tsx`, `CR.tsx` (onglet) | `src/lib/reserves.ts` (follow array) |
+| **Query params (deep linking)** | URL `?crNo=N&view=par-lot&search=terme` pour mémoriser filtres et vue ; synced bidirectionnelle | `CrTable.tsx` (useEffect hooks) | localStorage ↔ URL replaceState |
+| **Landscape print mode** | CSS `@media print and (orientation: landscape)` avec redimensionnement ; @page pour marges A4 | `src/styles.css` | CSS @page rules |
+| **Notes & suivi consolidé** | Onglet dédié listant tous les suivis de toutes les réserves, triés par date DESC, filtrables | `Notes.tsx` | `src/lib/reserves.ts` |
+| **Breadcrumb navigation** | Navigation contexte : CR > Journal CR / Notes & suivi / Réunions | `Breadcrumbs.tsx`, `CR.tsx` | `buildCrBreadcrumbs()` helper |
+| **Reusable URL state hook** | `useUrlState()` et `useUrlStates()` pour syncer n'importe quel état React à l'URL | `src/lib/useUrlState.ts` | Pattern bidirectionnel replaceState |
 | **Réunions** | Liste des réunions de chantier (PV, participants, ordre du jour) | `Meetings.tsx` | `src/lib/meetings.ts` |
 | **Réserves terrain** | Vue parallèle des réserves liées aux visites de terrain | `Reserves.tsx` | `src/lib/reserves.ts` |
 
@@ -275,4 +278,4 @@ TOUT ──► repo.ts (localStorage) ──► [Futur : Supabase via sync.ts]
 
 ---
 
-*Dernière mise à jour : 2026-09-18 — PARTIE 0-5 complètes (routing URL, export CR, query params, notes view, print landscape).*
+*Dernière mise à jour : 2026-09-18 — PARTIE 0-4 complètes (routing URL, export CR).*

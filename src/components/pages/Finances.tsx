@@ -9,6 +9,7 @@ import {
   getMarches, saveMarches, getAvenants, saveAvenants, getSituations, saveSituations,
   getLotsConfig, logActivity,
 } from '../../lib/repo'
+import { Breadcrumbs, buildFinancesBreadcrumbs } from '../layout/Breadcrumbs'
 import { SavedIndicator } from '../common/SavedIndicator'
 import { DpgfView } from './DpgfView'
 
@@ -29,6 +30,24 @@ export function Finances() {
   const [situations, setSituations] = useState<Situation[]>(getSituations)
   const [lots] = useState(getLotsConfig)
   const [form, setForm] = useState<{ lotId: string; amountHT: string } | null>(null)
+
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const savedSection = params.get('section') as FinSection | null
+    if (savedSection && ['marches', 'avenants', 'situations', 'dpgf'].includes(savedSection)) {
+      setSection(savedSection)
+    }
+  }, [])
+
+  // ── URL state sync: update URL when section changes ──────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (section !== 'marches') params.set('section', section)
+    else params.delete('section')
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [section])
 
   useEffect(() => { saveMarches(marches) }, [marches])
   useEffect(() => { saveAvenants(avenants) }, [avenants])
@@ -68,6 +87,7 @@ export function Finances() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      <Breadcrumbs crumbs={buildFinancesBreadcrumbs(section)} />
       {/* KPIs */}
       <div className="kpi-grid" style={{ marginBottom: '12px' }}>
         <Kpi label="Budget (HT)" value={euros(pf.budget)} />
