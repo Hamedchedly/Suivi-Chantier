@@ -284,6 +284,40 @@ export function Gantt() {
     logActivity('planning', `Sous-tâche ajoutée : ${title}`)
   }
 
+  const handleReorderTask = (taskId: string, targetIndex: number) => {
+    const allTasks = flattenLeaves(ganttTasks)
+    const taskIndex = allTasks.findIndex(t => t.id === taskId)
+    if (taskIndex === -1 || taskIndex === targetIndex) return
+
+    const task = allTasks[taskIndex]
+    let updated = ganttTasks
+
+    // Remove from source
+    updated = updated.flatMap(t => {
+      if (t.id === taskId) return []
+      if (t.children) {
+        const filtered = t.children.filter(c => c.id !== taskId)
+        return filtered.length < (t.children?.length ?? 0) ? { ...t, children: filtered } : t
+      }
+      return t
+    })
+
+    // Insert at target - simplified: just reorder in root level
+    if (taskIndex < targetIndex) {
+      const otherTasks = updated.slice(0, targetIndex)
+      const afterTasks = updated.slice(targetIndex)
+      updated = [...otherTasks, task, ...afterTasks]
+    } else {
+      const beforeTasks = updated.slice(0, targetIndex)
+      const afterTasks = updated.slice(targetIndex)
+      updated = [...beforeTasks, task, ...afterTasks]
+    }
+
+    setGanttTasks(updated)
+    saveGanttTasks(updated)
+    logActivity('planning', `Tâche réordonnée : ${task.title}`)
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -377,11 +411,11 @@ export function Gantt() {
             {editMode && (
               <button
                 className="gtb"
-                onClick={() => setShowTableView(!showTableView)}
-                title="Vue tableau"
+                onClick={() => setShowTableView(true)}
+                title="Ajuster le planning sous forme de tableau"
                 style={{ background: '#f0f9ff', color: '#0369a1' }}
               >
-                <span style={{ fontSize: '10px', fontWeight: 600 }}>Tableau</span>
+                📊 Tableau
               </button>
             )}
             <button
@@ -483,6 +517,14 @@ export function Gantt() {
       )}
 
       {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+
+      {showTableView && (
+        <PlanningTableView
+          tasks={ganttTasks}
+          onClose={() => setShowTableView(false)}
+          onReorder={handleReorderTask}
+        />
+      )}
 
       {/* Commitment details panel */}
       {selectedCommitment && (
