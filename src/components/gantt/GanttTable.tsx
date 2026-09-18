@@ -11,6 +11,7 @@ interface GanttTableProps {
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
   onCommitmentClick?: (commitment: DateCommitment) => void  // click on engagement marker
+  onCreateSubtask?: (parentId: string, title: string, duration: number) => void
   readOnly?: boolean
   showForecast?: boolean    // show forecast bars (hatched yellow)
   showBaseline?: boolean    // show baseline thin reference bar

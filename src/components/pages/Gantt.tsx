@@ -256,6 +256,32 @@ export function Gantt() {
     setAddForm(false)
   }
 
+  const handleCreateSubtask = (parentId: string, title: string, duration: number) => {
+    const parent = flattenLeaves(ganttTasks).find(t => t.id === parentId)
+    if (!parent) return
+    const newTask: GanttTask = {
+      id: `task-${Date.now()}`,
+      lot_id: parent.lot_id,
+      title,
+      planned_start: parent.planned_start,
+      planned_end: new Date(parent.planned_start.getTime() + duration * 86400000),
+      planned_duration: duration,
+      progress: 0,
+      status: 'not-started',
+      priority: 'medium',
+      dependencies: [],
+      is_critical: false,
+      is_milestone: false,
+    }
+    const updated = mapTaskInList(ganttTasks, parentId, t => ({
+      ...t,
+      children: [...(t.children ?? []), newTask],
+    }))
+    setGanttTasks(updated)
+    saveGanttTasks(updated)
+    logActivity('planning', `Sous-tâche ajoutée : ${title}`)
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -426,6 +452,7 @@ export function Gantt() {
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
               onCommitmentClick={setSelectedCommitment}
+              onCreateSubtask={handleCreateSubtask}
               showForecast={showForecast}
               showBaseline={showBaseline}
               showEcarts={showEcarts}
