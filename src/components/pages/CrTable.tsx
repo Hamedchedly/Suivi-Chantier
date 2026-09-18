@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers, Search, Eye, EyeOff, Printer,
+  LayoutList, Layers, Search, Eye, Printer,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,

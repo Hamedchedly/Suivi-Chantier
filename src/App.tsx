@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
 import { Visite } from './components/pages/Visite'

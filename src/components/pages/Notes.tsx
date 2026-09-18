@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search, X, MessageSquare, Calendar, Tag } from 'lucide-react'
-import { getReserves, getLotsConfig, logActivity } from '../../lib/repo'
+import { getReserves, getLotsConfig } from '../../lib/repo'
 import { sectionLabel, input, ghostBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
 
