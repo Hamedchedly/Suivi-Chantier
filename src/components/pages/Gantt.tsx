@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X, Search } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
 } from '../../lib/repo'
+import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
 import { createTask } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
@@ -106,6 +107,7 @@ export function Gantt() {
   const [showForecast, setShowForecast] = useState(false)
   const [showBaseline, setShowBaseline] = useState(false)
   const [showEcarts, setShowEcarts] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
@@ -118,6 +120,8 @@ export function Gantt() {
     if (params.get('showEcarts') === '1') setShowEcarts(true)
     if (params.get('showDelays') === '1') setShowDelays(true)
     if (params.get('showForecast') === '1') setShowForecast(true)
+    const searchParam = params.get('ganttSearch')
+    if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
   }, [])
 
   // ── URL state sync: update URL when view state changes ──────────────────────
@@ -135,9 +139,11 @@ export function Gantt() {
     else params.delete('showDelays')
     if (showForecast) params.set('showForecast', '1')
     else params.delete('showForecast')
+    if (searchTerm) params.set('ganttSearch', encodeURIComponent(searchTerm))
+    else params.delete('ganttSearch')
     const search = params.toString()
     window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
-  }, [mode, group, showBaseline, showEcarts, showDelays, showForecast, prefs0.group])
+  }, [mode, group, showBaseline, showEcarts, showDelays, showForecast, searchTerm, prefs0.group])
   const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const [editMode, setEditMode] = useState(false)
@@ -168,6 +174,25 @@ export function Gantt() {
     () => buildTree(tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns),
     [tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns],
   )
+
+  // Filter tasks by search term
+  const filteredTree = useMemo(() => {
+    if (!searchTerm.trim()) return displayTree
+    const term = searchTerm.toLowerCase()
+    const filterTasks = (tasks: GanttTask[]): GanttTask[] => {
+      return tasks
+        .map(t => {
+          const children = t.children ? filterTasks(t.children) : undefined
+          const matches = t.title.toLowerCase().includes(term)
+          if (matches || (children && children.length > 0)) {
+            return children !== undefined ? { ...t, children } : t
+          }
+          return null
+        })
+        .filter((t): t is GanttTask => t !== null)
+    }
+    return filterTasks(displayTree)
+  }, [displayTree, searchTerm])
 
   // Changer de regroupement / filtre replie tout : on repart des lots seuls.
   useEffect(() => {
@@ -237,6 +262,7 @@ export function Gantt() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      <Breadcrumbs crumbs={buildGanttBreadcrumbs(mode, group)} />
       {/* Mode + grouping */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
@@ -288,6 +314,17 @@ export function Gantt() {
           ) : null}
 
           <div className="g-toolbar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f7fafc', borderRadius: '6px', padding: '6px 10px', minWidth: '200px' }}>
+              <Search size={14} color="var(--muted)" />
+              <input
+                type="text"
+                placeholder="Rechercher une tâche…"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ flex: 1, border: 'none', background: 'none', fontSize: '12px', outline: 'none', color: 'var(--ink)' }}
+              />
+              {searchTerm && <button onClick={() => setSearchTerm('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)' }}><X size={13} /></button>}
+            </div>
             <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
             <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
             <div style={{ flex: 1 }} />
@@ -375,7 +412,7 @@ export function Gantt() {
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
-              tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : displayTree}
+              tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : filteredTree}
               viewState={viewState}
               readOnly={!editMode}
               onToggleExpanded={id => setExpandedTasks(prev => {
