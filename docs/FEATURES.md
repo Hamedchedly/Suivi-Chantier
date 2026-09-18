@@ -87,7 +87,8 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 
 | Fonctionnalité | Description | Composant | Lib / Logic |
 |----------------|-------------|-----------|-------------|
-| **Journal CR (CrTable)** | Liste paginable de tous les points de CR avec statut coloré | `CrTable.tsx` | `src/lib/reserves.ts` |
+| **Journal CR (CrTable)** | Liste paginable de tous les points de CR avec statut coloré ; recherche texte | `CrTable.tsx` | `src/lib/reserves.ts` |
+| **Recherche dans CR** | Champ de recherche pour filtrer les points par description, lot, entreprise, numéro | `CrTable.tsx` (searchTerm state, filteredRows) | — |
 | **Navigation par n° CR** | Chips « Tous \| CR 1 \| CR 2 … » pour filtrer par numéro de réunion | `CrTable.tsx` (selectedCr) | — |
 | **Vue par lot** | Toggle Liste / Par lot : groupé par lot avec cards action/observation | `CrTable.tsx` (view='par-lot') | `src/lib/reserves.ts` (reserveKind) |
 | **Ajout de point** | Formulaire inline : description, lot, entreprise, type, n° CR, échéance, rappel | `CrTable.tsx` (AddForm) | `src/lib/reserves.ts` (nextReserveNumber) |

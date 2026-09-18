@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers,
+  LayoutList, Layers, Search,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,
@@ -40,6 +40,7 @@ export function CrTable() {
   const [view, setView] = useState<'liste' | 'par-lot'>('liste')
   const [selectedCr, setSelectedCr] = useState<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
   const today = todayISO()
@@ -70,8 +71,20 @@ export function CrTable() {
     )
   }, [reserves, today, latestMeetingDate])
 
-  // Filtered to selected CR (null = all)
-  const filteredRows = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
+  // Filtered to selected CR (null = all) and search term
+  const filteredRows = useMemo(() => {
+    let result = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase()
+      result = result.filter(r =>
+        r.description.toLowerCase().includes(term) ||
+        r.lotId.toLowerCase().includes(term) ||
+        (r.company || '').toLowerCase().includes(term) ||
+        r.number.toLowerCase().includes(term)
+      )
+    }
+    return result
+  }, [rows, selectedCr, searchTerm])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
 
@@ -194,6 +207,19 @@ export function CrTable() {
       )}
 
       {adding && <AddForm lots={lots} onCancel={() => setAdding(false)} onAdd={addRow} />}
+
+      {/* Search bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '0 8px' }}>
+        <Search size={16} color="var(--muted)" />
+        <input
+          type="text"
+          placeholder="Rechercher une remarque…"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
+        />
+        {searchTerm && <button onClick={() => setSearchTerm('')} style={{ ...ghostBtn, padding: '6px 8px' }}><X size={14} /></button>}
+      </div>
 
       <div style={sectionLabel}>Points de CR ({filteredRows.length})</div>
       {filteredRows.length === 0 && <Empty>Aucun point. Ajoutez-en un ou importez un CR Excel.</Empty>}
