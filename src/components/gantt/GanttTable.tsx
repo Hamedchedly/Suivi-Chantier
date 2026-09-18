@@ -11,7 +11,7 @@ interface GanttTableProps {
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
   onCommitmentClick?: (commitment: DateCommitment) => void
-  onCreateSubtask?: (parentId: string, title: string, duration: number) => void  // create subtask
+  onCreateSubtask?: (parentId: string, title: string, duration: number) => void
   readOnly?: boolean
   showForecast?: boolean
   showBaseline?: boolean
