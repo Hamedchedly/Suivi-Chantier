@@ -51,6 +51,7 @@
 | **Verrouiller contractuel** | Figer les dates plannifiées actuelles comme baseline immutable | `Gantt.tsx` (lockBaseline button) | `src/lib/forecast.ts` (lockBaseline) |
 | **Méthode de calcul prévision** | Sélection : Rythme réel / Durée contractuelle / Manuel | `TaskDetail.tsx` (forecast_method select) | `src/types/gantt.ts` |
 | **Config planning** | Configuration de la durée des lots, jalons, congés | `PlanningConfig.tsx` | `src/lib/repo.ts` (getHolidays) |
+| **Query params (view state)** | URL `?ganttMode=matrix&ganttGroup=zone&showBaseline=1&showEcarts=1` pour mémoriser toggles | `Gantt.tsx` (useEffect hooks) | URL replaceState |
 
 ---
 
