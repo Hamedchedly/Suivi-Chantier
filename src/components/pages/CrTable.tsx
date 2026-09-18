@@ -434,6 +434,24 @@ export function CrTable() {
         })}
       </div>
 
+      {/* Quick stats */}
+      {filteredRows.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', fontSize: '11px', color: 'var(--muted)' }}>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.length}</span> au total
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.filter(r => r.status === 'open').length}</span> ouvert(s)
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.filter(r => r.status === 'resolved' || r.status === 'obsolete').length}</span> fermé(s)
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: '#dc2626' }}>{filteredRows.filter(r => crState(r, today, latestMeetingDate).tone === 'overdue').length}</span> en retard
+          </div>
+        </div>
+      )}
+
       <div style={sectionLabel}>Points de CR ({filteredRows.length})</div>
       {filteredRows.length === 0 && <Empty>Aucun point. Ajoutez-en un ou importez un CR Excel.</Empty>}
 

@@ -199,6 +199,19 @@ export function Meetings() {
         </div>
       </div>
 
+      {/* Quick stats */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', fontSize: '11px', color: 'var(--muted)' }}>
+        <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{meetings.flatMap(m => m.decisions).length}</span> décisions
+        </div>
+        <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{meetings.flatMap(m => m.actions).filter(a => a.status === 'done').length}</span> soldées
+        </div>
+        <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+          <span style={{ fontWeight: 600, color: '#dc2626' }}>{overdue.size}</span> en retard
+        </div>
+      </div>
+
       {showForm && (
         <div className="card" style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
