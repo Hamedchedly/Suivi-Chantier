@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react'
 import { Meeting, MeetingAction, nextActionRef, overdueActions } from '../../lib/meetings'
 import { getMeetings, saveMeetings, logActivity } from '../../lib/repo'
 
@@ -12,6 +12,9 @@ export function Meetings() {
   const [showForm, setShowForm] = useState(false)
   const [dTitle, setDTitle] = useState('')
   const [dDate, setDDate] = useState(todayIso())
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDate, setEditDate] = useState('')
 
   useEffect(() => { saveMeetings(meetings) }, [meetings])
 
@@ -62,6 +65,17 @@ export function Meetings() {
 
   const openCount = meetings.flatMap(m => m.actions).filter(a => a.status === 'todo').length
 
+  const updateMeeting = (id: string) => {
+    if (!editTitle.trim()) return
+    setMeetings(prev => prev.map(m => m.id === id ? { ...m, title: editTitle.trim(), date: editDate } : m))
+    logActivity('doc', `Réunion modifiée — ${editTitle.trim()}`)
+    setEditId(null); setEditTitle(''); setEditDate('')
+  }
+
+  const cancelEdit = () => {
+    setEditId(null); setEditTitle(''); setEditDate('')
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -85,17 +99,32 @@ export function Meetings() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {meetings.map(m => {
           const isOpen = open.has(m.id)
+          const isEditing = editId === m.id
           return (
             <div key={m.id} className="card" style={{ padding: '12px' }}>
-              <button onClick={() => toggleOpen(m.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
-                {isOpen ? <ChevronDown size={16} color="var(--navy)" /> : <ChevronRight size={16} color="var(--navy)" />}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '14px' }}>{m.title}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                    {fmtDate(m.date)} • {m.decisions.length} décision{m.decisions.length > 1 ? 's' : ''} • {m.actions.length} action{m.actions.length > 1 ? 's' : ''}
-                  </div>
+              {isEditing ? (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="Objet de la réunion" style={{ ...inp, flex: '2 1 180px' }} />
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={{ ...inp, flex: '1 1 130px' }} />
+                  <button onClick={() => updateMeeting(m.id)} style={okBtn}>Sauver</button>
+                  <button onClick={cancelEdit} style={{ ...ghostBtn, color: 'var(--bad)' }}><X size={13} /></button>
                 </div>
-              </button>
+              ) : (
+                <>
+                  <button onClick={() => toggleOpen(m.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                    {isOpen ? <ChevronDown size={16} color="var(--navy)" /> : <ChevronRight size={16} color="var(--navy)" />}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: '14px' }}>{m.title}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                        {fmtDate(m.date)} • {m.decisions.length} décision{m.decisions.length > 1 ? 's' : ''} • {m.actions.length} action{m.actions.length > 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </button>
+                  <button onClick={() => { setEditId(m.id); setEditTitle(m.title); setEditDate(m.date) }} title="Modifier" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0, marginTop: '8px' }}>
+                    <Pencil size={14} />
+                  </button>
+                </>
+              )}
 
               {isOpen && (
                 <div style={{ marginTop: '12px' }}>
