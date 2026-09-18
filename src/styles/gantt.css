@@ -1,54 +1,68 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   GANTT STYLING
+   GANTT STYLING — Refonte moderne et intuitive
    ───────────────────────────────────────────────────────────────────────── */
 
 /* Toolbar */
 .g-toolbar {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 10px 0;
+  flex-wrap: wrap;
+  background: linear-gradient(to right, rgba(248,250,252,.5), transparent);
+  border-radius: 8px;
 }
 
 .gtb-select {
-  padding: 6px 8px;
-  border: 1px solid #d1dce5;
-  border-radius: 4px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
   background: #fff;
   color: #02457A;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  max-width: 160px;
+  max-width: 180px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.gtb-select:hover {
+  border-color: #018ABE;
+  box-shadow: 0 2px 4px rgba(1,138,190,0.15);
 }
 
 .gtb {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 1px solid #d1dce5;
-  border-radius: 4px;
+  gap: 5px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
   background: #fff;
   color: #5b7183;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .gtb:hover {
-  background: #f1f5f9;
+  background: #f0f7ff;
   color: #02457A;
+  border-color: #018ABE;
+  box-shadow: 0 2px 4px rgba(1,138,190,0.15);
 }
 
 .gtb.on {
-  background: #02457A;
+  background: linear-gradient(135deg, #018ABE 0%, #02457A 100%);
   color: white;
-  border-color: #02457A;
+  border-color: #018ABE;
+  box-shadow: 0 2px 8px rgba(1,138,190,0.25);
 }
 
 /* Gantt Table Wrapper */
@@ -56,25 +70,30 @@
   position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  background: white;
+  background: linear-gradient(to bottom, #fafbfc 0%, #fff 8px);
   border: 1px solid #e4ecf2;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .gantt-tbl {
   border-collapse: collapse;
   width: 100%;
   font-size: 12px;
+  background: white;
 }
 
 .gantt-tbl th {
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid #e4ecf2;
-  background: #f8fafc;
-  font-weight: 600;
+  border-bottom: 2px solid #e4ecf2;
+  background: linear-gradient(to bottom, #f8fafc, #f0f4f8);
+  font-weight: 700;
   color: #02457A;
   font-size: 11px;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .gantt-task-header {
@@ -82,11 +101,11 @@
   position: sticky;
   left: 0;
   z-index: 10;
-  background: #f8fafc;
+  background: linear-gradient(to bottom, #f8fafc, #f0f4f8);
 }
 
 .gantt-progress-header {
-  width: 40px;
+  width: 45px;
   text-align: center;
 }
 
@@ -95,6 +114,7 @@
   position: relative;
   font-size: 10px;
   color: #5b7183;
+  background: linear-gradient(to bottom, #f8fafc, #f0f4f8);
 }
 
 .gantt-date-header {
@@ -107,16 +127,25 @@
 
 /* Table Rows */
 .gantt-row {
-  border-bottom: 0.5px solid #e4ecf2;
-  transition: background 0.15s;
+  border-bottom: 1px solid #f0f5f9;
+  transition: background 0.15s ease;
+  height: 34px;
 }
 
 .gantt-row:hover {
-  background: #f9fbfd;
+  background: linear-gradient(to right, #f0f7ff, rgba(240,247,255,0.3));
+}
+
+.gantt-row.critical {
+  background: linear-gradient(to right, rgba(220,38,38,0.04), transparent);
+}
+
+.gantt-row.critical:hover {
+  background: linear-gradient(to right, rgba(220,38,38,0.08), rgba(240,247,255,0.3));
 }
 
 .gantt-row.critical .gantt-task-cell {
-  font-weight: 600;
+  font-weight: 700;
   color: #dc2626;
 }
 
@@ -126,31 +155,35 @@
 
 /* Task Cell (left sticky column) */
 .gantt-task-cell {
-  padding: 5px 10px;
+  padding: 6px 12px;
   position: sticky;
   left: 0;
   z-index: 9;
   background: white;
   font-size: 12px;
+  font-weight: 500;
   color: #1f2937;
+  border-right: 1px solid #f0f5f9;
 }
 
 .gantt-row:hover .gantt-task-cell {
-  background: #f9fbfd;
+  background: #f0f7ff;
+  border-right-color: #e0f0ff;
 }
 
 /* Progress Cell */
 .gantt-progress-cell {
-  padding: 5px 10px;
+  padding: 6px 12px;
   text-align: center;
-  color: #5b7183;
-  font-weight: 600;
-  font-size: 11px;
+  color: #02457A;
+  font-weight: 700;
+  font-size: 12px;
+  border-right: 1px solid #f0f5f9;
 }
 
 /* Timeline Cell (Gantt bars) */
 .gantt-timeline-cell {
-  padding: 5px 5px;
+  padding: 6px 8px;
   position: relative;
   min-width: 320px;
 }
@@ -158,40 +191,45 @@
 .gantt-timeline-container {
   position: relative;
   height: 22px;
-  background: linear-gradient(to right, transparent 0%, transparent calc(100% - 1px), #e4ecf2 100%);
-  border-radius: 2px;
+  background: linear-gradient(to right, #f8fafc 0%, #f8fafc calc(100% - 1px), #e4ecf2 100%);
+  border-radius: 4px;
+  background-image:
+    repeating-linear-gradient(to right, transparent 0, transparent 1px, #e4ecf2 1px, #e4ecf2 2px);
+  background-size: 28px 100%;
 }
 
-/* Réel constaté — fine barre pleine sous le prévisionnel, pour lire l'écart
-   d'un coup d'œil. Le contractuel n'a plus de barre propre : il EST le
-   prévisionnel, donc la barre pleine elle-même. */
+/* Réel constaté — fine barre pleine sous le prévisionnel */
 .gantt-actual {
   position: absolute;
   top: 17px;
-  height: 4px;
-  min-width: 3px;
+  height: 5px;
+  min-width: 4px;
   border-radius: 2px;
-  background: #0f766e;
+  background: linear-gradient(to right, #0f766e, #14b8a6);
   z-index: 1;
   pointer-events: none;
   box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(15,118,110,0.2);
 }
 
 /* Gantt Bar — prévisionnel (= contractuel) */
 .gantt-bar {
   position: absolute;
-  height: 12px;
-  top: 5px;
-  border-radius: 2px;
+  height: 14px;
+  top: 4px;
+  border-radius: 3px;
   cursor: grab;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: box-shadow 0.2s;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   z-index: 2;
+  font-weight: 600;
+  font-size: 9px;
 }
 
 .gantt-bar:hover {
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
 }
 
 /* Status Colors */
@@ -211,11 +249,16 @@
   /* gray - not-started */
 }
 
+/* Progress bar inside gantt-bar */
+.gantt-bar span {
+  transition: all 0.2s ease;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .gantt-tbl th {
     font-size: 10px;
-    padding: 6px 8px;
+    padding: 8px 10px;
   }
 
   .gantt-task-header {
@@ -227,30 +270,35 @@
   }
 
   .gantt-task-cell {
-    padding: 6px 8px;
+    padding: 6px 10px;
     font-size: 11px;
   }
 
   .gantt-progress-cell {
-    padding: 6px 8px;
-    font-size: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
   }
 
   .gantt-timeline-cell {
-    padding: 6px 4px;
+    padding: 6px 6px;
   }
 
   .gantt-bar {
-    height: 16px;
-    top: 6px;
+    height: 14px;
+    top: 4px;
   }
 
   .gantt-timeline-container {
-    height: 24px;
+    height: 22px;
   }
 
   .gtb {
-    padding: 5px 8px;
-    font-size: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .g-toolbar {
+    gap: 6px;
+    padding: 8px 0;
   }
 }

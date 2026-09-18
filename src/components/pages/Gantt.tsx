@@ -204,21 +204,26 @@ export function Gantt() {
   ]
 
   return (
-    <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      {/* Mode + grouping */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-          {(['gantt', 'matrix'] as const).map(m => (
-            <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>{m === 'gantt' ? 'Gantt' : 'Damier'}</button>
-          ))}
-        </div>
-        {mode === 'gantt' && (
-          <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-            {groups.map(g => (
-              <button key={g.id} onClick={() => setGroup(g.id)} style={seg(group === g.id)}>{g.label}</button>
+    <div style={{ padding: '16px', paddingBottom: '80px' }}>
+      {/* Header section */}
+      <div style={{ marginBottom: '16px' }}>
+        <h2 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 700, color: '#02457A' }}>Planning du chantier</h2>
+
+        {/* Mode + grouping */}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e0' }}>
+            {(['gantt', 'matrix'] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>{m === 'gantt' ? '📊 Gantt' : '🔲 Damier'}</button>
             ))}
           </div>
-        )}
+          {mode === 'gantt' && (
+            <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e0' }}>
+              {groups.map(g => (
+                <button key={g.id} onClick={() => setGroup(g.id)} style={seg(group === g.id)}>{g.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Drift / late banner */}
@@ -256,77 +261,105 @@ export function Gantt() {
           ) : null}
 
           <div className="g-toolbar">
-            <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
-            <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
+            {/* Filters section */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', paddingRight: '8px', borderRight: '1px solid #cbd5e0' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Filtres</span>
+              <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
+              <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
+            </div>
+
+            {/* View options section */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em', marginLeft: '4px' }}>Affichage</span>
+              <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Afficher/masquer les liaisons entre tâches">
+                {depsVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
+              <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Mettre en évidence le chemin critique">
+                <Zap size={14} />
+              </button>
+              <button className={`gtb ${showEcarts ? 'on' : ''}`} onClick={() => setShowEcarts(v => !v)} title="Afficher les écarts (délais réels vs prévus)">
+                <AlertTriangle size={14} />
+              </button>
+            </div>
+
+            {/* Analysis section */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', paddingLeft: '8px', borderLeft: '1px solid #cbd5e0' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Analyse</span>
+              <button
+                className={`gtb ${showBaseline ? 'on' : ''}`}
+                onClick={() => setShowBaseline(v => !v)}
+                title="Afficher le contractuel (référence de base)"
+              >
+                <History size={14} />
+              </button>
+              <button
+                className={`gtb ${showForecast ? 'on' : ''}`}
+                onClick={() => setShowForecast(v => !v)}
+                title="Afficher les prévisions calculées"
+              >
+                <TrendingUp size={14} />
+              </button>
+            </div>
+
             <div style={{ flex: 1 }} />
-            <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique (calculé par CPM)">
-              <Zap size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Critique</span>
-            </button>
-            <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification : décaler les tâches liées">
-              <GitBranch size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-planif</span>
-            </button>
-            <button
-              className={`gtb ${showForecast ? 'on' : ''}`}
-              onClick={() => setShowForecast(v => !v)}
-              title="Afficher les barres de prévision (jaune hachuré)"
-            >
-              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Prévision</span>
-            </button>
-            <button
-              className={`gtb ${showBaseline ? 'on' : ''}`}
-              onClick={() => setShowBaseline(v => !v)}
-              title="Afficher le contractuel de référence (gris)"
-            >
-              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Contractuel</span>
-            </button>
-            <button
-              className={`gtb ${showEcarts ? 'on' : ''}`}
-              onClick={() => setShowEcarts(v => !v)}
-              title="Mode ÉCARTS : afficher les différences (début, fin, jours)"
-            >
-              <AlertTriangle size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>ÉCARTS</span>
-            </button>
-            <button
-              className="gtb"
-              onClick={() => {
-                const computed = computeForecasts(ganttTasks, new Date(), calendar)
-                setForecastTasks(computed)
-              }}
-              title="Calculer les prévisions automatiques (sans modifier le planning)"
-              style={{ background: '#fef3c7', color: '#92400e' }}
-            >
-              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-réplanif</span>
-            </button>
-            <button
-              className="gtb"
-              onClick={() => {
-                const locked = lockBaseline(ganttTasks, calendar)
-                saveGanttTasks(locked)
-                setGanttTasks(locked)
-                logActivity('planning', 'Dates contractuelles verrouillées (baseline créée)')
-              }}
-              title="Figer les dates plannifiées actuelles comme contractuel (baseline immutable)"
-              style={{ background: '#f0f9ff', color: '#0369a1' }}
-            >
-              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Verrouiller</span>
-            </button>
-            <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
-              {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
-            </button>
-            <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
-            <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
+
+            {/* Automation & Actions section */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className={`gtb ${autoPlan ? 'on' : ''}`}
+                onClick={() => setAutoPlan(!autoPlan)}
+                title="Auto-planification : décaler les tâches liées automatiquement"
+              >
+                <GitBranch size={14} />
+              </button>
+              <button
+                className="gtb"
+                onClick={() => {
+                  const computed = computeForecasts(ganttTasks, new Date(), calendar)
+                  setForecastTasks(computed)
+                }}
+                title="Calculer les prévisions"
+                style={{ background: '#fef3c7', color: '#92400e' }}
+              >
+                <TrendingUp size={14} />
+              </button>
+              <button
+                className="gtb"
+                onClick={() => {
+                  const locked = lockBaseline(ganttTasks, calendar)
+                  saveGanttTasks(locked)
+                  setGanttTasks(locked)
+                  logActivity('planning', 'Dates contractuelles verrouillées')
+                }}
+                title="Figer comme référence contractuelle"
+                style={{ background: '#f0f9ff', color: '#0369a1' }}
+              >
+                <History size={14} />
+              </button>
+            </div>
+
+            {/* Edit & Zoom section */}
+            <div style={{ display: 'flex', gap: '3px', alignItems: 'center', background: '#f0f4f8', padding: '4px', borderRadius: '6px' }}>
+              <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer" style={{ padding: '6px 8px' }}><ZoomOut size={13} /></button>
+              <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600, minWidth: '32px', textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+              <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer" style={{ padding: '6px 8px' }}><ZoomIn size={13} /></button>
+            </div>
+
+            {/* Edit mode button */}
             <button
               className={`gtb ${editMode ? 'on' : ''}`}
               onClick={editMode ? confirmEdit : enterEdit}
               title={editMode ? 'Confirmer les modifications' : 'Passer en mode édition'}
               style={editMode ? { background: '#dcfce7', color: '#15803d' } : {}}
             >
-              <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
+              <Pencil size={14} />
             </button>
+
+            {/* Add task button */}
             <button
               className="gtb"
               onClick={() => setAddForm(a => !a)}
-              title="Ajouter une tâche au planning"
+              title="Ajouter une tâche"
               style={{ background: '#eff6ff', color: '#2563eb' }}
             >
               <Plus size={14} />

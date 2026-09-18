@@ -438,41 +438,25 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   />
                 )}
 
-                {/* Date label or écarts display */}
-                {showEcarts ? (
-                  (() => {
-                    const ec = calculateEcarts(task)
-                    return (
-                      <div style={{
-                        position: 'absolute',
-                        left: bar.leftPx + bar.widthPx + 6,
-                        top: 2,
-                        fontSize: 8,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        zIndex: 2,
-                        pointerEvents: 'none',
-                        color: ec.color,
-                      }}>
-                        Δ {ec.deltaStart >= 0 ? '+' : ''}{ec.deltaStart}j | {ec.dayLabel}
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <div style={{
-                    position: 'absolute',
-                    left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
-                    top: 3,
-                    fontSize: 8,
-                    color: '#5b7183',
-                    whiteSpace: 'nowrap',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                    fontWeight: 500,
-                  }}>
-                    {fmt2(task.planned_start)}
-                  </div>
-                )}
+                {/* Écarts display (when enabled) */}
+                {showEcarts && (() => {
+                  const ec = calculateEcarts(task)
+                  return (
+                    <div style={{
+                      position: 'absolute',
+                      left: bar.leftPx + bar.widthPx + 6,
+                      top: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      zIndex: 2,
+                      pointerEvents: 'none',
+                      color: ec.color,
+                    }}>
+                      {ec.dayLabel && `${ec.dayLabel}`}
+                    </div>
+                  )
+                })()}
 
                 {/* Actual/planned bar */}
                 <div
