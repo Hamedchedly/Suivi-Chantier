@@ -146,11 +146,13 @@ function calculateEcarts(task: GanttTask) {
   return ecarts
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, onCommitmentClick, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, onCommitmentClick, onCreateSubtask, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
   const [editingActualStart, setEditingActualStart] = useState<string | null>(null)
+  const [editingSubtask, setEditingSubtask] = useState<string | null>(null)
+  const [subtaskTitle, setSubtaskTitle] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -370,6 +372,50 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return '#6b21a8'
   }
 
+  const renderSubtaskForm = (parentId: string) => {
+    return (
+      <tr style={{ background: '#f9fbfd' }}>
+        <td style={{ padding: '6px 10px', paddingLeft: `${28 + 14}px` }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', maxWidth: '300px' }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Titre…"
+              value={subtaskTitle}
+              onChange={e => setSubtaskTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && subtaskTitle.trim()) {
+                  onCreateSubtask?.(parentId, subtaskTitle.trim(), 5)
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                } else if (e.key === 'Escape') {
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                }
+              }}
+              style={{ flex: 1, padding: '4px 6px', borderRadius: '4px', border: '1px solid #d1dbe5', fontSize: '11px' }}
+            />
+            <button
+              onClick={() => {
+                if (subtaskTitle.trim()) {
+                  onCreateSubtask?.(parentId, subtaskTitle.trim(), 5)
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                }
+              }}
+              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #018ABE', background: '#018ABE', color: '#fff', fontSize: '10px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >✓</button>
+            <button
+              onClick={() => { setSubtaskTitle(''); setEditingSubtask(null) }}
+              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: '10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >✕</button>
+          </div>
+        </td>
+        <td colSpan={2} />
+      </tr>
+    )
+  }
+
   const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
@@ -413,6 +459,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 title="Détails du lot"
                 style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
               >ⓘ</button>
+            )}
+            {!hasChildren && !readOnly && onCreateSubtask && (
+              <button
+                onClick={e => { e.stopPropagation(); setEditingSubtask(task.id) }}
+                title="Ajouter une sous-tâche"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#018ABE', fontSize: 12, flexShrink: 0, lineHeight: 1, fontWeight: 700 }}
+              >+</button>
             )}
           </div>
         </td>
@@ -618,7 +671,11 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             </tr>
           </thead>
           <tbody>
-            {visible.map(({ task, depth }) => renderRow(task, depth))}
+            {visible.flatMap(({ task, depth }) => {
+              const rows = [renderRow(task, depth)]
+              if (editingSubtask === task.id) rows.push(renderSubtaskForm(task.id))
+              return rows
+            })}
           </tbody>
         </table>
 
