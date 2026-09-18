@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import { driftDays } from '../../lib/schedule'
@@ -26,12 +27,20 @@ interface Props {
   onProgress?: (taskId: string, progress: number) => void
   /** Modifie les dates planifiées (déclenche l'auto-planification). */
   onDates?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
+  /** Saisir / corriger la date de début réelle. */
+  onActualStart?: (taskId: string, date: Date | null) => void
   /** Permet de corriger la date de fin réelle (tâches historiques). */
   onActualEnd?: (taskId: string, date: Date | null) => void
   /** Modifie la méthode de calcul forecast. */
   onForecastMethod?: (taskId: string, method: 'actual_rate' | 'contractual_duration' | 'manual') => void
   /** Marge totale (jours) issue du CPM — absente pour les regroupements. */
   totalFloat?: number
+  /** Toutes les tâches disponibles pour ajouter des liaisons. */
+  allTasks?: GanttTask[]
+  /** Ajouter un prédécesseur à cette tâche. */
+  onDependencyAdd?: (taskId: string, depId: string) => void
+  /** Retirer un prédécesseur de cette tâche. */
+  onDependencyRemove?: (taskId: string, depId: string) => void
 }
 
 const isoDate = (d: Date) => {
@@ -40,7 +49,8 @@ const isoDate = (d: Date) => {
 }
 const parseDate = (s: string) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
 
-export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, onForecastMethod, totalFloat }: Props) {
+export function TaskDetail({ task, onClose, onProgress, onDates, onActualStart, onActualEnd, onForecastMethod, totalFloat, allTasks, onDependencyAdd, onDependencyRemove }: Props) {
+  const [depSearch, setDepSearch] = useState('')
   const editable = !!onDates && !task.children?.length
   const drift = driftDays(task)
   const st = STATUS_LABEL[task.status] ?? STATUS_LABEL['not-started']
@@ -98,7 +108,24 @@ export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, on
               <Row label="Contractuel — fin" value={fmt(task.planned_end)} />
             </>
           )}
-          <Row label="Réel — début" value={fmt(task.actual_start)} />
+          {onActualStart ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Réel — début</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <input
+                  type="date"
+                  value={task.actual_start ? isoDate(task.actual_start) : ''}
+                  onChange={e => e.target.value && onActualStart(task.id, parseDate(e.target.value))}
+                  style={{ width: '140px', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}
+                />
+                {task.actual_start && (
+                  <button onClick={() => onActualStart(task.id, null)} title="Effacer" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, padding: '2px 4px' }}>✕</button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <Row label="Réel — début" value={fmt(task.actual_start)} />
+          )}
           {onActualEnd && task.actual_end ? (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
               <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Réel — fin</span>
@@ -158,14 +185,54 @@ export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, on
               tone={totalFloat <= 0 ? 'bad' : 'ok'}
             />
           )}
-          {task.dependencies.length > 0 && (
-            <>
-              <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
-              <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '4px' }}>Prédécesseurs</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                {task.dependencies.map(d => <span key={d} style={{ fontSize: '11px', background: '#eef2f6', color: 'var(--navy)', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>{d}</span>)}
-              </div>
-            </>
+          {/* Dependencies section */}
+          <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
+          <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, marginBottom: '6px' }}>Prédécesseurs</div>
+          {task.dependencies.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
+              {task.dependencies.map(d => {
+                const depTask = allTasks?.find(t => t.id === d)
+                return (
+                  <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', background: '#eef2f6', color: 'var(--navy)', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                    {depTask ? depTask.title : d}
+                    {onDependencyRemove && (
+                      <button onClick={() => onDependencyRemove(task.id, d)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                    )}
+                  </span>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>Aucune liaison</div>
+          )}
+          {onDependencyAdd && allTasks && (
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                type="text"
+                placeholder="Rechercher une tâche…"
+                value={depSearch}
+                onChange={e => setDepSearch(e.target.value)}
+                style={{ flex: 1, padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '11px', color: 'var(--ink)' }}
+              />
+            </div>
+          )}
+          {onDependencyAdd && allTasks && depSearch.trim().length > 0 && (
+            <div style={{ marginTop: '4px', border: '1px solid var(--line)', borderRadius: '6px', overflow: 'hidden', maxHeight: '140px', overflowY: 'auto' }}>
+              {allTasks
+                .filter(t => t.id !== task.id && !task.dependencies.includes(t.id) && t.title.toLowerCase().includes(depSearch.toLowerCase()))
+                .slice(0, 8)
+                .map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => { onDependencyAdd(task.id, t.id); setDepSearch('') }}
+                    style={{ padding: '6px 10px', fontSize: '11px', cursor: 'pointer', borderBottom: '1px solid #f0f5f9', color: 'var(--ink)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f0f5f9')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '')}
+                  >
+                    <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{t.lot_id}</span> · {t.title}
+                  </div>
+                ))}
+            </div>
           )}
         </div>
       </div>

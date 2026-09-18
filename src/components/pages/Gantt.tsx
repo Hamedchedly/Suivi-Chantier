@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X, Search } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, TrendingUp, Pencil, Plus, Check, X, Search } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import { DateCommitment } from '../../lib/commitments'
 import {
@@ -13,7 +13,7 @@ import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
-import { computeForecasts, applyForecastToPlanning, forecastImpact, hasBaseline, lockBaseline } from '../../lib/forecast'
+import { computeForecasts, applyForecastToPlanning, forecastImpact, hasBaseline } from '../../lib/forecast'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -333,54 +333,6 @@ export function Gantt() {
             <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique (calculé par CPM)">
               <Zap size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Critique</span>
             </button>
-            <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification : décaler les tâches liées">
-              <GitBranch size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-planif</span>
-            </button>
-            <button
-              className={`gtb ${showForecast ? 'on' : ''}`}
-              onClick={() => setShowForecast(v => !v)}
-              title="Afficher les barres de prévision (jaune hachuré)"
-            >
-              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Prévision</span>
-            </button>
-            <button
-              className={`gtb ${showBaseline ? 'on' : ''}`}
-              onClick={() => setShowBaseline(v => !v)}
-              title="Afficher le contractuel de référence (gris)"
-            >
-              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Contractuel</span>
-            </button>
-            <button
-              className={`gtb ${showEcarts ? 'on' : ''}`}
-              onClick={() => setShowEcarts(v => !v)}
-              title="Mode ÉCARTS : afficher les différences (début, fin, jours)"
-            >
-              <AlertTriangle size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>ÉCARTS</span>
-            </button>
-            <button
-              className="gtb"
-              onClick={() => {
-                const computed = computeForecasts(ganttTasks, new Date(), calendar)
-                setForecastTasks(computed)
-              }}
-              title="Calculer les prévisions automatiques (sans modifier le planning)"
-              style={{ background: '#fef3c7', color: '#92400e' }}
-            >
-              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-réplanif</span>
-            </button>
-            <button
-              className="gtb"
-              onClick={() => {
-                const locked = lockBaseline(ganttTasks, calendar)
-                saveGanttTasks(locked)
-                setGanttTasks(locked)
-                logActivity('planning', 'Dates contractuelles verrouillées (baseline créée)')
-              }}
-              title="Figer les dates plannifiées actuelles comme contractuel (baseline immutable)"
-              style={{ background: '#f0f9ff', color: '#0369a1' }}
-            >
-              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Verrouiller</span>
-            </button>
             <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
               {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
             </button>
@@ -463,6 +415,10 @@ export function Gantt() {
             handleTaskUpdate(id, updates)
             setDetailTask(t => (t && t.id === id ? { ...t, ...updates } : t))
           }}
+          onActualStart={(id, date) => {
+            handleTaskUpdate(id, { actual_start: date ?? undefined })
+            setDetailTask(t => (t && t.id === id ? { ...t, actual_start: date ?? undefined } : t))
+          }}
           onActualEnd={(id, date) => {
             handleTaskUpdate(id, { actual_end: date ?? undefined })
             setDetailTask(t => (t && t.id === id ? { ...t, actual_end: date ?? undefined } : t))
@@ -475,6 +431,15 @@ export function Gantt() {
             logActivity('planning', `Méthode de calcul prévision modifiée : ${method}`)
           }}
           totalFloat={cpm.nodes.get(detailTask.id)?.totalFloat}
+          allTasks={ganttTasks.flatMap(t => [t, ...(t.children ?? [])])}
+          onDependencyAdd={(taskId, depId) => {
+            setGanttTasks(prev => mapTaskInList(prev, taskId, t => ({ ...t, dependencies: [...t.dependencies.filter(d => d !== depId), depId] })))
+            setDetailTask(t => t && t.id === taskId ? { ...t, dependencies: [...t.dependencies.filter(d => d !== depId), depId] } : t)
+          }}
+          onDependencyRemove={(taskId, depId) => {
+            setGanttTasks(prev => mapTaskInList(prev, taskId, t => ({ ...t, dependencies: t.dependencies.filter(d => d !== depId) })))
+            setDetailTask(t => t && t.id === taskId ? { ...t, dependencies: t.dependencies.filter(d => d !== depId) } : t)
+          }}
         />
       )}
 

@@ -157,7 +157,7 @@
 
 .gantt-timeline-container {
   position: relative;
-  height: 22px;
+  height: 26px;
   background: linear-gradient(to right, transparent 0%, transparent calc(100% - 1px), #e4ecf2 100%);
   border-radius: 2px;
 }
@@ -274,7 +274,7 @@
   }
 
   .gantt-timeline-container {
-    height: 24px;
+    height: 28px;
   }
 
   .gtb {

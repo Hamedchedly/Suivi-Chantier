@@ -555,6 +555,22 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   )}
                 </div>
 
+                {/* Contractual reference bar (thin grey, planned dates) */}
+                {base && (
+                  <div style={{
+                    position: 'absolute',
+                    left: base.leftPx,
+                    width: base.widthPx,
+                    height: 3,
+                    top: 19,
+                    background: '#94a3b8',
+                    borderRadius: 2,
+                    zIndex: 1,
+                    opacity: 0.65,
+                    pointerEvents: 'none',
+                  }} />
+                )}
+
                 {/* Right resize handle */}
                 {editable && (
                   <div
