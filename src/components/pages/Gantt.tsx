@@ -411,6 +411,29 @@ export function Gantt() {
             />
           )}
 
+          {/* Legend */}
+          <div style={{ marginBottom: '12px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#02457A', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Légende</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
+                <div style={{ width: '20px', height: '8px', background: 'linear-gradient(to right, #0f766e, #14b8a6)', borderRadius: '2px' }} />
+                <span>Barre verte = date de démarrage réelle constatée</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
+                <div style={{ width: '20px', height: '8px', background: 'repeating-linear-gradient(45deg, #f59e0b 0 3px, #fef3c7 3px 6px)', borderRadius: '2px' }} />
+                <span>Hachuré orange = prévision calculée</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
+                <div style={{ width: '20px', height: '8px', background: '#94a3b8', borderRadius: '2px' }} />
+                <span>Ligne grise = contractuel (baseline)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>◆</span>
+                <span>Diamant violet = engagement pris en visite</span>
+              </div>
+            </div>
+          </div>
+
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
               tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : filteredTree}

@@ -10,6 +10,7 @@ interface GanttTableProps {
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) => void
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
+  onTasksReorder?: (tasks: GanttTask[]) => void  // when task order changes
   readOnly?: boolean
   showForecast?: boolean    // show forecast bars (hatched yellow)
   showBaseline?: boolean    // show baseline thin reference bar
