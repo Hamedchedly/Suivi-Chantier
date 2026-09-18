@@ -348,12 +348,21 @@ export function Visite() {
         </div>
 
         {buildings.map(bid => {
-          const zones = active.zones.filter(z => z.buildingId === bid)
+          const allZones = active.zones.filter(z => z.buildingId === bid)
+          // Hide completed zones in session view (except if all are completed)
+          const visibleZones = allZones.filter(z => zoneState(z) !== 'done' || allZones.length === 1)
+          if (visibleZones.length === 0 && allZones.length > 0) {
+            return (
+              <div key={bid} style={{ marginBottom: '14px' }}>
+                <div style={sectionLabel}>{allZones[0].buildingLabel} <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 400, marginLeft: '4px' }}>✓ Tous complétés</span></div>
+              </div>
+            )
+          }
           return (
             <div key={bid} style={{ marginBottom: '14px' }}>
-              <div style={sectionLabel}>{zones[0].buildingLabel}</div>
+              <div style={sectionLabel}>{visibleZones.length > 0 ? visibleZones[0].buildingLabel : allZones[0].buildingLabel}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {zones.map(z => {
+                {visibleZones.map(z => {
                   const m = ZONE_META[zoneState(z)]
                   const carried = carriedOverPoints(reserves, z.refId, active.id).length
                   return (
@@ -656,7 +665,7 @@ function CreateSession({ lots, onCancel, onCreate }: { lots: LotContact[]; onCan
     onCreate(newVisit({
       kind, kindLabel: kindLabel ?? undefined, date, participants: guests, brief,
       companiesPresent: [...companies],
-      zones: buildZonesFromPlanning(getGanttTasks(), refs, zoneBelongs),
+      zones: buildZonesFromPlanning(getGanttTasks(), refs, zoneBelongs, false), // showAll initially
     }))
   }
 

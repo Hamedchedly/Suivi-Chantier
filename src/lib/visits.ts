@@ -235,9 +235,10 @@ export interface ZoneRef {
 export function buildZonesFromPlanning(
   tasks: GanttTask[], refs: ZoneRef[],
   belongs: (task: GanttTask, refId: string) => boolean = (t, refId) => t.logement_id === refId,
+  hideCompleted = false, // if true, filter out zones where all leaf tasks are completed
 ): VisitZone[] {
   const leaves = flattenLeaves(tasks)
-  return refs.map(ref => ({
+  const zones = refs.map(ref => ({
     refId: ref.refId,
     label: ref.label,
     kind: ref.kind,
@@ -272,6 +273,19 @@ export function buildZonesFromPlanning(
         }
       }),
   }))
+
+  // Filter out zones with only completed tasks if hideCompleted is true
+  if (hideCompleted) {
+    return zones.filter(z => {
+      // Keep zone if it has no tasks (notes/photos only) or has at least one non-completed task
+      if (z.tasks.length === 0) return true
+      // Find tasks that are not at 100% progress
+      const tasksToCheck = leaves.filter(t => belongs(t, z.refId))
+      return tasksToCheck.some(t => t.progress < 100 || t.status !== 'completed')
+    })
+  }
+
+  return zones
 }
 
 // ── Lot grouping (collapse / expand) ─────────────────────────────────────────
