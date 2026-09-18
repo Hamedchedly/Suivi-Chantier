@@ -378,6 +378,29 @@ export function Gantt() {
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
               onCommitmentClick={setSelectedCommitment}
+              onCreateSubtask={(parentId, title, duration) => {
+                const updated = mapTaskInList(ganttTasks, parentId, t => {
+                  const subtask: GanttTask = {
+                    id: `T${Date.now()}`,
+                    lot_id: t.lot_id,
+                    title,
+                    planned_start: t.planned_start,
+                    planned_end: new Date(t.planned_start.getTime() + duration * 86400000),
+                    planned_duration: duration,
+                    progress: 0,
+                    status: 'not-started',
+                    priority: 'medium',
+                    dependencies: [],
+                    is_milestone: false,
+                    is_critical: false,
+                    parent_id: parentId,
+                  }
+                  return { ...t, children: [...(t.children ?? []), subtask] }
+                })
+                setGanttTasks(updated)
+                saveGanttTasks(updated)
+                logActivity('planning', `Sous-tâche créée : ${title}`)
+              }}
               showForecast={showForecast}
               showBaseline={showBaseline}
               showEcarts={showEcarts}

@@ -10,12 +10,13 @@ interface GanttTableProps {
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) => void
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
-  onCommitmentClick?: (commitment: DateCommitment) => void  // click on engagement marker
+  onCommitmentClick?: (commitment: DateCommitment) => void
+  onCreateSubtask?: (parentId: string, title: string, duration: number) => void  // create subtask
   readOnly?: boolean
-  showForecast?: boolean    // show forecast bars (hatched yellow)
-  showBaseline?: boolean    // show baseline thin reference bar
-  showEcarts?: boolean      // show detailed écarts (deltas, day counts) in mode
-  commitments?: DateCommitment[] // engagement markers on timeline
+  showForecast?: boolean
+  showBaseline?: boolean
+  showEcarts?: boolean
+  commitments?: DateCommitment[]
 }
 
 interface DragState {
@@ -145,11 +146,13 @@ function calculateEcarts(task: GanttTask) {
   return ecarts
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, onCommitmentClick, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, onCommitmentClick, onCreateSubtask, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
   const [editingActualStart, setEditingActualStart] = useState<string | null>(null)
+  const [editingSubtask, setEditingSubtask] = useState<string | null>(null)
+  const [subtaskTitle, setSubtaskTitle] = useState('')
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -369,6 +372,50 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return '#6b21a8'
   }
 
+  const renderSubtaskForm = (parentId: string) => {
+    return (
+      <tr style={{ background: '#f9fbfd' }}>
+        <td colSpan={3} style={{ padding: '8px 10px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600 }}>Nouvelle sous-tâche :</span>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Titre…"
+              value={subtaskTitle}
+              onChange={e => setSubtaskTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && subtaskTitle.trim()) {
+                  onCreateSubtask?.(parentId, subtaskTitle.trim(), 5)
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                } else if (e.key === 'Escape') {
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                }
+              }}
+              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1dbe5', fontSize: '11px' }}
+            />
+            <button
+              onClick={() => {
+                if (subtaskTitle.trim()) {
+                  onCreateSubtask?.(parentId, subtaskTitle.trim(), 5)
+                  setSubtaskTitle('')
+                  setEditingSubtask(null)
+                }
+              }}
+              style={{ padding: '3px 10px', borderRadius: '4px', border: '1px solid #018ABE', background: '#018ABE', color: '#fff', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+            >Ajouter</button>
+            <button
+              onClick={() => { setSubtaskTitle(''); setEditingSubtask(null) }}
+              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: '10px', cursor: 'pointer' }}
+            >Annuler</button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
   const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
@@ -413,6 +460,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
               >ⓘ</button>
             )}
+            {!hasChildren && !readOnly && onCreateSubtask && (
+              <button
+                onClick={e => { e.stopPropagation(); setEditingSubtask(task.id) }}
+                title="Ajouter une sous-tâche"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#018ABE', fontSize: 12, flexShrink: 0, lineHeight: 1, fontWeight: 700 }}
+              >+</button>
+            )}
           </div>
         </td>
 
@@ -438,7 +492,10 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
         <td className="gantt-timeline-cell">
           <div
             className="gantt-timeline-container"
-            style={{ width: daysInRange * dayWidthPx, background: gridBackground }}
+            style={{
+              width: daysInRange * dayWidthPx,
+              background: base ? `linear-gradient(90deg, #e2e8f0 0%, #e2e8f0 ${(base.leftPx + base.widthPx) / (daysInRange * dayWidthPx) * 100}%, transparent ${(base.leftPx + base.widthPx) / (daysInRange * dayWidthPx) * 100}%), ${gridBackground}` : gridBackground
+            }}
             ref={el => {
               if (el) containerRefs.current.set(task.id, el)
               else containerRefs.current.delete(task.id)
@@ -555,22 +612,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   )}
                 </div>
 
-                {/* Contractual reference bar (thin grey, planned dates) */}
-                {base && (
-                  <div style={{
-                    position: 'absolute',
-                    left: base.leftPx,
-                    width: base.widthPx,
-                    height: 3,
-                    top: 19,
-                    background: '#94a3b8',
-                    borderRadius: 2,
-                    zIndex: 1,
-                    opacity: 0.65,
-                    pointerEvents: 'none',
-                  }} />
-                )}
-
                 {/* Right resize handle */}
                 {editable && (
                   <div
@@ -633,7 +674,11 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             </tr>
           </thead>
           <tbody>
-            {visible.map(({ task, depth }) => renderRow(task, depth))}
+            {visible.flatMap(({ task, depth }) => {
+              const rows = [renderRow(task, depth)]
+              if (editingSubtask === task.id) rows.push(renderSubtaskForm(task.id))
+              return rows
+            })}
           </tbody>
         </table>
 
