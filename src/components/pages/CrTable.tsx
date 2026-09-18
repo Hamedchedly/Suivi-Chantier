@@ -9,7 +9,6 @@ import {
   type FollowUpStatus,
 } from '../../lib/reserves'
 import { getReserves, saveReserves, getLotsConfig, logActivity } from '../../lib/repo'
-import { useUrlStates } from '../../lib/useUrlState'
 import { sectionLabel, input, ghostBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
 

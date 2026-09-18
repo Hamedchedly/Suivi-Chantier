@@ -1,5 +1,4 @@
 import { ChevronRight } from 'lucide-react'
-import type { Page } from './navConfig'
 
 export interface Crumb {
   label: string
