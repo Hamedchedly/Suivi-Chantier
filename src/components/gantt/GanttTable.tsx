@@ -128,7 +128,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const { months, weeks } = buildHeaders(viewState.startDate, daysInRange, dayWidthPx)
 
   const todayOffset = Math.floor((Date.now() - viewState.startDate.getTime()) / msPerDay)
-  const todayVisible = todayOffset >= 0 && todayOffset < daysInRange
   const todayLeftPx = todayOffset * dayWidthPx
 
   // Current-week band (startDate is Monday-anchored → weeks align on 7-day steps)

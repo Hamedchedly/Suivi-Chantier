@@ -770,9 +770,6 @@ function SliderMark({ pct, color, title }: { pct: number; color: string; title: 
   )
 }
 
-const markDot = (color: string): React.CSSProperties => ({
-  width: '8px', height: '8px', borderRadius: '2px', background: color, display: 'inline-block', flexShrink: 0,
-})
 
 const panelBox: React.CSSProperties = { marginTop: '4px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }
 
