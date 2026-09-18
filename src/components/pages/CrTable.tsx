@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers, Search, Eye, EyeOff, Printer,
+  LayoutList, Layers, Search, Eye, EyeOff, Printer, Download,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,
@@ -288,6 +288,41 @@ export function CrTable() {
     logActivity('doc', `Point restauré`)
   }
 
+  const exportFilteredAsCsv = () => {
+    if (filteredRows.length === 0) return
+    const rows = filteredRows.map(r => {
+      const { tone } = crState(r, today, latestMeetingDate)
+      const ts = TONE_STYLE[tone]
+      return {
+        Numéro: r.number,
+        'N°CR': r.crNo ?? '—',
+        Lot: lotLabel(r.lotId),
+        Entreprise: r.company || '—',
+        Remarque: r.description,
+        Type: reserveKind(r) === 'action' ? 'Action' : 'Observation',
+        Statut: ts.label || '—',
+        Échéance: frDate(r.dueDate),
+        'Date réunion': frDate(r.meetingDate),
+        Rappel: r.reminder ? 'Oui' : 'Non',
+      }
+    })
+    const headers = ['Numéro', 'N°CR', 'Lot', 'Entreprise', 'Remarque', 'Type', 'Statut', 'Échéance', 'Date réunion', 'Rappel']
+    const csvContent = [
+      headers.join('\t'),
+      ...rows.map(r => headers.map(h => r[h as keyof typeof r] ?? '').join('\t'))
+    ].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `cr-export-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    logActivity('doc', `Export CR : ${filteredRows.length} point(s) exporté(s)`)
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {/* Toolbar */}
@@ -300,6 +335,11 @@ export function CrTable() {
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
+        {filteredRows.length > 0 && (
+          <button onClick={exportFilteredAsCsv} title="Exporter les points actuels" style={{ ...ghostBtn, color: 'var(--navy)' }}>
+            <Download size={14} /> Exporter ({filteredRows.length})
+          </button>
+        )}
         {selectedRows.size > 0 && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid var(--line)' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)' }}>{selectedRows.size} sélectionné(s)</span>
