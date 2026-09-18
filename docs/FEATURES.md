@@ -109,6 +109,8 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Query params (deep linking)** | URL `?crNo=N&view=par-lot&search=terme` pour mémoriser filtres et vue ; synced bidirectionnelle | `CrTable.tsx` (useEffect hooks) | localStorage ↔ URL replaceState |
 | **Landscape print mode** | CSS `@media print and (orientation: landscape)` avec redimensionnement ; @page pour marges A4 | `src/styles.css` | CSS @page rules |
 | **Notes & suivi consolidé** | Onglet dédié listant tous les suivis de toutes les réserves, triés par date DESC, filtrables | `Notes.tsx` | `src/lib/reserves.ts` |
+| **Breadcrumb navigation** | Navigation contexte : CR > Journal CR / Notes & suivi / Réunions | `Breadcrumbs.tsx`, `CR.tsx` | `buildCrBreadcrumbs()` helper |
+| **Reusable URL state hook** | `useUrlState()` et `useUrlStates()` pour syncer n'importe quel état React à l'URL | `src/lib/useUrlState.ts` | Pattern bidirectionnel replaceState |
 | **Réunions** | Liste des réunions de chantier (PV, participants, ordre du jour) | `Meetings.tsx` | `src/lib/meetings.ts` |
 | **Réserves terrain** | Vue parallèle des réserves liées aux visites de terrain | `Reserves.tsx` | `src/lib/reserves.ts` |
 

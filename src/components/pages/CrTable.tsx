@@ -9,6 +9,7 @@ import {
   type FollowUpStatus,
 } from '../../lib/reserves'
 import { getReserves, saveReserves, getLotsConfig, logActivity } from '../../lib/repo'
+import { useUrlStates } from '../../lib/useUrlState'
 import { sectionLabel, input, ghostBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
 
@@ -80,9 +81,12 @@ export function CrTable() {
   // ── URL state sync: update URL when state changes ───────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (view !== 'liste') params.set('view', view); else params.delete('view')
-    if (searchTerm) params.set('search', encodeURIComponent(searchTerm)); else params.delete('search')
-    if (selectedCr !== null) params.set('crNo', String(selectedCr)); else params.delete('crNo')
+    if (view !== 'liste') params.set('view', view)
+    else params.delete('view')
+    if (searchTerm) params.set('search', encodeURIComponent(searchTerm))
+    else params.delete('search')
+    if (selectedCr !== null) params.set('crNo', String(selectedCr))
+    else params.delete('crNo')
     const search = params.toString()
     window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
   }, [view, searchTerm, selectedCr])
