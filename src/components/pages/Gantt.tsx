@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
 } from '../../lib/repo'
+import { createTask } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
@@ -106,6 +107,9 @@ export function Gantt() {
   const [showBaseline, setShowBaseline] = useState(false)
   const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
+  const [editMode, setEditMode] = useState(false)
+  const [snapshot, setSnapshot] = useState<GanttTask[] | null>(null)
+  const [addForm, setAddForm] = useState(false)
   const commitments = useMemo(() => getCommitments(), [])
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
@@ -181,6 +185,17 @@ export function Gantt() {
     })
     setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
   }
+  const enterEdit = () => { setSnapshot(ganttTasks); setEditMode(true) }
+  const confirmEdit = () => { setSnapshot(null); setEditMode(false); logActivity('planning', 'Planning modifié (mode édition)') }
+  const cancelEdit = () => { if (snapshot) { setGanttTasks(snapshot); saveGanttTasks(snapshot) } setSnapshot(null); setEditMode(false) }
+
+  const addTaskFromForm = (lotId: string, title: string, start: string, duration: number) => {
+    const [y, m, d] = start.split('-').map(Number)
+    const res = createTask(ganttTasks, lotId, { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) })
+    if (res.ok) { setGanttTasks(res.tasks); saveGanttTasks(res.tasks); logActivity('planning', `Tâche ajoutée : ${title}`) }
+    setAddForm(false)
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -226,6 +241,19 @@ export function Gantt() {
       ) : (
         <>
           {/* Filters + controls */}
+          {/* Edit mode bar */}
+          {editMode ? (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', background: '#fef3c7', borderRadius: '8px', padding: '8px 12px' }}>
+              <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#92400e' }}>Mode édition — modifiez les tâches par glisser-déposer ou via les détails</span>
+              <button onClick={confirmEdit} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#15803d', color: '#fff', border: 'none', borderRadius: '7px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                <Check size={13} /> Confirmer
+              </button>
+              <button onClick={cancelEdit} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '7px', padding: '6px 12px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                <X size={13} /> Annuler
+              </button>
+            </div>
+          ) : null}
+
           <div className="g-toolbar">
             <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
             <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
@@ -266,12 +294,37 @@ export function Gantt() {
             </button>
             <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
             <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
+            <button
+              className={`gtb ${editMode ? 'on' : ''}`}
+              onClick={editMode ? confirmEdit : enterEdit}
+              title={editMode ? 'Confirmer les modifications' : 'Passer en mode édition'}
+              style={editMode ? { background: '#dcfce7', color: '#15803d' } : {}}
+            >
+              <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
+            </button>
+            <button
+              className="gtb"
+              onClick={() => setAddForm(a => !a)}
+              title="Ajouter une tâche au planning"
+              style={{ background: '#eff6ff', color: '#2563eb' }}
+            >
+              <Plus size={14} />
+            </button>
           </div>
+
+          {addForm && (
+            <AddTaskForm
+              lots={ganttTasks.map(t => ({ id: t.lot_id, label: t.title }))}
+              onAdd={addTaskFromForm}
+              onCancel={() => setAddForm(false)}
+            />
+          )}
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
               tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : displayTree}
               viewState={viewState}
+              readOnly={!editMode}
               onToggleExpanded={id => setExpandedTasks(prev => {
                 const next = new Set(prev)
                 if (next.has(id)) next.delete(id); else next.add(id)
@@ -472,6 +525,51 @@ function DelayPanel({ tasks, onClose }: { tasks: GanttTask[]; onClose: () => voi
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Formulaire ajout de tâche ─────────────────────────────────────────────────
+function AddTaskForm({ lots, onAdd, onCancel }: {
+  lots: { id: string; label: string }[]
+  onAdd: (lotId: string, title: string, start: string, duration: number) => void
+  onCancel: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [lotId, setLotId] = useState(lots[0]?.id ?? '')
+  const [title, setTitle] = useState('')
+  const [start, setStart] = useState(today)
+  const [duration, setDuration] = useState('5')
+  const inp: React.CSSProperties = { padding: '7px 10px', borderRadius: '7px', border: '1px solid #d1dbe5', fontSize: '12px', color: '#1f2937', background: '#fff', width: '100%', boxSizing: 'border-box' }
+  return (
+    <div style={{ padding: '12px', borderRadius: '10px', border: '1px solid #d1dbe5', background: '#f8fafc', marginBottom: '10px' }}>
+      <div style={{ fontWeight: 700, fontSize: '12px', color: '#02457A', marginBottom: '8px' }}>Nouvelle tâche</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px', marginBottom: '7px' }}>
+        <select value={lotId} onChange={e => setLotId(e.target.value)} style={inp}>
+          {lots.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titre de la tâche" style={inp} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px', marginBottom: '10px' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: '#5b7183' }}>
+          Début
+          <input type="date" value={start} onChange={e => setStart(e.target.value)} style={inp} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: '#5b7183' }}>
+          Durée (jours)
+          <input type="number" min={1} value={duration} onChange={e => setDuration(e.target.value)} style={inp} />
+        </label>
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          disabled={!title.trim() || !lotId}
+          onClick={() => onAdd(lotId, title.trim(), start, parseInt(duration) || 1)}
+          style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 14px', borderRadius: '7px', border: 'none', background: '#018ABE', color: '#fff', fontWeight: 700, fontSize: '12px', cursor: title.trim() && lotId ? 'pointer' : 'not-allowed', opacity: title.trim() && lotId ? 1 : 0.5 }}
+        >
+          <Plus size={13} /> Ajouter
+        </button>
+        <button onClick={onCancel} style={{ padding: '7px 12px', borderRadius: '7px', border: '1px solid #d1dbe5', background: '#fff', color: '#5b7183', fontSize: '12px', cursor: 'pointer' }}>Annuler</button>
       </div>
     </div>
   )
