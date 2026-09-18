@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Meetings } from './Meetings'
 import { CrTable } from './CrTable'
+import { Notes } from './Notes'
 
-type Section = 'journal' | 'reunions'
-const LABEL: Record<Section, string> = { journal: 'Journal CR', reunions: 'Réunions' }
+type Section = 'journal' | 'reunions' | 'notes'
+const LABEL: Record<Section, string> = { journal: 'Journal CR', reunions: 'Réunions', notes: 'Notes & suivi' }
 
 export function CR() {
   const [section, setSection] = useState<Section>('journal')
 
   const segmented = (
     <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-      {(['journal', 'reunions'] as const).map(s => (
+      {(['journal', 'notes', 'reunions'] as const).map(s => (
         <button
           key={s}
           onClick={() => setSection(s)}
@@ -27,6 +28,15 @@ export function CR() {
       <div style={{ padding: '12px', paddingBottom: '80px' }}>
         {segmented}
         <Meetings />
+      </div>
+    )
+  }
+
+  if (section === 'notes') {
+    return (
+      <div>
+        <div style={{ padding: '12px 12px 0' }}>{segmented}</div>
+        <Notes />
       </div>
     )
   }

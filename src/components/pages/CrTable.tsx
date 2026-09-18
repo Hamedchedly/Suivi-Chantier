@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
@@ -62,6 +62,30 @@ export function CrTable() {
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
   const today = todayISO()
+
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const savedView = params.get('view') as 'liste' | 'par-lot' | null
+    if (savedView === 'liste' || savedView === 'par-lot') setView(savedView)
+    const searchParam = params.get('search')
+    if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
+    const crParam = params.get('crNo')
+    if (crParam) {
+      const num = Number(crParam)
+      if (!isNaN(num)) setSelectedCr(num)
+    }
+  }, [])
+
+  // ── URL state sync: update URL when state changes ───────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (view !== 'liste') params.set('view', view); else params.delete('view')
+    if (searchTerm) params.set('search', encodeURIComponent(searchTerm)); else params.delete('search')
+    if (selectedCr !== null) params.set('crNo', String(selectedCr)); else params.delete('crNo')
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [view, searchTerm, selectedCr])
 
   const toggleColumnVis = (col: keyof ColumnVisibility) => {
     const next = { ...columnVis, [col]: !columnVis[col] }
