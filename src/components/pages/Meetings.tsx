@@ -130,6 +130,13 @@ export function Meetings() {
     document.body.removeChild(link)
   }
 
+  const clearCompletedActions = (mid: string) => {
+    setMeetings(prev => prev.map(m => m.id === mid
+      ? { ...m, actions: m.actions.filter(a => a.status !== 'done') }
+      : m))
+    logActivity('resolve', `Actions soldées supprimées`)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
@@ -209,7 +216,7 @@ export function Meetings() {
                   <InlineAdd placeholder="Nouvelle décision…" onAdd={text => addDecision(m.id, text)} />
 
                   <div style={{ height: '12px' }} />
-                  <SubTitle icon={<Check size={12} />} label="Actions" />
+                  <SubTitle icon={<Check size={12} />} label="Actions" action={m.actions.some(a => a.status === 'done') ? { text: 'Nettoyer', onClick: () => clearCompletedActions(m.id) } : undefined} />
                   {m.actions.length === 0 && <Empty>Aucune action.</Empty>}
                   {m.actions.map(a => (
                     <ActionRow key={a.id} action={a} overdue={overdue.has(a.id)} onToggle={() => toggleAction(m.id, a.id)} onDelete={() => deleteAction(m.id, a.id)} />
@@ -271,9 +278,10 @@ function ActionAdd({ onAdd }: { onAdd: (text: string, assignee: string, due: str
   )
 }
 
-const SubTitle = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: '6px' }}>
-    {icon}{label}
+const SubTitle = ({ icon, label, action }: { icon: React.ReactNode; label: string; action?: { text: string; onClick: () => void } }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)', marginBottom: '6px', justifyContent: 'space-between' }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>{icon}{label}</span>
+    {action && <button onClick={action.onClick} style={{ fontSize: '9px', fontWeight: 600, color: 'var(--navy)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>{action.text}</button>}
   </div>
 )
 const Empty = ({ children }: { children: React.ReactNode }) => (
