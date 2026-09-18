@@ -61,6 +61,7 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Points à revoir** | Section affichant les réserves ouvertes non levées rattachées à la zone courante | `ZoneControl.tsx` (CarriedPoints) | `src/lib/reserves.ts` (carriedOverPoints) |
 | **Menu overflow sous-tâches** | Actions Engagement + Marquer N/A regroupées dans menu 3 points ; confirmation window.confirm() | `LotControl.tsx` (overflow-menu panel) | — |
 | **Notes de tâche avec délai** | Bouton « + Note », formulaire inline : texte, toggle Important (rouge), sélecteur délai (1-4 sem) → dueDate | `LotControl.tsx` (noteForm state, submitNote) | — |
+| **Éditer titre tâche** | Bouton Pencil sur TaskCard, formulaire inline pour corriger le titre de la tâche en visite | `LotControl.tsx` (editForm state, submitEdit) | — |
 | **Contrôle par lot (LotControl)** | Vue lot : TaskCard par tâche, sous-tâches expandables | `LotControl.tsx` | `src/lib/visits.ts` |
 | **Ajout tâche depuis visite** | Bouton « + » par lot → crée une tâche dans le planning | `LotControl.tsx` (onAddPlanTask) | `src/lib/planning.ts` (createTask) |
 | **Ajout sous-tâche depuis visite** | Bouton « ↳+ » sur TaskCard → crée une sous-tâche | `LotControl.tsx` (onAddSubTask) | `src/lib/planning.ts` (createSubTask) |

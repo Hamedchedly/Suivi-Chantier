@@ -238,6 +238,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
   const [subAdded, setSubAdded] = useState<string | null>(null)
   const [noteForm, setNoteForm] = useState<{ text: string; delayDays: number; important: boolean } | null>(null)
+  const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
@@ -265,6 +266,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       priority: noteForm.important ? 'high' : 'low',
     })
     setNoteForm(null)
+  }
+  const submitEdit = () => {
+    if (!editForm || !editForm.title.trim()) return
+    onPatch({ title: editForm.title.trim() })
+    setEditForm(null)
   }
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
@@ -322,6 +328,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         {(task.state === 'ok' || (task.progress ?? 0) >= 100) && (
           <button onClick={() => setCollapsed(true)} title="Replier" style={miniBtn('#15803d', false)}>
             <Check size={14} />
+          </button>
+        )}
+        {!readOnly && (
+          <button onClick={() => setEditForm({ title: task.title, start: '', end: '' })} title="Éditer le titre" style={miniBtn('#0284c7', !!editForm)}>
+            <Pencil size={14} />
           </button>
         )}
         {!readOnly && (
@@ -465,6 +476,30 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           {remarks.map(r => (
             <RemarkRow key={r.id} remark={r} readOnly={readOnly} onUpdate={onUpdateRemark} onRemove={onRemoveRemark} />
           ))}
+        </div>
+      )}
+
+      {/* Formulaire édition titre tâche */}
+      {editForm && !readOnly && (
+        <div style={{ margin: '4px 0 10px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#0369a1', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Pencil size={12} /> Éditer le titre
+          </div>
+          <input
+            autoFocus
+            type="text"
+            value={editForm.title}
+            placeholder="Titre de la tâche"
+            onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+            onKeyDown={e => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') setEditForm(null) }}
+            style={{ ...input, width: '100%', fontSize: '12px', marginBottom: '8px' }}
+          />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={submitEdit} disabled={!editForm.title.trim()} style={{ ...ghostBtn, background: editForm.title.trim() ? '#0284c7' : '#e5e7eb', color: editForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700 }}>
+              Enregistrer
+            </button>
+            <button onClick={() => setEditForm(null)} style={ghostBtn}>Annuler</button>
+          </div>
         </div>
       )}
 
