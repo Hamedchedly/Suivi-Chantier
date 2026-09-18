@@ -52,6 +52,8 @@ export function CrTable() {
   const [editing, setEditing] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showVisibility, setShowVisibility] = useState(false)
+  const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -123,9 +125,10 @@ export function CrTable() {
     )
   }, [reserves, today, latestMeetingDate])
 
-  // Filtered to selected CR (null = all) and search term
+  // Filtered to selected CR (null = all), search term, and status filters
   const filteredRows = useMemo(() => {
     let result = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
       result = result.filter(r =>
@@ -135,8 +138,26 @@ export function CrTable() {
         r.number.toLowerCase().includes(term)
       )
     }
+
+    if (statusFilter.size > 0) {
+      result = result.filter(r => {
+        const { tone } = crState(r, today, latestMeetingDate)
+        return statusFilter.has(tone)
+      })
+    }
+
+    // Apply sorting based on sortBy
+    if (sortBy === 'crNo') {
+      result.sort((a, b) => (b.crNo ?? -1) - (a.crNo ?? -1))
+    } else if (sortBy === 'date') {
+      result.sort((a, b) => (b.meetingDate ?? '').localeCompare(a.meetingDate ?? ''))
+    } else if (sortBy === 'lot') {
+      result.sort((a, b) => a.lotId.localeCompare(b.lotId))
+    }
+    // 'status' is already the default sort in rows
+
     return result
-  }, [rows, selectedCr, searchTerm])
+  }, [rows, selectedCr, searchTerm, statusFilter, sortBy, today, latestMeetingDate])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
 
@@ -304,6 +325,54 @@ export function CrTable() {
           style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
         />
         {searchTerm && <button onClick={() => setSearchTerm('')} style={{ ...ghostBtn, padding: '6px 8px' }}><X size={14} /></button>}
+      </div>
+
+      {/* Sort buttons */}
+      <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px', marginBottom: '12px', width: 'fit-content' }}>
+        {[
+          { value: 'status' as const, label: 'Par statut' },
+          { value: 'crNo' as const, label: 'Par N°CR' },
+          { value: 'date' as const, label: 'Par date' },
+          { value: 'lot' as const, label: 'Par lot' },
+        ].map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setSortBy(opt.value)}
+            title={opt.label}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: sortBy === opt.value ? '#fff' : 'transparent', color: sortBy === opt.value ? '#02457A' : '#5b7183' }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Status filter buttons */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        {[
+          { tone: 'overdue', label: 'En retard' },
+          { tone: 'reminder', label: 'Rappel' },
+          { tone: 'reported', label: 'Reporté' },
+          { tone: 'done', label: 'Terminé' },
+          { tone: 'obsolete', label: 'Obsolète' },
+        ].map(({ tone, label }) => {
+          const ts = TONE_STYLE[tone]
+          const isActive = statusFilter.has(tone)
+          return (
+            <button
+              key={tone}
+              onClick={() => {
+                const next = new Set(statusFilter)
+                if (isActive) next.delete(tone)
+                else next.add(tone)
+                setStatusFilter(next)
+              }}
+              title={label}
+              style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: `1px solid ${ts.color}`, background: isActive ? ts.bg : '#fff', color: ts.color, cursor: 'pointer' }}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       <div style={sectionLabel}>Points de CR ({filteredRows.length})</div>
