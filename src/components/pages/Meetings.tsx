@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X, Copy } from 'lucide-react'
+import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X, Copy, Download } from 'lucide-react'
 import { Meeting, MeetingAction, nextActionRef, overdueActions } from '../../lib/meetings'
 import { getMeetings, saveMeetings, logActivity } from '../../lib/repo'
 
@@ -100,14 +100,47 @@ export function Meetings() {
     logActivity('doc', `Réunion dupliquée — ${m.title}`)
   }
 
+  const exportActionsAsCsv = () => {
+    const allActions = meetings.flatMap(m =>
+      m.actions.map(a => ({
+        Ref: a.ref,
+        Description: a.text,
+        Responsable: a.assignee,
+        Échéance: fmtDate(a.dueDate),
+        Statut: a.status === 'done' ? 'Soldée' : 'En cours',
+        Réunion: m.title,
+      }))
+    )
+    if (allActions.length === 0) return
+
+    const headers = ['Ref', 'Description', 'Responsable', 'Échéance', 'Statut', 'Réunion']
+    const csvContent = [
+      headers.join('\t'),
+      ...allActions.map(a => headers.map(h => a[h as keyof typeof a]).join('\t'))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `actions-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
           {meetings.length} réunion{meetings.length > 1 ? 's' : ''} • {openCount} action{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''}
           {overdue.size > 0 && <span style={{ color: 'var(--bad)', fontWeight: 700 }}> • {overdue.size} en retard</span>}
         </div>
-        <button onClick={() => setShowForm(v => !v)} title="Nouvelle réunion" style={primaryBtn}><Plus size={15} /> Réunion</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {openCount > 0 && <button onClick={exportActionsAsCsv} title="Exporter les actions" style={{ ...primaryBtn, background: '#018ABE' }}><Download size={15} /> Export CSV</button>}
+          <button onClick={() => setShowForm(v => !v)} title="Nouvelle réunion" style={primaryBtn}><Plus size={15} /> Réunion</button>
+        </div>
       </div>
 
       {showForm && (
