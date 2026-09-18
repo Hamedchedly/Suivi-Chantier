@@ -100,6 +100,22 @@ export function Visite() {
   const back = () => setStack(s => (s.length > 1 ? s.slice(0, -1) : s))
   const swap = (v: View) => setStack(s => [...s.slice(0, -1), v])
 
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const visitId = params.get('visitId')
+    if (visitId) setActiveId(visitId)
+  }, [])
+
+  // ── URL state sync: update URL when active visit changes ──────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (activeId) params.set('visitId', activeId)
+    else params.delete('visitId')
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [activeId])
+
   // The system Back button unwinds this stack before leaving the app.
   const stackRef = useRef(stack)
   stackRef.current = stack

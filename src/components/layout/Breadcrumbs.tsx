@@ -73,3 +73,31 @@ export function buildCrBreadcrumbs(section: 'journal' | 'notes' | 'reunions', se
 
   return crumbs
 }
+
+/** Build breadcrumbs for Gantt module */
+export function buildGanttBreadcrumbs(mode: 'gantt' | 'matrix', group?: string): Crumb[] {
+  return [
+    { label: 'Planning' },
+    { label: mode === 'gantt' ? 'Gantt' : 'Matrice', active: true },
+    group && group !== 'lot' ? { label: group === 'zone' ? 'par Zone' : 'Chronologique', active: true } : null,
+  ].filter((c): c is Crumb => c !== null)
+}
+
+/** Build breadcrumbs for Visite module */
+export function buildVisiteBreadcrumbs(visitLabel?: string): Crumb[] {
+  return [
+    { label: 'Visites' },
+    visitLabel ? { label: visitLabel, active: true } : null,
+  ].filter((c): c is Crumb => c !== null)
+}
+
+/** Build breadcrumbs for Finances module */
+export function buildFinancesBreadcrumbs(section: 'marches' | 'avenants' | 'situations' | 'dpgf'): Crumb[] {
+  const labels: Record<typeof section, string> = {
+    marches: 'Marchés',
+    avenants: 'Avenants',
+    situations: 'Situations',
+    dpgf: 'DPG/F',
+  }
+  return [{ label: 'Finances' }, { label: labels[section], active: true }]
+}
