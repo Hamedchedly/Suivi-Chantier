@@ -10,8 +10,9 @@
 
 | Couche | Rôle | Fichiers clés |
 |--------|------|---------------|
+| **Routing** | Navigation URL-based (/, /planning, /visite, /cr…) synced avec état React | `src/App.tsx` (PAGE_ROUTES, setUrlForPage, getPageFromUrl) |
 | **Persistence** | Unique frontière de lecture/écriture (localStorage aujourd'hui, Supabase demain) | `src/lib/repo.ts` |
-| **Navigation** | Stack de vues `View[]` avec push/pop/swap — sans router | `src/App.tsx`, `src/components/layout/navConfig.tsx` |
+| **Navigation** | Stack de vues `View[]` avec push/pop/swap — contrôlée par URL/état | `src/App.tsx`, `src/components/layout/navConfig.tsx` |
 | **Shell** | Barre du bas, topbar, feuille Gestion, menu compte | `src/components/layout/AppShell.tsx`, `Topbar.tsx`, `GestionSheet.tsx`, `Navigation.tsx`, `SideNav.tsx` |
 | **Auth** | Comptes locaux + rôles (superadmin, chef de projet, entreprise…) | `src/lib/auth.ts`, `src/lib/supabaseAuth.ts` |
 | **Sync** | Write-through Supabase (optionnel, nécessite auth) | `src/lib/sync.ts`, `src/lib/supabase.ts` |
@@ -19,6 +20,13 @@
 | **Types globaux** | Type `GanttTask` avec 4 couches de dates | `src/types/gantt.ts` |
 
 **Cloisonnement multi-projet :** toutes les clés localStorage autres que GLOBAL sont préfixées `<base>::<projectId>`. Changer de projet = changer de jeu de données complet.
+
+**Routing et historique :** L'URL change avec la navigation ; le bouton retour du navigateur fonctionne nativement. Les routes sont :
+- `/` → home (accueil)
+- `/planning` → gantt (planning)
+- `/visite` → visite (visites & réunions)
+- `/cr` → cr (réserves & CR)
+- `/entreprises`, `/finances`, `/rapports`, `/alertes`, `/structure`, `/config`, `/comptes`, `/demandes`, `/projets`, `/moncompte`
 
 ---
 
@@ -96,6 +104,8 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Édition inline** | Bouton Modifier sur chaque point → formulaire en place | `CrTable.tsx` (EditForm) | — |
 | **Suivi de réserve** | Terminé / +1 sem / +2 sem / +4 sem / Commenter / Obsolète | `CrTable.tsx` | `src/lib/reserves.ts` (applyFollowUp) |
 | **Attribution crNo** | À la clôture sans n° CR, attribue le crNo courant automatiquement | `CrTable.tsx` (follow) | — |
+| **Sélecteur visibilité colonnes** | Cocher/décocher les colonnes à afficher : N°CR, Description, Lot/Entreprise, Type, Échéance, Statut | `CrTable.tsx` (showVisibility, columnVis) | localStorage (sc_cr_columns) |
+| **Imprimer journal CR** | Bouton d'impression avec CSS print dédié ; cache les colonnes masquées | `CrTable.tsx` (window.print) | `src/styles.css` (@media print) |
 | **Réunions** | Liste des réunions de chantier (PV, participants, ordre du jour) | `Meetings.tsx` | `src/lib/meetings.ts` |
 | **Réserves terrain** | Vue parallèle des réserves liées aux visites de terrain | `Reserves.tsx` | `src/lib/reserves.ts` |
 
@@ -262,4 +272,4 @@ TOUT ──► repo.ts (localStorage) ──► [Futur : Supabase via sync.ts]
 
 ---
 
-*Dernière mise à jour : 2026-09-18 — fonctionnalités batch 2 complètes.*
+*Dernière mise à jour : 2026-09-18 — PARTIE 0-4 complètes (routing URL, export CR).*
