@@ -55,6 +55,7 @@ export function CrTable() {
   const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [showArchived, setShowArchived] = useState(false)
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -126,9 +127,13 @@ export function CrTable() {
     )
   }, [reserves, today, latestMeetingDate])
 
-  // Filtered to selected CR (null = all), search term, and status filters
+  // Filtered to selected CR (null = all), search term, status filters, and archive
   const filteredRows = useMemo(() => {
     let result = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
+
+    if (!showArchived) {
+      result = result.filter(r => !r.archived)
+    }
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
@@ -158,7 +163,7 @@ export function CrTable() {
     // 'status' is already the default sort in rows
 
     return result
-  }, [rows, selectedCr, searchTerm, statusFilter, sortBy, today, latestMeetingDate])
+  }, [rows, selectedCr, searchTerm, statusFilter, sortBy, showArchived, today, latestMeetingDate])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
 
@@ -250,6 +255,18 @@ export function CrTable() {
     setSelectedRows(next)
   }
 
+  const archiveReserve = (id: string) => {
+    const updated = reserves.map(r => r.id === id ? { ...r, archived: true } : r)
+    persist(updated)
+    logActivity('doc', `Point archivé`)
+  }
+
+  const unarchiveReserve = (id: string) => {
+    const updated = reserves.map(r => r.id === id ? { ...r, archived: false } : r)
+    persist(updated)
+    logActivity('doc', `Point restauré`)
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {/* Toolbar */}
@@ -283,10 +300,13 @@ export function CrTable() {
             <Layers size={13} /> Par lot
           </button>
         </div>
-        {/* Print + column visibility */}
+        {/* Print + column visibility + archive */}
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => window.print()} title="Imprimer" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px' }}>
             <Printer size={13} /> Imprimer
+          </button>
+          <button onClick={() => setShowArchived(v => !v)} title={showArchived ? 'Masquer les archivés' : 'Afficher les archivés'} style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showArchived ? '#fff' : 'transparent', color: showArchived ? 'var(--navy)' : 'var(--muted)' }}>
+            {showArchived ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowVisibility(v => !v)} title="Colonnes à afficher" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showVisibility ? '#fff' : 'transparent' }}>
@@ -518,7 +538,13 @@ export function CrTable() {
                           </div>
                         )}
                         {r.status !== 'open' && (
-                          <button onClick={() => follow(r, 'in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => follow(r, 'in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
+                            <button onClick={() => archiveReserve(r.id)} style={{ ...ghostBtn, borderColor: '#d1d5db', color: '#6b7280' }}>Archiver</button>
+                          </div>
+                        )}
+                        {r.archived && (
+                          <button onClick={() => unarchiveReserve(r.id)} style={ghostBtn}>Restaurer</button>
                         )}
                       </div>
                     )
