@@ -15,10 +15,20 @@ export function Meetings() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
+  const [sortBy, setSortBy] = useState<'date' | 'actions'>('date')
 
   useEffect(() => { saveMeetings(meetings) }, [meetings])
 
   const overdue = new Set(overdueActions(meetings, new Date()).map(a => a.id))
+
+  const sortedMeetings = [...meetings].sort((a, b) => {
+    if (sortBy === 'date') {
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    }
+    const aOpen = a.actions.filter(x => x.status === 'todo').length
+    const bOpen = b.actions.filter(x => x.status === 'todo').length
+    return bOpen - aOpen
+  })
 
   const toggleOpen = (id: string) => setOpen(prev => {
     const n = new Set(prev)
@@ -140,9 +150,18 @@ export function Meetings() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-          {meetings.length} réunion{meetings.length > 1 ? 's' : ''} • {openCount} action{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''}
-          {overdue.size > 0 && <span style={{ color: 'var(--bad)', fontWeight: 700 }}> • {overdue.size} en retard</span>}
+        <div style={{ fontSize: '12px', color: 'var(--muted)', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>
+            {meetings.length} réunion{meetings.length > 1 ? 's' : ''} • {openCount} action{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''}
+            {overdue.size > 0 && <span style={{ color: 'var(--bad)', fontWeight: 700 }}> • {overdue.size} en retard</span>}
+          </span>
+          <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '6px' }}>
+            {(['date', 'actions'] as const).map(sort => (
+              <button key={sort} onClick={() => setSortBy(sort)} style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 600, border: 'none', borderRadius: '4px', background: sortBy === sort ? '#fff' : 'transparent', color: sortBy === sort ? '#02457A' : '#5b7183', cursor: 'pointer' }}>
+                {sort === 'date' ? 'Par date' : 'Par actions'}
+              </button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {openCount > 0 && <button onClick={exportActionsAsCsv} title="Exporter les actions" style={{ ...primaryBtn, background: '#018ABE' }}><Download size={15} /> Export CSV</button>}
@@ -161,7 +180,7 @@ export function Meetings() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {meetings.map(m => {
+        {sortedMeetings.map(m => {
           const isOpen = open.has(m.id)
           const isEditing = editId === m.id
           return (
