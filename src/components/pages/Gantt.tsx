@@ -106,6 +106,38 @@ export function Gantt() {
   const [showForecast, setShowForecast] = useState(false)
   const [showBaseline, setShowBaseline] = useState(false)
   const [showEcarts, setShowEcarts] = useState(false)
+
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const savedMode = params.get('ganttMode') as 'gantt' | 'matrix' | null
+    if (savedMode === 'gantt' || savedMode === 'matrix') setMode(savedMode)
+    const savedGroup = params.get('ganttGroup') as GanttGroup | null
+    if (savedGroup && ['lot', 'zone', 'chrono'].includes(savedGroup)) setGroup(savedGroup)
+    if (params.get('showBaseline') === '1') setShowBaseline(true)
+    if (params.get('showEcarts') === '1') setShowEcarts(true)
+    if (params.get('showDelays') === '1') setShowDelays(true)
+    if (params.get('showForecast') === '1') setShowForecast(true)
+  }, [])
+
+  // ── URL state sync: update URL when view state changes ──────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (mode !== 'gantt') params.set('ganttMode', mode)
+    else params.delete('ganttMode')
+    if (group !== prefs0.group) params.set('ganttGroup', group)
+    else params.delete('ganttGroup')
+    if (showBaseline) params.set('showBaseline', '1')
+    else params.delete('showBaseline')
+    if (showEcarts) params.set('showEcarts', '1')
+    else params.delete('showEcarts')
+    if (showDelays) params.set('showDelays', '1')
+    else params.delete('showDelays')
+    if (showForecast) params.set('showForecast', '1')
+    else params.delete('showForecast')
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [mode, group, showBaseline, showEcarts, showDelays, showForecast, prefs0.group])
   const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const [editMode, setEditMode] = useState(false)
