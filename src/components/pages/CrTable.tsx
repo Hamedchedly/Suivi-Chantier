@@ -54,6 +54,7 @@ export function CrTable() {
   const [showVisibility, setShowVisibility] = useState(false)
   const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -222,6 +223,33 @@ export function CrTable() {
     }
   }
 
+  const bulkMarkAsDone = () => {
+    const updated = reserves.map(r =>
+      selectedRows.has(r.id) ? { ...r, status: 'resolved' as const } : r
+    )
+    persist(updated)
+    logActivity('doc', `${selectedRows.size} point(s) marqué(s) comme terminé(s)`)
+    setSelectedRows(new Set())
+  }
+
+  const bulkDelete = () => {
+    if (!window.confirm(`Supprimer ${selectedRows.size} point(s) ?`)) return
+    const updated = reserves.filter(r => !selectedRows.has(r.id))
+    persist(updated)
+    logActivity('doc', `${selectedRows.size} point(s) supprimé(s)`)
+    setSelectedRows(new Set())
+  }
+
+  const bulkToggleSelection = (rowIds: string[]) => {
+    const allSelected = rowIds.every(id => selectedRows.has(id))
+    const next = new Set(selectedRows)
+    rowIds.forEach(id => {
+      if (allSelected) next.delete(id)
+      else next.add(id)
+    })
+    setSelectedRows(next)
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {/* Toolbar */}
@@ -234,6 +262,17 @@ export function CrTable() {
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
+        {selectedRows.size > 0 && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid var(--line)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)' }}>{selectedRows.size} sélectionné(s)</span>
+            <button onClick={bulkMarkAsDone} title="Marquer comme terminé" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px', color: 'var(--ok)' }}>
+              <Check size={14} /> Terminer
+            </button>
+            <button onClick={bulkDelete} title="Supprimer les sélections" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px', color: '#dc2626' }}>
+              <Ban size={14} /> Supprimer
+            </button>
+          </div>
+        )}
         <div style={{ flex: 1 }} />
         {/* View toggle */}
         <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px' }}>
@@ -382,7 +421,13 @@ export function CrTable() {
       {view === 'liste' && filteredRows.length > 0 && (
         <div className="cr-list-table" style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px' }}>
           <div style={{ minWidth: '640px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.id))}
+                onChange={() => bulkToggleSelection(filteredRows.map(r => r.id))}
+                style={{ accentColor: '#02457A', cursor: 'pointer' }}
+              />
               {columnVis.crNo && <span>CR</span>}
               {columnVis.description && <span>Point</span>}
               {columnVis.lotCompany && <span>Lot / Entreprise</span>}
@@ -398,8 +443,21 @@ export function CrTable() {
               const isEditing = editing === r.id
               return (
                 <div key={r.id} style={{ borderBottom: '1px solid #eef2f6', background: ts.bg }}>
-                  <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
-                    {columnVis.crNo && (
+                  <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.has(r.id)}
+                      onChange={() => {
+                        const next = new Set(selectedRows)
+                        if (next.has(r.id)) next.delete(r.id)
+                        else next.add(r.id)
+                        setSelectedRows(next)
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ accentColor: '#02457A', cursor: 'pointer' }}
+                    />
+                    <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'contents', cursor: 'pointer' }}>
+                      {columnVis.crNo && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
                         {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         {r.crNo != null ? `#${r.crNo}` : '—'}
@@ -415,6 +473,7 @@ export function CrTable() {
                     {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
                     {columnVis.dueDate && <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>}
                     {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
+                    </div>
                   </div>
 
                   {expanded && (
@@ -560,7 +619,7 @@ export function CrTable() {
 }
 
 const buildGridCols = (vis: ColumnVisibility): string => {
-  const cols: string[] = []
+  const cols: string[] = ['30px'] // checkbox column
   if (vis.crNo) cols.push('52px')
   if (vis.description) cols.push('1fr')
   if (vis.lotCompany) cols.push('130px')
