@@ -59,6 +59,7 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Barres d'avancement par zone** | Deux barres visuelles (travaux bleu, contrôle vert) affichant les % pour chaque logement | `Visite.tsx` (zone row rendering) | — |
 | **Tâches terminées pliées** | Par défaut, les tâches à 100% affichées en mode compact ; dépliable au clic | `LotControl.tsx` (TaskCard, collapsed state) | — |
 | **Points à revoir** | Section affichant les réserves ouvertes non levées rattachées à la zone courante | `ZoneControl.tsx` (CarriedPoints) | `src/lib/reserves.ts` (carriedOverPoints) |
+| **Pas de scroll-to-top** | Suppression du scroll automatique lors changement de lot (conservation position) | `LotControl.tsx` (removed useEffect) | — |
 | **Menu overflow sous-tâches** | Actions Engagement + Marquer N/A regroupées dans menu 3 points ; confirmation window.confirm() | `LotControl.tsx` (overflow-menu panel) | — |
 | **Notes de tâche avec délai** | Bouton « + Note », formulaire inline : texte, toggle Important (rouge), sélecteur délai (1-4 sem) → dueDate | `LotControl.tsx` (noteForm state, submitNote) | — |
 | **Éditer titre tâche** | Bouton Pencil sur TaskCard, formulaire inline pour corriger le titre de la tâche en visite | `LotControl.tsx` (editForm state, submitEdit) | — |
