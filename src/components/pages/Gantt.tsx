@@ -254,6 +254,62 @@ export function Gantt() {
     setAddForm(false)
   }
 
+  const handleTasksReorder = (action: { type: 'swap'; taskId1: string; taskId2: string } | { type: 'insert'; newTask: GanttTask; beforeTaskId: string }) => {
+    if (action.type === 'swap') {
+      setGanttTasks(prev => {
+        const reordered = swapTasksById(prev, action.taskId1, action.taskId2)
+        saveGanttTasks(reordered)
+        logActivity('planning', 'Ordre des tâches modifié')
+        return reordered
+      })
+    } else if (action.type === 'insert') {
+      setGanttTasks(prev => {
+        const reordered = insertTaskBeforeById(prev, action.beforeTaskId, action.newTask)
+        saveGanttTasks(reordered)
+        logActivity('planning', `Tâche insérée : ${action.newTask.title}`)
+        return reordered
+      })
+    }
+  }
+
+  // Helper: swap two tasks by ID in the tree
+  const swapTasksById = (tree: GanttTask[], id1: string, id2: string): GanttTask[] => {
+    return tree.map(t => {
+      if (t.children?.length) {
+        const idx1 = t.children.findIndex(c => c.id === id1)
+        const idx2 = t.children.findIndex(c => c.id === id2)
+
+        if (idx1 >= 0 && idx2 >= 0) {
+          const nc: GanttTask[] = [...t.children]
+          ;[nc[idx1], nc[idx2]] = [nc[idx2], nc[idx1]]
+          return { ...t, children: nc }
+        }
+
+        // Recurse into children
+        return { ...t, children: swapTasksById(t.children, id1, id2) }
+      }
+      return t
+    })
+  }
+
+  // Helper: insert a task before another by ID
+  const insertTaskBeforeById = (tree: GanttTask[], beforeId: string, newTask: GanttTask): GanttTask[] => {
+    return tree.map(t => {
+      if (t.children?.length) {
+        const idx = t.children.findIndex(c => c.id === beforeId)
+        if (idx >= 0) {
+          const nc: GanttTask[] = [...t.children]
+          nc.splice(idx, 0, newTask)
+          return { ...t, children: nc }
+        }
+
+        // Recurse into children
+        return { ...t, children: insertTaskBeforeById(t.children, beforeId, newTask) }
+      }
+      return t
+    })
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -423,6 +479,7 @@ export function Gantt() {
               onTaskUpdate={handleTaskUpdate}
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
+              onTasksReorder={handleTasksReorder}
               showForecast={showForecast}
               showBaseline={showBaseline}
               showEcarts={showEcarts}
