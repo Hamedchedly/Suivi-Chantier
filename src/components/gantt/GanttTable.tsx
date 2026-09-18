@@ -106,6 +106,7 @@ function isoWeek(d: Date): number {
 }
 
 const fmt2 = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+const fmtDateInput = (d: Date) => d.toISOString().split('T')[0]
 
 // Calcul des écarts (delta) pour affichage mode détail
 function calculateEcarts(task: GanttTask) {
@@ -148,6 +149,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
+  const [editingActualStart, setEditingActualStart] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -325,28 +327,30 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return (
       <tr key={task.id} className={`gantt-row${task.is_critical ? ' critical' : ''}${task.is_milestone ? ' milestone' : ''}`}>
         <td className="gantt-task-cell">
-          <div style={{ paddingLeft: `${depth * 14}px`, display: 'flex', alignItems: 'center', gap: 4 }}>
-            {hasChildren ? (
-              <button
-                onClick={() => onToggleExpanded(task.id)}
-                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: 'var(--navy)' }}
+          <div style={{ paddingLeft: `${depth * 14}px`, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between', minHeight: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
+              {hasChildren ? (
+                <button
+                  onClick={() => onToggleExpanded(task.id)}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: 'var(--navy)', flexShrink: 0 }}
+                >
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+              ) : (
+                <div style={{ width: 16, flexShrink: 0 }} />
+              )}
+              <span
+                onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
+                style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 500, color: task.is_critical ? '#dc2626' : '#1f2937', cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              </button>
-            ) : (
-              <div style={{ width: 14 }} />
-            )}
-            <span
-              onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
-              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default' }}
-            >
-              {task.title}
-            </span>
+                {task.title}
+              </span>
+            </div>
             {hasChildren && onTaskClick && (
               <button
                 onClick={e => { e.stopPropagation(); onTaskClick(task) }}
-                title="Détails du lot"
-                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
+                title="Détails"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
               >ⓘ</button>
             )}
           </div>
@@ -362,7 +366,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               type="number" min={0} max={100} step={5}
               defaultValue={task.progress}
               autoFocus
-              style={{ width: '46px', fontSize: '11px', textAlign: 'center', border: '1px solid var(--accent)', borderRadius: '4px', padding: '1px 2px' }}
+              style={{ width: '50px', fontSize: '11px', textAlign: 'center', border: '1px solid var(--accent)', borderRadius: '4px', padding: '2px 4px' }}
               onBlur={e => { onProgress?.(task.id, Math.min(100, Math.max(0, Number(e.target.value)))); setEditingProgress(null) }}
               onKeyDown={e => { if (e.key === 'Enter') { onProgress?.(task.id, Math.min(100, Math.max(0, Number((e.target as HTMLInputElement).value)))); setEditingProgress(null) } else if (e.key === 'Escape') setEditingProgress(null) }}
             />
@@ -370,6 +374,40 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             <span title={!readOnly && onProgress ? 'Cliquer pour modifier' : undefined}>{task.progress}%</span>
           )}
         </td>
+
+        {editable && (
+          <td style={{ padding: '6px 8px', minWidth: '140px', verticalAlign: 'middle' }}>
+            {editingActualStart === task.id ? (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <input
+                  type="date"
+                  defaultValue={fmtDateInput(task.actual_start ?? task.planned_start)}
+                  autoFocus
+                  style={{ fontSize: '11px', padding: '4px 6px', borderRadius: '4px', border: '1px solid #18ABE', flex: 1, minWidth: '100px' }}
+                  onBlur={e => {
+                    const newDate = new Date(e.target.value + 'T00:00:00')
+                    if (newDate.getTime() !== (task.actual_start ?? task.planned_start).getTime()) {
+                      onTaskUpdate?.(task.id, { actual_start: newDate })
+                    }
+                    setEditingActualStart(null)
+                  }}
+                  onKeyDown={e => { if (e.key === 'Enter') setEditingActualStart(null); if (e.key === 'Escape') setEditingActualStart(null) }}
+                />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '11px', color: '#5b7183' }}>
+                <span>Début réel:</span>
+                <button
+                  onClick={() => setEditingActualStart(task.id)}
+                  title="Modifier date de démarrage réelle"
+                  style={{ border: '1px solid #cbd5e0', background: '#f7fafc', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', color: '#02457A', fontWeight: 600 }}
+                >
+                  {task.actual_start ? fmt2(task.actual_start) : 'Non défini'}
+                </button>
+              </div>
+            )}
+          </td>
+        )}
 
         <td className="gantt-timeline-cell">
           <div
@@ -516,6 +554,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             <tr>
               <th className="gantt-task-header">Tâche</th>
               <th className="gantt-progress-header">%</th>
+              {editable && <th style={{ width: '140px', padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#02457A', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #e4ecf2' }}>Réel</th>}
               <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx, position: 'relative' }}>
                 {/* Current-week highlight in header */}
                 {curWeekVisible && (
