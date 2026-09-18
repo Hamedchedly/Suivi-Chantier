@@ -15,6 +15,8 @@ export function Meetings() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
+  const [editAttendeeId, setEditAttendeeId] = useState<string | null>(null)
+  const [newAttendee, setNewAttendee] = useState('')
   const [sortBy, setSortBy] = useState<'date' | 'actions'>('date')
 
   useEffect(() => { saveMeetings(meetings) }, [meetings])
@@ -96,6 +98,20 @@ export function Meetings() {
 
   const cancelEdit = () => {
     setEditId(null); setEditTitle(''); setEditDate('')
+  }
+
+  const addAttendee = (mid: string, name: string) => {
+    if (!name.trim()) return
+    setMeetings(prev => prev.map(m => m.id === mid
+      ? { ...m, attendees: [...new Set([...m.attendees, name.trim()])] }
+      : m))
+    setNewAttendee('')
+  }
+
+  const removeAttendee = (mid: string, name: string) => {
+    setMeetings(prev => prev.map(m => m.id === mid
+      ? { ...m, attendees: m.attendees.filter(a => a !== name) }
+      : m))
   }
 
   const duplicateMeeting = (m: Meeting) => {
@@ -259,11 +275,43 @@ export function Meetings() {
 
               {isOpen && (
                 <div style={{ marginTop: '12px' }}>
-                  {m.attendees.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                      <Users size={12} /> {m.attendees.join(' · ')}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--navy)', marginBottom: '6px' }}>
+                      <Users size={12} /> Participants ({m.attendees.length})
                     </div>
-                  )}
+                    {editAttendeeId === m.id ? (
+                      <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                        <input
+                          value={newAttendee}
+                          onChange={e => setNewAttendee(e.target.value)}
+                          placeholder="Ajouter un participant…"
+                          style={{ ...inp, flex: 1, fontSize: '12px' }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { addAttendee(m.id, newAttendee); setNewAttendee('') }
+                          }}
+                        />
+                        <button onClick={() => { addAttendee(m.id, newAttendee); setNewAttendee('') }} style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px' }}><Plus size={12} /></button>
+                        <button onClick={() => setEditAttendeeId(null)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px', color: 'var(--bad)' }}><X size={12} /></button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setEditAttendeeId(m.id)} style={{ ...ghostBtn, fontSize: '11px', padding: '4px 8px' }}>Ajouter participant</button>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {m.attendees.map(a => (
+                        <div
+                          key={a}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', padding: '4px 10px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '999px', color: 'var(--navy)' }}
+                        >
+                          {a}
+                          {editAttendeeId === m.id && (
+                            <button onClick={() => removeAttendee(m.id, a)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 2px', color: '#dc2626', display: 'flex' }}>
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                   <SubTitle icon={<Gavel size={12} />} label="Décisions" />
                   {m.decisions.length === 0 && <Empty>Aucune décision actée.</Empty>}
