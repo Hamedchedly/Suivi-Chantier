@@ -259,7 +259,8 @@ export function Gantt() {
   }
 
   const handleCreateSubtask = (parentId: string, title: string, duration: number) => {
-    const parent = flattenLeaves(ganttTasks).find(t => t.id === parentId)
+    const allTasksList = ganttTasks.flatMap(t => [t, ...(t.children ?? [])])
+    const parent = allTasksList.find(t => t.id === parentId)
     if (!parent) return
     const newTask: GanttTask = {
       id: `task-${Date.now()}`,

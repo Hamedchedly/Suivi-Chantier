@@ -15,8 +15,49 @@ export function PlanningTableView({ tasks, onClose, onTaskUpdate, onReorder }: P
   const [expandedZones, setExpandedZones] = useState<Set<string>>(new Set())
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null)
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<`${string}:${'start'|'end'|'actual_start'|'actual_end'|'progress'}` | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
 
   const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
+
+  const handleFieldClick = (taskId: string, field: 'start'|'end'|'actual_start'|'actual_end'|'progress', value: string) => {
+    setEditingField(`${taskId}:${field}`)
+    setEditValue(value)
+  }
+
+  const handleSaveEdit = (taskId: string, field: string, newValue: string) => {
+    if (!newValue.trim()) {
+      setEditingField(null)
+      return
+    }
+
+    if (field === 'progress') {
+      const progress = Math.min(100, Math.max(0, Number(newValue) || 0))
+      onTaskUpdate?.(taskId, { progress })
+    } else if (field === 'start') {
+      const date = new Date(newValue)
+      if (!isNaN(date.getTime())) {
+        onTaskUpdate?.(taskId, { planned_start: date })
+      }
+    } else if (field === 'end') {
+      const date = new Date(newValue)
+      if (!isNaN(date.getTime())) {
+        onTaskUpdate?.(taskId, { planned_end: date })
+      }
+    } else if (field === 'actual_start') {
+      const date = newValue ? new Date(newValue) : undefined
+      if (!newValue || !isNaN(date!.getTime())) {
+        onTaskUpdate?.(taskId, { actual_start: date })
+      }
+    } else if (field === 'actual_end') {
+      const date = newValue ? new Date(newValue) : undefined
+      if (!newValue || !isNaN(date!.getTime())) {
+        onTaskUpdate?.(taskId, { actual_end: date })
+      }
+    }
+
+    setEditingField(null)
+  }
 
   const isLate = (task: GanttTask) => task.actual_end && task.actual_end.getTime() > task.planned_end.getTime()
 
@@ -155,20 +196,97 @@ export function PlanningTableView({ tasks, onClose, onTaskUpdate, onReorder }: P
                                   <td style={{ padding: '10px', color: textColor, fontWeight: 600, borderRight: '1px solid #e4ecf2', paddingLeft: '40px' }}>
                                     {task.title}
                                   </td>
-                                  <td style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2' }}>
-                                    {fmt(task.planned_start)}
+                                  <td
+                                    style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2', cursor: 'pointer' }}
+                                    onClick={() => handleFieldClick(task.id, 'start', task.planned_start.toISOString().split('T')[0])}
+                                  >
+                                    {editingField === `${task.id}:start` ? (
+                                      <input
+                                        autoFocus
+                                        type="date"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveEdit(task.id, 'start', editValue)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(task.id, 'start', editValue); if (e.key === 'Escape') setEditingField(null) }}
+                                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #0369a1', width: '100%' }}
+                                      />
+                                    ) : (
+                                      fmt(task.planned_start)
+                                    )}
                                   </td>
-                                  <td style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2' }}>
-                                    {fmt(task.planned_end)}
+                                  <td
+                                    style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2', cursor: 'pointer' }}
+                                    onClick={() => handleFieldClick(task.id, 'end', task.planned_end.toISOString().split('T')[0])}
+                                  >
+                                    {editingField === `${task.id}:end` ? (
+                                      <input
+                                        autoFocus
+                                        type="date"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveEdit(task.id, 'end', editValue)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(task.id, 'end', editValue); if (e.key === 'Escape') setEditingField(null) }}
+                                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #0369a1', width: '100%' }}
+                                      />
+                                    ) : (
+                                      fmt(task.planned_end)
+                                    )}
                                   </td>
-                                  <td style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2' }}>
-                                    {fmt(task.actual_start)}
+                                  <td
+                                    style={{ padding: '10px', textAlign: 'center', color: textColor, borderRight: '1px solid #e4ecf2', cursor: 'pointer' }}
+                                    onClick={() => handleFieldClick(task.id, 'actual_start', task.actual_start ? task.actual_start.toISOString().split('T')[0] : '')}
+                                  >
+                                    {editingField === `${task.id}:actual_start` ? (
+                                      <input
+                                        autoFocus
+                                        type="date"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveEdit(task.id, 'actual_start', editValue)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(task.id, 'actual_start', editValue); if (e.key === 'Escape') setEditingField(null) }}
+                                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #0369a1', width: '100%' }}
+                                      />
+                                    ) : (
+                                      fmt(task.actual_start)
+                                    )}
                                   </td>
-                                  <td style={{ padding: '10px', textAlign: 'center', color: textColor, fontWeight: late ? 700 : 400, borderRight: '1px solid #e4ecf2' }}>
-                                    {fmt(task.actual_end)}
+                                  <td
+                                    style={{ padding: '10px', textAlign: 'center', color: textColor, fontWeight: late ? 700 : 400, borderRight: '1px solid #e4ecf2', cursor: 'pointer' }}
+                                    onClick={() => handleFieldClick(task.id, 'actual_end', task.actual_end ? task.actual_end.toISOString().split('T')[0] : '')}
+                                  >
+                                    {editingField === `${task.id}:actual_end` ? (
+                                      <input
+                                        autoFocus
+                                        type="date"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveEdit(task.id, 'actual_end', editValue)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(task.id, 'actual_end', editValue); if (e.key === 'Escape') setEditingField(null) }}
+                                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #0369a1', width: '100%' }}
+                                      />
+                                    ) : (
+                                      fmt(task.actual_end)
+                                    )}
                                   </td>
-                                  <td style={{ padding: '10px', textAlign: 'center', color: textColor, fontWeight: 600, borderRight: '1px solid #e4ecf2' }}>
-                                    {task.progress}%
+                                  <td
+                                    style={{ padding: '10px', textAlign: 'center', color: textColor, fontWeight: 600, borderRight: '1px solid #e4ecf2', cursor: 'pointer' }}
+                                    onClick={() => handleFieldClick(task.id, 'progress', String(task.progress))}
+                                  >
+                                    {editingField === `${task.id}:progress` ? (
+                                      <input
+                                        autoFocus
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onBlur={() => handleSaveEdit(task.id, 'progress', editValue)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(task.id, 'progress', editValue); if (e.key === 'Escape') setEditingField(null) }}
+                                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #0369a1', width: '50px', textAlign: 'center' }}
+                                      />
+                                    ) : (
+                                      `${task.progress}%`
+                                    )}
                                   </td>
                                   <td style={{ padding: '10px', color: textColor, fontSize: '11px' }}>
                                     {task.dependencies.length > 0 ? task.dependencies.join(', ') : '—'}

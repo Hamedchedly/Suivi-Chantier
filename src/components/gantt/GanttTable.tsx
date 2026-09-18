@@ -225,9 +225,13 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
       const planMs = Math.max(0, planEnd.getTime() - barStart.getTime())
       const planPct = (planMs / totalMs) * 100
       const overduePct = 100 - planPct
+      // Progress distribution: contract zone first, then planning, then overdue
+      const contractualFilled = Math.min(planPct, p)
+      const planningFilled = Math.max(0, Math.min(p - contractualFilled, (planEnd.getTime() - barStart.getTime()) / totalMs * 100 - contractualFilled))
+      const overdueProgress = p >= 100 ? 100 : 0
       return [
-        { type: 'planning', widthPercent: planPct, progressPercent: p, isVisible: planPct > 0.5 },
-        { type: 'overdue', widthPercent: overduePct, progressPercent: 100, isVisible: overduePct > 0.5 },
+        { type: 'planning', widthPercent: planPct, progressPercent: (contractualFilled / planPct) * 100, isVisible: planPct > 0.5 },
+        { type: 'overdue', widthPercent: overduePct, progressPercent: overdueProgress, isVisible: overduePct > 0.5 },
       ]
     }
 
@@ -240,9 +244,12 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
       const contractualMs = Math.max(0, baselineEnd.getTime() - barStart.getTime())
       const contractualPct = (contractualMs / totalMs) * 100
       const planningPct = 100 - contractualPct
+      // Progress: if task is p% complete, first p% fills contractual zone, overflow goes to planning
+      const contractualProgress = Math.min(100, (p / contractualPct) * 100)
+      const planningProgress = p > contractualPct ? Math.min(100, ((p - contractualPct) / planningPct) * 100) : 0
       return [
-        { type: 'contractual', widthPercent: contractualPct, progressPercent: p, isVisible: contractualPct > 0.5 },
-        ...(planningPct > 0.5 ? [{ type: 'planning' as const, widthPercent: planningPct, progressPercent: p, isVisible: true }] : []),
+        { type: 'contractual', widthPercent: contractualPct, progressPercent: contractualProgress, isVisible: contractualPct > 0.5 },
+        ...(planningPct > 0.5 ? [{ type: 'planning' as const, widthPercent: planningPct, progressPercent: planningProgress, isVisible: true }] : []),
       ]
     }
 
