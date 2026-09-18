@@ -10,7 +10,7 @@ interface GanttTableProps {
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) => void
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
-  onTasksReorder?: (tasks: GanttTask[]) => void  // when task order changes
+  onTasksReorder?: (action: { type: 'swap'; taskId1: string; taskId2: string } | { type: 'insert'; newTask: GanttTask; beforeTaskId: string }) => void
   readOnly?: boolean
   showForecast?: boolean    // show forecast bars (hatched yellow)
   showBaseline?: boolean    // show baseline thin reference bar
@@ -146,11 +146,12 @@ function calculateEcarts(task: GanttTask) {
   return ecarts
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, showEcarts, commitments, onTasksReorder }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
   const [editingActualStart, setEditingActualStart] = useState<string | null>(null)
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -308,6 +309,62 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return '#6b21a8'
   }
 
+  // Find the index of a task in the visible list
+  const getVisibleIndex = (taskId: string) => visible.findIndex(v => v.task.id === taskId)
+
+  // Move task up in the visible order (swap with previous sibling)
+  const handleMoveUp = (taskId: string) => {
+    const idx = getVisibleIndex(taskId)
+    if (idx <= 0) return
+
+    const current = visible[idx]
+    const previous = visible[idx - 1]
+
+    // Only swap if they're at the same depth (siblings)
+    if (current.depth === previous.depth) {
+      onTasksReorder?.({ type: 'swap', taskId1: current.task.id, taskId2: previous.task.id })
+    }
+  }
+
+  // Move task down in the visible order
+  const handleMoveDown = (taskId: string) => {
+    const idx = getVisibleIndex(taskId)
+    if (idx < 0 || idx >= visible.length - 1) return
+
+    const current = visible[idx]
+    const next = visible[idx + 1]
+
+    // Only swap if they're at the same depth (siblings)
+    if (current.depth === next.depth) {
+      onTasksReorder?.({ type: 'swap', taskId1: current.task.id, taskId2: next.task.id })
+    }
+  }
+
+  // Insert a new task before the current one
+  const handleInsertBefore = (taskId: string) => {
+    const idx = getVisibleIndex(taskId)
+    if (idx < 0) return
+
+    const current = visible[idx]
+    // Create a new task at the same level
+    const newTask: GanttTask = {
+      id: `task-${Date.now()}`,
+      lot_id: current.task.lot_id,
+      title: 'Nouvelle tâche',
+      planned_start: current.task.planned_start,
+      planned_end: new Date(current.task.planned_start.getTime() + 86400000), // +1 day
+      planned_duration: 1,
+      progress: 0,
+      status: 'not-started',
+      priority: 'medium',
+      dependencies: [],
+      is_milestone: false,
+      is_critical: false,
+    }
+
+    onTasksReorder?.({ type: 'insert', newTask, beforeTaskId: current.task.id })
+  }
+
   const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
@@ -377,14 +434,18 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
         </td>
 
         {editable && (
-          <td style={{ padding: '6px 8px', minWidth: '140px', verticalAlign: 'middle' }}>
+          <td
+            style={{ padding: '6px 8px', minWidth: '180px', verticalAlign: 'middle' }}
+            onMouseEnter={() => setHoveredTaskId(task.id)}
+            onMouseLeave={() => setHoveredTaskId(null)}
+          >
             {editingActualStart === task.id ? (
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <input
                   type="date"
                   defaultValue={fmtDateInput(task.actual_start ?? task.planned_start)}
                   autoFocus
-                  style={{ fontSize: '11px', padding: '4px 6px', borderRadius: '4px', border: '1px solid #18ABE', flex: 1, minWidth: '100px' }}
+                  style={{ fontSize: '11px', padding: '4px 6px', borderRadius: '4px', border: '1px solid #018ABE', flex: 1, minWidth: '100px' }}
                   onBlur={e => {
                     const newDate = new Date(e.target.value + 'T00:00:00')
                     if (newDate.getTime() !== (task.actual_start ?? task.planned_start).getTime()) {
@@ -396,15 +457,39 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                 />
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '11px', color: '#5b7183' }}>
-                <span>Début réel:</span>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   onClick={() => setEditingActualStart(task.id)}
-                  title="Modifier date de démarrage réelle"
-                  style={{ border: '1px solid #cbd5e0', background: '#f7fafc', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', color: '#02457A', fontWeight: 600 }}
+                  title="Modifier date réelle"
+                  style={{ border: '1px solid #cbd5e0', background: '#f7fafc', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', color: '#02457A', fontWeight: 600, whiteSpace: 'nowrap', flex: '0 1 auto' }}
                 >
-                  {task.actual_start ? fmt2(task.actual_start) : 'Non défini'}
+                  📅 {task.actual_start ? fmt2(task.actual_start) : 'Non défini'}
                 </button>
+                {hoveredTaskId === task.id && (
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    <button
+                      onClick={() => handleMoveUp(task.id)}
+                      title="Déplacer vers le haut"
+                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#5b7183', fontWeight: 600 }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => handleMoveDown(task.id)}
+                      title="Déplacer vers le bas"
+                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#5b7183', fontWeight: 600 }}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={() => handleInsertBefore(task.id)}
+                      title="Insérer une tâche avant"
+                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#02457A', fontWeight: 600 }}
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </td>
