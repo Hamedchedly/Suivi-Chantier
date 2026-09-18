@@ -14,6 +14,10 @@ export interface MeetingAction {
   assignee: string
   dueDate: string        // ISO yyyy-mm-dd
   status: ActionStatus
+  timeTracking?: {
+    startedAt?: string   // ISO datetime for active timer
+    totalSeconds: number // cumulative time spent
+  }
 }
 
 export interface Meeting {

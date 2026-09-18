@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X } from 'lucide-react'
+import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X, Search } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
 } from '../../lib/repo'
+import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
 import { createTask } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
@@ -106,6 +107,43 @@ export function Gantt() {
   const [showForecast, setShowForecast] = useState(false)
   const [showBaseline, setShowBaseline] = useState(false)
   const [showEcarts, setShowEcarts] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const savedMode = params.get('ganttMode') as 'gantt' | 'matrix' | null
+    if (savedMode === 'gantt' || savedMode === 'matrix') setMode(savedMode)
+    const savedGroup = params.get('ganttGroup') as GanttGroup | null
+    if (savedGroup && ['lot', 'zone', 'chrono'].includes(savedGroup)) setGroup(savedGroup)
+    if (params.get('showBaseline') === '1') setShowBaseline(true)
+    if (params.get('showEcarts') === '1') setShowEcarts(true)
+    if (params.get('showDelays') === '1') setShowDelays(true)
+    if (params.get('showForecast') === '1') setShowForecast(true)
+    const searchParam = params.get('ganttSearch')
+    if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
+  }, [])
+
+  // ── URL state sync: update URL when view state changes ──────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (mode !== 'gantt') params.set('ganttMode', mode)
+    else params.delete('ganttMode')
+    if (group !== prefs0.group) params.set('ganttGroup', group)
+    else params.delete('ganttGroup')
+    if (showBaseline) params.set('showBaseline', '1')
+    else params.delete('showBaseline')
+    if (showEcarts) params.set('showEcarts', '1')
+    else params.delete('showEcarts')
+    if (showDelays) params.set('showDelays', '1')
+    else params.delete('showDelays')
+    if (showForecast) params.set('showForecast', '1')
+    else params.delete('showForecast')
+    if (searchTerm) params.set('ganttSearch', encodeURIComponent(searchTerm))
+    else params.delete('ganttSearch')
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [mode, group, showBaseline, showEcarts, showDelays, showForecast, searchTerm, prefs0.group])
   const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const [editMode, setEditMode] = useState(false)
@@ -136,6 +174,25 @@ export function Gantt() {
     () => buildTree(tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns),
     [tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns],
   )
+
+  // Filter tasks by search term
+  const filteredTree = useMemo(() => {
+    if (!searchTerm.trim()) return displayTree
+    const term = searchTerm.toLowerCase()
+    const filterTasks = (tasks: GanttTask[]): GanttTask[] => {
+      return tasks
+        .map(t => {
+          const children = t.children ? filterTasks(t.children) : undefined
+          const matches = t.title.toLowerCase().includes(term)
+          if (matches || (children && children.length > 0)) {
+            return children !== undefined ? { ...t, children } : t
+          }
+          return null
+        })
+        .filter((t): t is GanttTask => t !== null)
+    }
+    return filterTasks(displayTree)
+  }, [displayTree, searchTerm])
 
   // Changer de regroupement / filtre replie tout : on repart des lots seuls.
   useEffect(() => {
@@ -204,26 +261,22 @@ export function Gantt() {
   ]
 
   return (
-    <div style={{ padding: '16px', paddingBottom: '80px' }}>
-      {/* Header section */}
-      <div style={{ marginBottom: '16px' }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 700, color: '#02457A' }}>Planning du chantier</h2>
-
-        {/* Mode + grouping */}
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e0' }}>
-            {(['gantt', 'matrix'] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>{m === 'gantt' ? '📊 Gantt' : '🔲 Damier'}</button>
+    <div style={{ padding: '12px', paddingBottom: '80px' }}>
+      <Breadcrumbs crumbs={buildGanttBreadcrumbs(mode, group)} />
+      {/* Mode + grouping */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+          {(['gantt', 'matrix'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>{m === 'gantt' ? 'Gantt' : 'Damier'}</button>
+          ))}
+        </div>
+        {mode === 'gantt' && (
+          <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
+            {groups.map(g => (
+              <button key={g.id} onClick={() => setGroup(g.id)} style={seg(group === g.id)}>{g.label}</button>
             ))}
           </div>
-          {mode === 'gantt' && (
-            <div style={{ display: 'flex', gap: '3px', background: '#f0f4f8', padding: '4px', borderRadius: '8px', border: '1px solid #cbd5e0' }}>
-              {groups.map(g => (
-                <button key={g.id} onClick={() => setGroup(g.id)} style={seg(group === g.id)}>{g.label}</button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Drift / late banner */}
@@ -261,67 +314,51 @@ export function Gantt() {
           ) : null}
 
           <div className="g-toolbar">
+            {/* Search bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f7fafc', borderRadius: '6px', padding: '6px 10px', minWidth: '220px', border: '1px solid #cbd5e0' }}>
+              <Search size={13} color="#5b7183" />
+              <input
+                type="text"
+                placeholder="Chercher une tâche…"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ flex: 1, border: 'none', background: 'none', fontSize: '12px', outline: 'none', color: '#1f2937' }}
+              />
+              {searchTerm && <button onClick={() => setSearchTerm('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: '#5b7183' }}><X size={13} /></button>}
+            </div>
+
             {/* Filters section */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', paddingRight: '8px', borderRight: '1px solid #cbd5e0' }}>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Filtres</span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', paddingRight: '8px', borderRight: '1px solid #cbd5e0' }}>
               <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
               <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
             </div>
 
-            {/* View options section */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em', marginLeft: '4px' }}>Affichage</span>
-              <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Afficher/masquer les liaisons entre tâches">
-                {depsVisible ? <Eye size={14} /> : <EyeOff size={14} />}
-              </button>
-              <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Mettre en évidence le chemin critique">
-                <Zap size={14} />
-              </button>
-              <button className={`gtb ${showEcarts ? 'on' : ''}`} onClick={() => setShowEcarts(v => !v)} title="Afficher les écarts (délais réels vs prévus)">
-                <AlertTriangle size={14} />
-              </button>
+            {/* Display options */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons entre tâches"><Eye size={13} /></button>
+              <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique"><Zap size={13} /></button>
+              <button className={`gtb ${showEcarts ? 'on' : ''}`} onClick={() => setShowEcarts(v => !v)} title="Écarts"><AlertTriangle size={13} /></button>
             </div>
 
-            {/* Analysis section */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', paddingLeft: '8px', borderLeft: '1px solid #cbd5e0' }}>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Analyse</span>
-              <button
-                className={`gtb ${showBaseline ? 'on' : ''}`}
-                onClick={() => setShowBaseline(v => !v)}
-                title="Afficher le contractuel (référence de base)"
-              >
-                <History size={14} />
-              </button>
-              <button
-                className={`gtb ${showForecast ? 'on' : ''}`}
-                onClick={() => setShowForecast(v => !v)}
-                title="Afficher les prévisions calculées"
-              >
-                <TrendingUp size={14} />
-              </button>
+            {/* Analysis options */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid #cbd5e0' }}>
+              <button className={`gtb ${showBaseline ? 'on' : ''}`} onClick={() => setShowBaseline(v => !v)} title="Contractuel"><History size={13} /></button>
+              <button className={`gtb ${showForecast ? 'on' : ''}`} onClick={() => setShowForecast(v => !v)} title="Prévisions"><TrendingUp size={13} /></button>
             </div>
 
-            <div style={{ flex: 1 }} />
-
-            {/* Automation & Actions section */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                className={`gtb ${autoPlan ? 'on' : ''}`}
-                onClick={() => setAutoPlan(!autoPlan)}
-                title="Auto-planification : décaler les tâches liées automatiquement"
-              >
-                <GitBranch size={14} />
-              </button>
+            {/* Automation */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification"><GitBranch size={13} /></button>
               <button
                 className="gtb"
                 onClick={() => {
                   const computed = computeForecasts(ganttTasks, new Date(), calendar)
                   setForecastTasks(computed)
                 }}
-                title="Calculer les prévisions"
+                title="Recalculer prévisions"
                 style={{ background: '#fef3c7', color: '#92400e' }}
               >
-                <TrendingUp size={14} />
+                <TrendingUp size={13} />
               </button>
               <button
                 className="gtb"
@@ -329,40 +366,40 @@ export function Gantt() {
                   const locked = lockBaseline(ganttTasks, calendar)
                   saveGanttTasks(locked)
                   setGanttTasks(locked)
-                  logActivity('planning', 'Dates contractuelles verrouillées')
+                  logActivity('planning', 'Baseline verrouillée')
                 }}
-                title="Figer comme référence contractuelle"
+                title="Verrouiller baseline"
                 style={{ background: '#f0f9ff', color: '#0369a1' }}
               >
-                <History size={14} />
+                <History size={13} />
               </button>
             </div>
 
-            {/* Edit & Zoom section */}
-            <div style={{ display: 'flex', gap: '3px', alignItems: 'center', background: '#f0f4f8', padding: '4px', borderRadius: '6px' }}>
-              <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer" style={{ padding: '6px 8px' }}><ZoomOut size={13} /></button>
-              <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600, minWidth: '32px', textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-              <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer" style={{ padding: '6px 8px' }}><ZoomIn size={13} /></button>
+            <div style={{ flex: 1 }} />
+
+            {/* Zoom controls */}
+            <div style={{ display: 'flex', gap: '3px', alignItems: 'center', background: '#f0f4f8', padding: '4px', borderRadius: '6px', border: '1px solid #cbd5e0' }}>
+              <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer" style={{ padding: '6px 8px' }}><ZoomOut size={12} /></button>
+              <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600, minWidth: '30px', textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+              <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer" style={{ padding: '6px 8px' }}><ZoomIn size={12} /></button>
             </div>
 
-            {/* Edit mode button */}
+            {/* Edit & Add buttons */}
             <button
               className={`gtb ${editMode ? 'on' : ''}`}
               onClick={editMode ? confirmEdit : enterEdit}
-              title={editMode ? 'Confirmer les modifications' : 'Passer en mode édition'}
+              title={editMode ? 'Confirmer' : 'Éditer'}
               style={editMode ? { background: '#dcfce7', color: '#15803d' } : {}}
             >
-              <Pencil size={14} />
+              <Pencil size={13} />
             </button>
-
-            {/* Add task button */}
             <button
               className="gtb"
               onClick={() => setAddForm(a => !a)}
-              title="Ajouter une tâche"
+              title="Ajouter"
               style={{ background: '#eff6ff', color: '#2563eb' }}
             >
-              <Plus size={14} />
+              <Plus size={13} />
             </button>
           </div>
 
@@ -376,7 +413,7 @@ export function Gantt() {
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
-              tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : displayTree}
+              tasks={forecastTasks ? buildTree(applyCriticality(forecastTasks, cpm.criticalIds), group, selectedLots, selectedZones, zoneOpts, concerns) : filteredTree}
               viewState={viewState}
               readOnly={!editMode}
               onToggleExpanded={id => setExpandedTasks(prev => {

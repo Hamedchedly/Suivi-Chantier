@@ -248,30 +248,60 @@ body { max-width: 100% }
 .bnav.active { color: var(--accent); border-top-color: var(--accent) }
 .bnav svg { width: 20px; height: 20px }
 
-/* Print — only the CR report is visible on paper */
+/* Print — documents, tables, and lists optimized for paper */
+@page {
+  margin: 12mm 10mm;
+  size: A4 portrait;
+}
+
 @media print {
   .topbar, .bot-nav, .no-print { display: none !important }
   .app-wrapper, .app-body { display: block !important; min-height: 0 !important }
   .cr-print { padding: 0 !important; max-width: 100% !important }
-  body { background: #fff !important; margin: 0 !important; padding: 0 !important }
-  @page { margin: 10mm; size: A4 portrait }
+  body { background: #fff !important; margin: 0 !important; padding: 12mm 10mm !important; font-size: 10pt; line-height: 1.4 }
+
+  /* Headers stay on page top */
+  .topbar, h1, h2, h3 { page-break-after: avoid }
 
   /* CR table print styles */
-  .cr-list-table { border: 1px solid #ccc !important; width: 100% }
-  .cr-list-table > div { min-width: 100% !important; width: 100% }
-  .cr-row { page-break-inside: avoid }
-  table { border-collapse: collapse; width: 100% }
+  .cr-list-table { border: 1px solid #ccc !important; width: 100% !important }
+  .cr-list-table > div { min-width: 100% !important }
+  .cr-row { page-break-inside: avoid; font-size: 10pt }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 4mm }
   table, th, td { border: 1px solid #999 !important }
-  th, td { padding: 8px !important; text-align: left; font-size: 10pt }
-  th { background: #f5f5f5 !important; font-weight: bold }
+  th, td { padding: 6px !important; text-align: left; font-size: 9pt }
+  th { background: #f0f0f0 !important; font-weight: bold }
+
+  /* Card list print styles — avoid orphan items */
+  .card { page-break-inside: avoid; margin-bottom: 6mm; border: 1px solid #ccc !important; box-shadow: none !important }
+  .lot-card { page-break-inside: avoid; margin-bottom: 6mm }
+
+  /* Meeting cards and actions */
+  .meeting-card { page-break-inside: avoid; margin-bottom: 5mm }
+  .action-item { page-break-inside: avoid }
+
+  /* Breadcrumbs and navigation — no print */
+  [class*="breadcrumb"] { display: none !important }
+
+  /* Page breaks for long lists */
+  .cr-row:nth-child(n+20) { page-break-before: auto }
+  .card:nth-child(n+15) { page-break-before: auto }
+
+  /* Improve text readability on paper */
+  a { text-decoration: underline; color: #000 !important }
+  .muted { color: #555 !important }
+
+  /* Better spacing between sections */
+  section { margin-bottom: 8mm !important; page-break-inside: avoid }
+  .section-title { margin-top: 4mm !important; page-break-after: avoid }
 }
 
-/* Landscape print mode: user can set via browser print dialog */
 @media print and (orientation: landscape) {
-  @page { size: A4 landscape; margin: 10mm }
-  body { font-size: 10pt }
-  th, td { padding: 6px !important; font-size: 9pt }
-  .cr-list-table { width: 100% !important; transform: scale(0.95); transform-origin: 0 0 }
+  @page { size: A4 landscape; margin: 12mm 10mm }
+  body { font-size: 9pt; padding: 12mm 10mm !important }
+  th, td { padding: 5px !important; font-size: 8pt }
+  .cr-list-table { transform: scale(0.92); transform-origin: 0 0; width: auto !important }
+  table { margin-bottom: 3mm }
 }
 
 /* Sections */

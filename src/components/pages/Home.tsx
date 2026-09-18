@@ -52,6 +52,7 @@ export function Home({ onNavigate }: HomeProps) {
   const highReserves = openReserves.filter(r => r.priority === 'high')
   const pf = projectFinance(getMarches(), getAvenants(), getSituations())
   const lotsOnTrack = lots.filter(l => !l.late).length
+  const crNumbers = [...new Set(reserves.filter(r => r.crNo != null).map(r => r.crNo!))]
 
   // ── Visit pilot: what the last tour found, and what is still owed ─────────
   const now = todayIso()
@@ -136,6 +137,21 @@ export function Home({ onNavigate }: HomeProps) {
         <KPICard label="Retards" value={late.length} variant={late.length > 0 ? 'warn' : undefined} />
         <KPICard label="Réserves ouvertes" value={openReserves.length} variant={openReserves.length > 0 ? 'warn' : undefined} />
       </div>
+
+      {/* Analytics — CR et actions en détail */}
+      <section>
+        <h2 className="section-title">Analyse des réserves</h2>
+        <div className="kpi-grid" style={{ marginBottom: '10px' }}>
+          <KPICard label="Actions ouvertes" value={openReserves.filter(r => reserveKind(r) === 'action').length} />
+          <KPICard label="Observations ouvertes" value={openReserves.filter(r => reserveKind(r) === 'observation').length} />
+          <KPICard label="Priorité haute" value={highReserves.length} variant={highReserves.length > 0 ? 'warn' : undefined} />
+        </div>
+        <div className="kpi-grid">
+          <KPICard label="Complétude CR" value={`${crNumbers.length} numérotés`} />
+          <KPICard label="À tracer" value={toCheck.length} />
+          <KPICard label="Résolu / Obsolète" value={reserves.filter(r => r.status === 'resolved' || r.status === 'obsolete').length} />
+        </div>
+      </section>
 
       {/* Visites — pilotage */}
       <section>

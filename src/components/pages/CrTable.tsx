@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers, Search, Eye, Printer,
+  LayoutList, Layers, Search, Eye, EyeOff, Printer, Download,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,
@@ -51,6 +51,20 @@ export function CrTable() {
   const [editing, setEditing] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showVisibility, setShowVisibility] = useState(false)
+  const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [showArchived, setShowArchived] = useState(false)
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('sc_cr_search_history')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [showSearchHistory, setShowSearchHistory] = useState(false)
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -63,26 +77,52 @@ export function CrTable() {
   const lots = useMemo(() => getLotsConfig(), [])
   const today = todayISO()
 
-  // Sync query params: ?crNo=N selects that CR
+  // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const crNoParam = params.get('crNo')
-    if (crNoParam) {
-      const num = Number(crNoParam)
+    const savedView = params.get('view') as 'liste' | 'par-lot' | null
+    if (savedView === 'liste' || savedView === 'par-lot') setView(savedView)
+    const searchParam = params.get('search')
+    if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
+    const crParam = params.get('crNo')
+    if (crParam) {
+      const num = Number(crParam)
       if (!isNaN(num)) setSelectedCr(num)
     }
   }, [])
 
+  // ── URL state sync: update URL when state changes ───────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (selectedCr !== null) {
-      params.set('crNo', String(selectedCr))
-    } else {
-      params.delete('crNo')
-    }
+    if (view !== 'liste') params.set('view', view)
+    else params.delete('view')
+    if (searchTerm) params.set('search', encodeURIComponent(searchTerm))
+    else params.delete('search')
+    if (selectedCr !== null) params.set('crNo', String(selectedCr))
+    else params.delete('crNo')
     const search = params.toString()
     window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
-  }, [selectedCr])
+  }, [view, searchTerm, selectedCr])
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (isMod && e.key === 'n') {
+        e.preventDefault()
+        setAdding(a => !a)
+      } else if ((isMod && e.key === '/') || e.key === '?') {
+        e.preventDefault()
+        setShowKeyboardHelp(h => !h)
+      } else if (e.key === 'Escape') {
+        if (adding) setAdding(false)
+        if (searchTerm) setSearchTerm('')
+        if (showKeyboardHelp) setShowKeyboardHelp(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  }, [adding, searchTerm, showKeyboardHelp])
 
   const toggleColumnVis = (col: keyof ColumnVisibility) => {
     const next = { ...columnVis, [col]: !columnVis[col] }
@@ -116,9 +156,14 @@ export function CrTable() {
     )
   }, [reserves, today, latestMeetingDate])
 
-  // Filtered to selected CR (null = all) and search term
+  // Filtered to selected CR (null = all), search term, status filters, and archive
   const filteredRows = useMemo(() => {
     let result = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
+
+    if (!showArchived) {
+      result = result.filter(r => !r.archived)
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
       result = result.filter(r =>
@@ -128,8 +173,26 @@ export function CrTable() {
         r.number.toLowerCase().includes(term)
       )
     }
+
+    if (statusFilter.size > 0) {
+      result = result.filter(r => {
+        const { tone } = crState(r, today, latestMeetingDate)
+        return statusFilter.has(tone)
+      })
+    }
+
+    // Apply sorting based on sortBy
+    if (sortBy === 'crNo') {
+      result.sort((a, b) => (b.crNo ?? -1) - (a.crNo ?? -1))
+    } else if (sortBy === 'date') {
+      result.sort((a, b) => (b.meetingDate ?? '').localeCompare(a.meetingDate ?? ''))
+    } else if (sortBy === 'lot') {
+      result.sort((a, b) => a.lotId.localeCompare(b.lotId))
+    }
+    // 'status' is already the default sort in rows
+
     return result
-  }, [rows, selectedCr, searchTerm])
+  }, [rows, selectedCr, searchTerm, statusFilter, sortBy, showArchived, today, latestMeetingDate])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
 
@@ -194,6 +257,87 @@ export function CrTable() {
     }
   }
 
+  const bulkMarkAsDone = () => {
+    const updated = reserves.map(r =>
+      selectedRows.has(r.id) ? { ...r, status: 'resolved' as const } : r
+    )
+    persist(updated)
+    logActivity('doc', `${selectedRows.size} point(s) marqué(s) comme terminé(s)`)
+    setSelectedRows(new Set())
+  }
+
+  const bulkDelete = () => {
+    if (!window.confirm(`Supprimer ${selectedRows.size} point(s) ?`)) return
+    const updated = reserves.filter(r => !selectedRows.has(r.id))
+    persist(updated)
+    logActivity('doc', `${selectedRows.size} point(s) supprimé(s)`)
+    setSelectedRows(new Set())
+  }
+
+  const bulkToggleSelection = (rowIds: string[]) => {
+    const allSelected = rowIds.every(id => selectedRows.has(id))
+    const next = new Set(selectedRows)
+    rowIds.forEach(id => {
+      if (allSelected) next.delete(id)
+      else next.add(id)
+    })
+    setSelectedRows(next)
+  }
+
+  const archiveReserve = (id: string) => {
+    const updated = reserves.map(r => r.id === id ? { ...r, archived: true } : r)
+    persist(updated)
+    logActivity('doc', `Point archivé`)
+  }
+
+  const unarchiveReserve = (id: string) => {
+    const updated = reserves.map(r => r.id === id ? { ...r, archived: false } : r)
+    persist(updated)
+    logActivity('doc', `Point restauré`)
+  }
+
+  const addSearchToHistory = (term: string) => {
+    if (!term.trim()) return
+    const next = [term, ...searchHistory.filter(s => s !== term)].slice(0, 10)
+    setSearchHistory(next)
+    try { localStorage.setItem('sc_cr_search_history', JSON.stringify(next)) } catch { /* noop */ }
+  }
+
+  const exportFilteredAsCsv = () => {
+    if (filteredRows.length === 0) return
+    const rows = filteredRows.map(r => {
+      const { tone } = crState(r, today, latestMeetingDate)
+      const ts = TONE_STYLE[tone]
+      return {
+        Numéro: r.number,
+        'N°CR': r.crNo ?? '—',
+        Lot: lotLabel(r.lotId),
+        Entreprise: r.company || '—',
+        Remarque: r.description,
+        Type: reserveKind(r) === 'action' ? 'Action' : 'Observation',
+        Statut: ts.label || '—',
+        Échéance: frDate(r.dueDate),
+        'Date réunion': frDate(r.meetingDate),
+        Rappel: r.reminder ? 'Oui' : 'Non',
+      }
+    })
+    const headers = ['Numéro', 'N°CR', 'Lot', 'Entreprise', 'Remarque', 'Type', 'Statut', 'Échéance', 'Date réunion', 'Rappel']
+    const csvContent = [
+      headers.join('\t'),
+      ...rows.map(r => headers.map(h => r[h as keyof typeof r] ?? '').join('\t'))
+    ].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `cr-export-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    logActivity('doc', `Export CR : ${filteredRows.length} point(s) exporté(s)`)
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       {/* Toolbar */}
@@ -206,6 +350,22 @@ export function CrTable() {
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
+        {filteredRows.length > 0 && (
+          <button onClick={exportFilteredAsCsv} title="Exporter les points actuels" style={{ ...ghostBtn, color: 'var(--navy)' }}>
+            <Download size={14} /> Exporter ({filteredRows.length})
+          </button>
+        )}
+        {selectedRows.size > 0 && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid var(--line)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)' }}>{selectedRows.size} sélectionné(s)</span>
+            <button onClick={bulkMarkAsDone} title="Marquer comme terminé" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px', color: 'var(--ok)' }}>
+              <Check size={14} /> Terminer
+            </button>
+            <button onClick={bulkDelete} title="Supprimer les sélections" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px', color: '#dc2626' }}>
+              <Ban size={14} /> Supprimer
+            </button>
+          </div>
+        )}
         <div style={{ flex: 1 }} />
         {/* View toggle */}
         <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px' }}>
@@ -216,10 +376,13 @@ export function CrTable() {
             <Layers size={13} /> Par lot
           </button>
         </div>
-        {/* Print + column visibility */}
+        {/* Print + column visibility + archive */}
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => window.print()} title="Imprimer" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px' }}>
             <Printer size={13} /> Imprimer
+          </button>
+          <button onClick={() => setShowArchived(v => !v)} title={showArchived ? 'Masquer les archivés' : 'Afficher les archivés'} style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showArchived ? '#fff' : 'transparent', color: showArchived ? 'var(--navy)' : 'var(--muted)' }}>
+            {showArchived ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowVisibility(v => !v)} title="Colonnes à afficher" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showVisibility ? '#fff' : 'transparent' }}>
@@ -284,20 +447,136 @@ export function CrTable() {
         </div>
       )}
 
+      {showKeyboardHelp && (
+        <div style={{ padding: '12px', borderRadius: '10px', background: '#f0f9ff', border: '1px solid #bfdbfe', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>Raccourcis clavier</div>
+            <button onClick={() => setShowKeyboardHelp(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px' }}>
+              <X size={14} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '11px', color: 'var(--ink)' }}>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Ctrl+N</kbd> Nouveau point</div>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Ctrl+/</kbd> Aide clavier</div>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Esc</kbd> Fermer/Annuler</div>
+          </div>
+        </div>
+      )}
+
       {adding && <AddForm lots={lots} onCancel={() => setAdding(false)} onAdd={addRow} />}
 
-      {/* Search bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '0 8px' }}>
-        <Search size={16} color="var(--muted)" />
-        <input
-          type="text"
-          placeholder="Rechercher une remarque…"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
-        />
-        {searchTerm && <button onClick={() => setSearchTerm('')} style={{ ...ghostBtn, padding: '6px 8px' }}><X size={14} /></button>}
+      {/* Search bar with history */}
+      <div style={{ position: 'relative', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px' }}>
+          <Search size={16} color="var(--muted)" />
+          <input
+            type="text"
+            placeholder="Rechercher une remarque…"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            onFocus={() => setShowSearchHistory(true)}
+            onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && searchTerm.trim()) {
+                addSearchToHistory(searchTerm)
+              }
+            }}
+            style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
+          />
+          {searchTerm ? (
+            <button onClick={() => { setSearchTerm(''); setShowSearchHistory(false) }} style={{ ...ghostBtn, padding: '6px 8px' }}>
+              <X size={14} />
+            </button>
+          ) : (
+            searchHistory.length > 0 && (
+              <button onClick={() => setShowSearchHistory(h => !h)} title="Historique de recherche" style={{ ...ghostBtn, padding: '6px 8px', color: 'var(--muted)' }}>
+                <Clock size={14} />
+              </button>
+            )
+          )}
+        </div>
+        {showSearchHistory && searchHistory.length > 0 && !searchTerm && (
+          <div style={{ position: 'absolute', top: '100%', left: '30px', right: '8px', marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,.12)', zIndex: 50, maxHeight: '200px', overflowY: 'auto' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em' }}>Récents</div>
+            {searchHistory.map(term => (
+              <button
+                key={term}
+                onClick={() => { setSearchTerm(term); setShowSearchHistory(false) }}
+                style={{ display: 'flex', width: '100%', padding: '8px 10px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink)', fontSize: '12px', alignItems: 'center', gap: '6px', textAlign: 'left' }}
+              >
+                <Clock size={12} color="var(--muted)" />
+                {term}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Sort buttons */}
+      <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px', marginBottom: '12px', width: 'fit-content' }}>
+        {[
+          { value: 'status' as const, label: 'Par statut' },
+          { value: 'crNo' as const, label: 'Par N°CR' },
+          { value: 'date' as const, label: 'Par date' },
+          { value: 'lot' as const, label: 'Par lot' },
+        ].map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setSortBy(opt.value)}
+            title={opt.label}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: sortBy === opt.value ? '#fff' : 'transparent', color: sortBy === opt.value ? '#02457A' : '#5b7183' }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Status filter buttons */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        {[
+          { tone: 'overdue', label: 'En retard' },
+          { tone: 'reminder', label: 'Rappel' },
+          { tone: 'reported', label: 'Reporté' },
+          { tone: 'done', label: 'Terminé' },
+          { tone: 'obsolete', label: 'Obsolète' },
+        ].map(({ tone, label }) => {
+          const ts = TONE_STYLE[tone]
+          const isActive = statusFilter.has(tone)
+          return (
+            <button
+              key={tone}
+              onClick={() => {
+                const next = new Set(statusFilter)
+                if (isActive) next.delete(tone)
+                else next.add(tone)
+                setStatusFilter(next)
+              }}
+              title={label}
+              style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: `1px solid ${ts.color}`, background: isActive ? ts.bg : '#fff', color: ts.color, cursor: 'pointer' }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Quick stats */}
+      {filteredRows.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', fontSize: '11px', color: 'var(--muted)' }}>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.length}</span> au total
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.filter(r => r.status === 'open').length}</span> ouvert(s)
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{filteredRows.filter(r => r.status === 'resolved' || r.status === 'obsolete').length}</span> fermé(s)
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+            <span style={{ fontWeight: 600, color: '#dc2626' }}>{filteredRows.filter(r => crState(r, today, latestMeetingDate).tone === 'overdue').length}</span> en retard
+          </div>
+        </div>
+      )}
 
       <div style={sectionLabel}>Points de CR ({filteredRows.length})</div>
       {filteredRows.length === 0 && <Empty>Aucun point. Ajoutez-en un ou importez un CR Excel.</Empty>}
@@ -306,7 +585,13 @@ export function CrTable() {
       {view === 'liste' && filteredRows.length > 0 && (
         <div className="cr-list-table" style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px' }}>
           <div style={{ minWidth: '640px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.id))}
+                onChange={() => bulkToggleSelection(filteredRows.map(r => r.id))}
+                style={{ accentColor: '#02457A', cursor: 'pointer' }}
+              />
               {columnVis.crNo && <span>CR</span>}
               {columnVis.description && <span>Point</span>}
               {columnVis.lotCompany && <span>Lot / Entreprise</span>}
@@ -322,8 +607,21 @@ export function CrTable() {
               const isEditing = editing === r.id
               return (
                 <div key={r.id} style={{ borderBottom: '1px solid #eef2f6', background: ts.bg }}>
-                  <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
-                    {columnVis.crNo && (
+                  <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.has(r.id)}
+                      onChange={() => {
+                        const next = new Set(selectedRows)
+                        if (next.has(r.id)) next.delete(r.id)
+                        else next.add(r.id)
+                        setSelectedRows(next)
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ accentColor: '#02457A', cursor: 'pointer' }}
+                    />
+                    <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'contents', cursor: 'pointer' }}>
+                      {columnVis.crNo && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
                         {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         {r.crNo != null ? `#${r.crNo}` : '—'}
@@ -339,6 +637,7 @@ export function CrTable() {
                     {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
                     {columnVis.dueDate && <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>}
                     {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
+                    </div>
                   </div>
 
                   {expanded && (
@@ -383,7 +682,13 @@ export function CrTable() {
                           </div>
                         )}
                         {r.status !== 'open' && (
-                          <button onClick={() => follow(r, 'in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => follow(r, 'in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
+                            <button onClick={() => archiveReserve(r.id)} style={{ ...ghostBtn, borderColor: '#d1d5db', color: '#6b7280' }}>Archiver</button>
+                          </div>
+                        )}
+                        {r.archived && (
+                          <button onClick={() => unarchiveReserve(r.id)} style={ghostBtn}>Restaurer</button>
                         )}
                       </div>
                     )
@@ -484,7 +789,7 @@ export function CrTable() {
 }
 
 const buildGridCols = (vis: ColumnVisibility): string => {
-  const cols: string[] = []
+  const cols: string[] = ['30px'] // checkbox column
   if (vis.crNo) cols.push('52px')
   if (vis.description) cols.push('1fr')
   if (vis.lotCompany) cols.push('130px')
