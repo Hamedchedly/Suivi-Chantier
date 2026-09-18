@@ -56,6 +56,7 @@ export function CrTable() {
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -94,6 +95,26 @@ export function CrTable() {
     const search = params.toString()
     window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
   }, [view, searchTerm, selectedCr])
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (isMod && e.key === 'n') {
+        e.preventDefault()
+        setAdding(a => !a)
+      } else if ((isMod && e.key === '/') || e.key === '?') {
+        e.preventDefault()
+        setShowKeyboardHelp(h => !h)
+      } else if (e.key === 'Escape') {
+        if (adding) setAdding(false)
+        if (searchTerm) setSearchTerm('')
+        if (showKeyboardHelp) setShowKeyboardHelp(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  }, [adding, searchTerm, showKeyboardHelp])
 
   const toggleColumnVis = (col: keyof ColumnVisibility) => {
     const next = { ...columnVis, [col]: !columnVis[col] }
@@ -368,6 +389,22 @@ export function CrTable() {
       {notice && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '9px', background: '#eef4fb', border: '1px solid #d3e3f2', color: '#274b6b', fontSize: '12px', marginBottom: '12px' }}>
           {notice}<button onClick={() => setNotice(null)} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: '#274b6b', display: 'flex' }}><X size={14} /></button>
+        </div>
+      )}
+
+      {showKeyboardHelp && (
+        <div style={{ padding: '12px', borderRadius: '10px', background: '#f0f9ff', border: '1px solid #bfdbfe', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>Raccourcis clavier</div>
+            <button onClick={() => setShowKeyboardHelp(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px' }}>
+              <X size={14} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '11px', color: 'var(--ink)' }}>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Ctrl+N</kbd> Nouveau point</div>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Ctrl+/</kbd> Aide clavier</div>
+            <div><kbd style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '4px', padding: '2px 6px', fontSize: '10px', fontWeight: 600 }}>Esc</kbd> Fermer/Annuler</div>
+          </div>
         </div>
       )}
 
