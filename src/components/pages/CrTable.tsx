@@ -57,6 +57,15 @@ export function CrTable() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('sc_cr_search_history')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [showSearchHistory, setShowSearchHistory] = useState(false)
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
@@ -288,6 +297,13 @@ export function CrTable() {
     logActivity('doc', `Point restauré`)
   }
 
+  const addSearchToHistory = (term: string) => {
+    if (!term.trim()) return
+    const next = [term, ...searchHistory.filter(s => s !== term)].slice(0, 10)
+    setSearchHistory(next)
+    try { localStorage.setItem('sc_cr_search_history', JSON.stringify(next)) } catch { /* noop */ }
+  }
+
   const exportFilteredAsCsv = () => {
     if (filteredRows.length === 0) return
     const rows = filteredRows.map(r => {
@@ -450,17 +466,51 @@ export function CrTable() {
 
       {adding && <AddForm lots={lots} onCancel={() => setAdding(false)} onAdd={addRow} />}
 
-      {/* Search bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '0 8px' }}>
-        <Search size={16} color="var(--muted)" />
-        <input
-          type="text"
-          placeholder="Rechercher une remarque…"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
-        />
-        {searchTerm && <button onClick={() => setSearchTerm('')} style={{ ...ghostBtn, padding: '6px 8px' }}><X size={14} /></button>}
+      {/* Search bar with history */}
+      <div style={{ position: 'relative', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px' }}>
+          <Search size={16} color="var(--muted)" />
+          <input
+            type="text"
+            placeholder="Rechercher une remarque…"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            onFocus={() => setShowSearchHistory(true)}
+            onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && searchTerm.trim()) {
+                addSearchToHistory(searchTerm)
+              }
+            }}
+            style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
+          />
+          {searchTerm ? (
+            <button onClick={() => { setSearchTerm(''); setShowSearchHistory(false) }} style={{ ...ghostBtn, padding: '6px 8px' }}>
+              <X size={14} />
+            </button>
+          ) : (
+            searchHistory.length > 0 && (
+              <button onClick={() => setShowSearchHistory(h => !h)} title="Historique de recherche" style={{ ...ghostBtn, padding: '6px 8px', color: 'var(--muted)' }}>
+                <Clock size={14} />
+              </button>
+            )
+          )}
+        </div>
+        {showSearchHistory && searchHistory.length > 0 && !searchTerm && (
+          <div style={{ position: 'absolute', top: '100%', left: '30px', right: '8px', marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,.12)', zIndex: 50, maxHeight: '200px', overflowY: 'auto' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', padding: '8px 10px', textTransform: 'uppercase', letterSpacing: '.04em' }}>Récents</div>
+            {searchHistory.map(term => (
+              <button
+                key={term}
+                onClick={() => { setSearchTerm(term); setShowSearchHistory(false) }}
+                style={{ display: 'flex', width: '100%', padding: '8px 10px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink)', fontSize: '12px', alignItems: 'center', gap: '6px', textAlign: 'left' }}
+              >
+                <Clock size={12} color="var(--muted)" />
+                {term}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sort buttons */}
