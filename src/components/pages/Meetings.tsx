@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X, Copy, Download } from 'lucide-react'
+import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X, Copy, Download, Clock } from 'lucide-react'
 import { Meeting, MeetingAction, nextActionRef, overdueActions } from '../../lib/meetings'
 import { getMeetings, saveMeetings, logActivity } from '../../lib/repo'
 
@@ -63,7 +63,7 @@ export function Meetings() {
     setMeetings(prev => {
       const ref = nextActionRef(prev)
       return prev.map(m => m.id === mid
-        ? { ...m, actions: [...m.actions, { id: `a${Date.now()}`, ref, text: text.trim(), assignee: assignee.trim() || '—', dueDate, status: 'todo' as const }] }
+        ? { ...m, actions: [...m.actions, { id: `a${Date.now()}`, ref, text: text.trim(), assignee: assignee.trim() || '—', dueDate, status: 'todo' as const, timeTracking: { totalSeconds: 0 } }] }
         : m)
     })
   }
@@ -145,6 +145,36 @@ export function Meetings() {
       ? { ...m, actions: m.actions.filter(a => a.status !== 'done') }
       : m))
     logActivity('resolve', `Actions soldées supprimées`)
+  }
+
+  const startActionTimer = (mid: string, aid: string) => {
+    setMeetings(prev => prev.map(m => m.id !== mid ? m : {
+      ...m,
+      actions: m.actions.map(a => a.id !== aid ? a : {
+        ...a,
+        timeTracking: { ...a.timeTracking, startedAt: new Date().toISOString(), totalSeconds: a.timeTracking?.totalSeconds ?? 0 }
+      })
+    }))
+  }
+
+  const stopActionTimer = (mid: string, aid: string) => {
+    setMeetings(prev => prev.map(m => m.id !== mid ? m : {
+      ...m,
+      actions: m.actions.map(a => {
+        if (a.id !== aid || !a.timeTracking?.startedAt) return a
+        const elapsed = Math.round((Date.now() - new Date(a.timeTracking.startedAt).getTime()) / 1000)
+        return { ...a, timeTracking: { totalSeconds: (a.timeTracking.totalSeconds ?? 0) + elapsed, startedAt: undefined } }
+      })
+    }))
+  }
+
+  const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    if (h > 0) return `${h}h ${m}m`
+    if (m > 0) return `${m}m ${s}s`
+    return `${s}s`
   }
 
   return (
@@ -238,7 +268,7 @@ export function Meetings() {
                   <SubTitle icon={<Check size={12} />} label="Actions" action={m.actions.some(a => a.status === 'done') ? { text: 'Nettoyer', onClick: () => clearCompletedActions(m.id) } : undefined} />
                   {m.actions.length === 0 && <Empty>Aucune action.</Empty>}
                   {m.actions.map(a => (
-                    <ActionRow key={a.id} action={a} overdue={overdue.has(a.id)} onToggle={() => toggleAction(m.id, a.id)} onDelete={() => deleteAction(m.id, a.id)} />
+                    <ActionRow key={a.id} action={a} overdue={overdue.has(a.id)} onToggle={() => toggleAction(m.id, a.id)} onDelete={() => deleteAction(m.id, a.id)} onStartTimer={() => startActionTimer(m.id, a.id)} onStopTimer={() => stopActionTimer(m.id, a.id)} formatDuration={formatDuration} />
                   ))}
                   <ActionAdd onAdd={(t, who, due) => addAction(m.id, t, who, due)} />
                 </div>
@@ -251,8 +281,21 @@ export function Meetings() {
   )
 }
 
-function ActionRow({ action, overdue, onToggle, onDelete }: { action: MeetingAction; overdue: boolean; onToggle: () => void; onDelete: () => void }) {
+function ActionRow({ action, overdue, onToggle, onDelete, onStartTimer, onStopTimer, formatDuration }: { action: MeetingAction; overdue: boolean; onToggle: () => void; onDelete: () => void; onStartTimer: () => void; onStopTimer: () => void; formatDuration: (s: number) => string }) {
   const done = action.status === 'done'
+  const isRunning = !!action.timeTracking?.startedAt
+  const totalTime = action.timeTracking?.totalSeconds ?? 0
+  const [displayTime, setDisplayTime] = useState(totalTime)
+
+  useEffect(() => {
+    if (!isRunning) return
+    const interval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - new Date(action.timeTracking!.startedAt!).getTime()) / 1000)
+      setDisplayTime(totalTime + elapsed)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [isRunning, totalTime, action])
+
   return (
     <div style={{ display: 'flex', alignItems: 'start', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
       <button onClick={onToggle} title={done ? 'Rouvrir' : 'Solder'} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: done ? 'var(--ok)' : 'var(--muted)', flexShrink: 0 }}>
@@ -262,10 +305,16 @@ function ActionRow({ action, overdue, onToggle, onDelete }: { action: MeetingAct
         <div style={{ fontSize: '13px', color: 'var(--ink)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>
           <strong style={{ color: 'var(--navy)', marginRight: '5px' }}>{action.ref}</strong>{action.text}
         </div>
-        <div style={{ fontSize: '11px', color: overdue && !done ? 'var(--bad)' : 'var(--muted)', fontWeight: overdue && !done ? 700 : 400 }}>
-          {action.assignee} • échéance {fmtDate(action.dueDate)}{overdue && !done ? ' — en retard' : ''}
+        <div style={{ fontSize: '11px', color: overdue && !done ? 'var(--bad)' : 'var(--muted)', fontWeight: overdue && !done ? 700 : 400, display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span>{action.assignee} • échéance {fmtDate(action.dueDate)}{overdue && !done ? ' — en retard' : ''}</span>
+          {displayTime > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'var(--navy)', fontWeight: 600 }}><Clock size={11} /> {formatDuration(displayTime)}</span>}
         </div>
       </div>
+      {!done && (
+        <button onClick={isRunning ? onStopTimer : onStartTimer} title={isRunning ? 'Arrêter le chrono' : 'Démarrer le chrono'} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: isRunning ? '#2563eb' : 'var(--muted)', flexShrink: 0 }}>
+          <Clock size={14} />
+        </button>
+      )}
       <button onClick={onDelete} title="Supprimer" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0 }}>
         <X size={14} />
       </button>
