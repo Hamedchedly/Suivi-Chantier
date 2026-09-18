@@ -206,54 +206,62 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   interface BarZone {
     type: 'contractual' | 'planning' | 'overdue'
     widthPercent: number
-    progressPercent: number
+    progressPercent: number // 0-100 fill within this segment
     isVisible: boolean
   }
 
-  const calculateZones = (task: GanttTask): BarZone[] => {
-    const contractualStart = task.baseline_start ?? task.planned_start
-    const contractualEnd = task.baseline_end ?? task.planned_end
-    const planningEnd = task.planned_end
-    const actualEnd = task.actual_end ?? task.forecast_end
+  const calculateZones = (task: GanttTask, barStart: Date, barEnd: Date): BarZone[] => {
+    const planEnd = task.planned_end
+    const totalMs = Math.max(1, barEnd.getTime() - barStart.getTime())
+    const p = Math.max(0, Math.min(100, task.progress))
 
-    // Total span from contractual start to actual/forecast end
-    const totalStart = contractualStart
-    const totalEnd = actualEnd || planningEnd
-    const totalMs = totalEnd.getTime() - totalStart.getTime()
+    const hasOverrun = barEnd.getTime() > planEnd.getTime()
 
-    if (totalMs <= 0) return []
+    if (hasOverrun) {
+      // Bar extends past planned end: planning zone + red overrun zone
+      const planMs = Math.max(0, planEnd.getTime() - barStart.getTime())
+      const planPct = (planMs / totalMs) * 100
+      const overduePct = 100 - planPct
+      return [
+        { type: 'planning', widthPercent: planPct, progressPercent: p, isVisible: planPct > 0.5 },
+        { type: 'overdue', widthPercent: overduePct, progressPercent: 100, isVisible: overduePct > 0.5 },
+      ]
+    }
 
-    // Zone 1: Contractuel (baseline/planned start → baseline/planned end)
-    const contractualMs = contractualEnd.getTime() - contractualStart.getTime()
-    const contractualPercent = (contractualMs / totalMs) * 100
-    const contractualProgress = task.actual_start && task.actual_end && task.actual_end >= contractualEnd ? 100 : (task.progress * (contractualMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime()))))
+    // No overrun — check if there's a distinct baseline ending before planned_end
+    const baselineEnd = task.baseline_end
+    const hasDistinctBaseline = !!baselineEnd && baselineEnd.getTime() < planEnd.getTime() - 86400000
 
-    // Zone 2: Planning (contractual end → planned end)
-    const planningStart = contractualEnd
-    const planningMs = planningEnd.getTime() - planningStart.getTime()
-    const planningPercent = planningMs > 0 ? (planningMs / totalMs) * 100 : 0
-    const planningProgress = planningMs > 0 ? (task.progress * (planningMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime())))) : 0
+    if (hasDistinctBaseline && baselineEnd) {
+      // Contractual (grey) up to baseline_end, then planning extension (blue)
+      const contractualMs = Math.max(0, baselineEnd.getTime() - barStart.getTime())
+      const contractualPct = (contractualMs / totalMs) * 100
+      const planningPct = 100 - contractualPct
+      return [
+        { type: 'contractual', widthPercent: contractualPct, progressPercent: p, isVisible: contractualPct > 0.5 },
+        ...(planningPct > 0.5 ? [{ type: 'planning' as const, widthPercent: planningPct, progressPercent: p, isVisible: true }] : []),
+      ]
+    }
 
-    // Zone 3: Overdue (planned end → actual/forecast end)
-    const overdueStart = planningEnd
-    const overdueMs = (actualEnd ? actualEnd.getTime() : planningEnd.getTime()) - overdueStart.getTime()
-    const overduePercent = overdueMs > 0 ? (overdueMs / totalMs) * 100 : 0
-    const overdueProgress = overdueMs > 0 && actualEnd && actualEnd > planningEnd ? 100 : 0
-
-    return [
-      { type: 'contractual', widthPercent: contractualPercent, progressPercent: Math.min(100, contractualProgress), isVisible: contractualPercent > 0 },
-      { type: 'planning', widthPercent: planningPercent, progressPercent: Math.min(100, planningProgress), isVisible: planningPercent > 0 },
-      { type: 'overdue', widthPercent: overduePercent, progressPercent: overdueProgress, isVisible: overduePercent > 0 },
-    ]
+    // Default: single blue planning bar with gradient progress
+    return [{ type: 'planning', widthPercent: 100, progressPercent: p, isVisible: true }]
   }
 
-  const getSegmentColor = (zoneType: 'contractual' | 'planning' | 'overdue', isCompleted: boolean): string => {
-    const colors = {
-      contractual: { completed: '#64748b', remaining: '#e2e8f0' },
-      planning: { completed: '#2563eb', remaining: '#dbeafe' },
-      overdue: { completed: '#dc2626', remaining: '#fee2e2' },
+  // Returns CSS background (gradient) showing the filled portion within a segment
+  const getSegmentBackground = (zoneType: 'contractual' | 'planning' | 'overdue', progressPercent: number): string => {
+    if (zoneType === 'overdue') return '#dc2626'
+    const p = Math.max(0, Math.min(100, progressPercent))
+    if (zoneType === 'contractual') {
+      const done = '#64748b'; const todo = '#e2e8f0'
+      if (p >= 100) return done
+      if (p <= 0) return todo
+      return `linear-gradient(to right, ${done} ${p}%, ${todo} ${p}%)`
     }
-    return colors[zoneType][isCompleted ? 'completed' : 'remaining']
+    // planning
+    const done = '#2563eb'; const todo = '#bfdbfe'
+    if (p >= 100) return done
+    if (p <= 0) return todo
+    return `linear-gradient(to right, ${done} ${p}%, ${todo} ${p}%)`
   }
 
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
@@ -469,41 +477,25 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   />
                 )}
 
-                {/* Date label or écarts display */}
-                {showEcarts ? (
-                  (() => {
-                    const ec = calculateEcarts(task)
-                    return (
-                      <div style={{
-                        position: 'absolute',
-                        left: bar.leftPx + bar.widthPx + 6,
-                        top: 2,
-                        fontSize: 8,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        zIndex: 2,
-                        pointerEvents: 'none',
-                        color: ec.color,
-                      }}>
-                        Δ {ec.deltaStart >= 0 ? '+' : ''}{ec.deltaStart}j | {ec.dayLabel}
-                      </div>
-                    )
-                  })()
-                ) : (
-                  <div style={{
-                    position: 'absolute',
-                    left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
-                    top: 3,
-                    fontSize: 8,
-                    color: '#5b7183',
-                    whiteSpace: 'nowrap',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                    fontWeight: 500,
-                  }}>
-                    {fmt2(task.planned_start)}
-                  </div>
-                )}
+                {/* ÉCARTS display — only when mode is on */}
+                {showEcarts && (() => {
+                  const ec = calculateEcarts(task)
+                  return (
+                    <div style={{
+                      position: 'absolute',
+                      left: bar.leftPx + bar.widthPx + 6,
+                      top: 2,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      zIndex: 2,
+                      pointerEvents: 'none',
+                      color: ec.color,
+                    }}>
+                      Δ {ec.deltaStart >= 0 ? '+' : ''}{ec.deltaStart}j | {ec.dayLabel}
+                    </div>
+                  )
+                })()}
 
                 {/* Unified segmented bar */}
                 <div
@@ -518,23 +510,22 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   title={tooltip}
                 >
                   {(() => {
-                    const zones = calculateZones(task)
-                    return zones.map((zone, idx) => {
-                      if (!zone.isVisible) return null
-                      const isCompleted = zone.progressPercent >= 100
-                      const bgColor = getSegmentColor(zone.type, isCompleted)
-                      return (
-                        <div
-                          key={zone.type}
-                          className="gantt-bar-segment"
-                          style={{
-                            flex: zone.widthPercent,
-                            backgroundColor: bgColor,
-                            opacity: isCompleted ? 1 : 0.65,
-                          }}
-                        />
-                      )
-                    })
+                    const zones = calculateZones(task, mainStart, mainEnd)
+                    const visibleZones = zones.filter(z => z.isVisible)
+                    // Fallback: always show at least a blue bar
+                    if (visibleZones.length === 0) {
+                      return <div className="gantt-bar-segment" style={{ flex: 1, background: '#bfdbfe' }} />
+                    }
+                    return visibleZones.map(zone => (
+                      <div
+                        key={zone.type}
+                        className="gantt-bar-segment"
+                        style={{
+                          flex: zone.widthPercent,
+                          background: getSegmentBackground(zone.type, zone.progressPercent),
+                        }}
+                      />
+                    ))
                   })()}
 
                   {/* Percentage overlay */}
