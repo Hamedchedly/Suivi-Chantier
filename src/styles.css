@@ -253,7 +253,16 @@ body { max-width: 100% }
   .topbar, .bot-nav, .no-print { display: none !important }
   .app-wrapper, .app-body { display: block !important; min-height: 0 !important }
   .cr-print { padding: 0 !important; max-width: 100% !important }
-  body { background: #fff !important }
+  body { background: #fff !important; margin: 0 !important; padding: 0 !important }
+
+  /* CR table print styles */
+  .cr-list-table { border: 1px solid #ccc !important }
+  .cr-list-table > div { min-width: 100% !important }
+  .cr-row { page-break-inside: avoid }
+  table { border-collapse: collapse; width: 100% }
+  table, th, td { border: 1px solid #999 !important }
+  th, td { padding: 8px !important; text-align: left }
+  th { background: #f5f5f5 !important; font-weight: bold }
 }
 
 /* Sections */

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers, Search,
+  LayoutList, Layers, Search, Eye, EyeOff, Printer,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,
@@ -32,6 +32,15 @@ const FOLLOW_LABEL: Record<FollowUpStatus, string> = {
   rescheduled: 'Reporté', obsolete: 'Rendu obsolète', comment: 'Commentaire',
 }
 
+type ColumnVisibility = {
+  crNo: boolean
+  description: boolean
+  lotCompany: boolean
+  kind: boolean
+  dueDate: boolean
+  status: boolean
+}
+
 export function CrTable() {
   const [reserves, setReserves] = useState<Reserve[]>(getReserves)
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -41,9 +50,24 @@ export function CrTable() {
   const [selectedCr, setSelectedCr] = useState<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [showVisibility, setShowVisibility] = useState(false)
+  const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
+    try {
+      const saved = localStorage.getItem('sc_cr_columns')
+      return saved ? JSON.parse(saved) : { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+    } catch {
+      return { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+    }
+  })
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
   const today = todayISO()
+
+  const toggleColumnVis = (col: keyof ColumnVisibility) => {
+    const next = { ...columnVis, [col]: !columnVis[col] }
+    setColumnVis(next)
+    try { localStorage.setItem('sc_cr_columns', JSON.stringify(next)) } catch { /* noop */ }
+  }
 
   const persist = (next: Reserve[]) => { setReserves(next); saveReserves(next) }
 
@@ -171,6 +195,39 @@ export function CrTable() {
             <Layers size={13} /> Par lot
           </button>
         </div>
+        {/* Print + column visibility */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button onClick={() => window.print()} title="Imprimer" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px' }}>
+            <Printer size={13} /> Imprimer
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowVisibility(v => !v)} title="Colonnes à afficher" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showVisibility ? '#fff' : 'transparent' }}>
+              <Eye size={13} /> Colonnes
+            </button>
+            {showVisibility && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', padding: '10px', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,.12)', zIndex: 50 }}>
+                {[
+                  { key: 'crNo', label: 'N° CR' },
+                  { key: 'description', label: 'Remarque' },
+                  { key: 'lotCompany', label: 'Lot / Entreprise' },
+                  { key: 'kind', label: 'Type' },
+                  { key: 'dueDate', label: 'Échéance' },
+                  { key: 'status', label: 'Statut' },
+                ].map(({ key, label }) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '6px 0', cursor: 'pointer', color: 'var(--navy)' }}>
+                    <input
+                      type="checkbox"
+                      checked={columnVis[key as keyof ColumnVisibility]}
+                      onChange={() => toggleColumnVis(key as keyof ColumnVisibility)}
+                      style={{ accentColor: '#02457A' }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* CR navigation chips */}
@@ -226,10 +283,15 @@ export function CrTable() {
 
       {/* ── Vue liste (default) ────────────────────────────────────────────── */}
       {view === 'liste' && filteredRows.length > 0 && (
-        <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px' }}>
+        <div className="cr-list-table" style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px' }}>
           <div style={{ minWidth: '640px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: HEAD_COLS, gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>
-              <span>CR</span><span>Point</span><span>Lot / Entreprise</span><span>Type</span><span>Échéance</span><span>Statut</span>
+            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>
+              {columnVis.crNo && <span>CR</span>}
+              {columnVis.description && <span>Point</span>}
+              {columnVis.lotCompany && <span>Lot / Entreprise</span>}
+              {columnVis.kind && <span>Type</span>}
+              {columnVis.dueDate && <span>Échéance</span>}
+              {columnVis.status && <span>Statut</span>}
             </div>
             {filteredRows.map(r => {
               const { tone, lastMeeting } = crState(r, today, latestMeetingDate)
@@ -239,19 +301,23 @@ export function CrTable() {
               const isEditing = editing === r.id
               return (
                 <div key={r.id} style={{ borderBottom: '1px solid #eef2f6', background: ts.bg }}>
-                  <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'grid', gridTemplateColumns: HEAD_COLS, gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
-                      {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      {r.crNo != null ? `#${r.crNo}` : '—'}
-                    </span>
-                    <span style={{ color: emphasize ? '#018ABE' : (tone === 'normal' ? 'var(--ink, #1f2937)' : ts.color), fontWeight: emphasize || tone === 'reminder' ? 700 : 400 }}>
-                      {r.reminder && <Flag size={11} color="#dc2626" style={{ verticalAlign: '-1px', marginRight: '4px' }} />}
-                      {r.description}
-                    </span>
-                    <span style={{ color: 'var(--muted)' }}>{r.company || lotLabel(r.lotId)}</span>
-                    <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>
-                    <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>
-                    <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>
+                  <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
+                    {columnVis.crNo && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
+                        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        {r.crNo != null ? `#${r.crNo}` : '—'}
+                      </span>
+                    )}
+                    {columnVis.description && (
+                      <span style={{ color: emphasize ? '#018ABE' : (tone === 'normal' ? 'var(--ink, #1f2937)' : ts.color), fontWeight: emphasize || tone === 'reminder' ? 700 : 400 }}>
+                        {r.reminder && <Flag size={11} color="#dc2626" style={{ verticalAlign: '-1px', marginRight: '4px' }} />}
+                        {r.description}
+                      </span>
+                    )}
+                    {columnVis.lotCompany && <span style={{ color: 'var(--muted)' }}>{r.company || lotLabel(r.lotId)}</span>}
+                    {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
+                    {columnVis.dueDate && <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>}
+                    {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
                   </div>
 
                   {expanded && (
@@ -396,7 +462,16 @@ export function CrTable() {
   )
 }
 
-const HEAD_COLS = '52px 1fr 130px 60px 90px 84px'
+const buildGridCols = (vis: ColumnVisibility): string => {
+  const cols: string[] = []
+  if (vis.crNo) cols.push('52px')
+  if (vis.description) cols.push('1fr')
+  if (vis.lotCompany) cols.push('130px')
+  if (vis.kind) cols.push('60px')
+  if (vis.dueDate) cols.push('90px')
+  if (vis.status) cols.push('84px')
+  return cols.join(' ')
+}
 
 interface Draft { crNo: string; meetingDate: string; description: string; lotId: string; company: string; kind: ReserveKind; dueDate: string; reminder: boolean }
 

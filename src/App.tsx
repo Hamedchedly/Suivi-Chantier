@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
 import { Visite } from './components/pages/Visite'
@@ -40,6 +40,42 @@ import { initRemoteSession, disableSync, clearLocalAppState } from './lib/sync'
 
 export type { Page }
 
+// ── URL routing helpers ──────────────────────────────────────────────────────
+
+const PAGE_ROUTES: Record<Page, string> = {
+  home: '/',
+  gantt: '/planning',
+  visite: '/visite',
+  cr: '/cr',
+  entreprises: '/entreprises',
+  finances: '/finances',
+  rapports: '/rapports',
+  alertes: '/alertes',
+  structure: '/structure',
+  config: '/config',
+  comptes: '/comptes',
+  demandes: '/demandes',
+  projets: '/projets',
+  moncompte: '/moncompte',
+}
+
+const ROUTES_PAGE: Record<string, Page> = Object.entries(PAGE_ROUTES).reduce(
+  (acc, [page, route]) => ({ ...acc, [route]: page as Page }),
+  {} as Record<string, Page>
+)
+
+const getPageFromUrl = (): Page => {
+  const path = window.location.pathname
+  return ROUTES_PAGE[path] ?? 'home'
+}
+
+const setUrlForPage = (page: Page) => {
+  const route = PAGE_ROUTES[page]
+  if (route && window.location.pathname !== route) {
+    window.history.pushState({ sc: true, page }, '', route)
+  }
+}
+
 /** Pages dont le titre ne dépend pas de l'opération affichée. */
 const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
   gantt:    { title: 'Planning', sub: 'Déplacez les barres pour modifier les dates' },
@@ -59,6 +95,9 @@ const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
+    // Try URL first, then localStorage fallback
+    const urlPage = getPageFromUrl()
+    if (urlPage !== 'home' && ROUTES_PAGE[window.location.pathname]) return urlPage
     try { return (localStorage.getItem('sc_nav_page') as Page) ?? 'home' } catch { return 'home' }
   })
   const [gestionOpen, setGestionOpen] = useState(false)
@@ -216,10 +255,18 @@ export default function App() {
     if (t) logActivity('doc', `Opération « ${t.name} » supprimée définitivement`)
   }
 
-  // Back button: step back inside the app instead of closing it. A spare
-  // history entry is kept ahead of us; each Back consumes it and we push a new
-  // one, until there is nothing left to step back to.
-  useEffect(() => { try { localStorage.setItem('sc_nav_page', currentPage) } catch { /* noop */ } }, [currentPage])
+  // ── URL sync: update the browser URL when page changes ────────────────────
+  useEffect(() => {
+    setUrlForPage(currentPage)
+    try { localStorage.setItem('sc_nav_page', currentPage) } catch { /* noop */ }
+  }, [currentPage])
+
+  // ── Back button: step back inside the app instead of closing it ──────────
+  // A spare history entry is kept ahead of us; each Back consumes it and we
+  // push a new one, until there is nothing left to step back to.
+  useEffect(() => {
+    history.pushState({ sc: true }, '')
+  }, [])
 
   const pageRef = useRef(currentPage)
   pageRef.current = currentPage
@@ -228,11 +275,13 @@ export default function App() {
 
   useEffect(() => {
     if (window.location.hash.startsWith('#share=')) return
-    history.pushState({ sc: true }, '')
     const onPop = () => {
       const keepInside = () => history.pushState({ sc: true }, '')
       if (sheetRef.current) { setGestionOpen(false); keepInside(); return }
       if (runBackHandler()) { keepInside(); return }
+      // Try to navigate based on URL
+      const urlPage = getPageFromUrl()
+      if (urlPage !== pageRef.current) { setCurrentPage(urlPage); keepInside(); return }
       if (pageRef.current !== 'home') { setCurrentPage('home'); keepInside(); return }
       // at the root with nothing to unwind — let the browser leave
     }
