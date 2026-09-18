@@ -18,6 +18,7 @@ import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
 import { TaskDetail } from '../gantt/TaskDetail'
+import { PlanningTableView } from '../gantt/PlanningTableView'
 import '../../styles/gantt.css'
 
 const LOT_OPTS = [
@@ -109,6 +110,7 @@ export function Gantt() {
   const [showBaseline, setShowBaseline] = useState(false)
   const [showEcarts, setShowEcarts] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [showTableView, setShowTableView] = useState(false)
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
@@ -346,6 +348,16 @@ export function Gantt() {
             >
               <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
             </button>
+            {editMode && (
+              <button
+                className="gtb"
+                onClick={() => setShowTableView(!showTableView)}
+                title="Vue tableau"
+                style={{ background: '#f0f9ff', color: '#0369a1' }}
+              >
+                <span style={{ fontSize: '10px', fontWeight: 600 }}>Tableau</span>
+              </button>
+            )}
             <button
               className="gtb"
               onClick={() => setAddForm(a => !a)}
@@ -519,6 +531,14 @@ export function Gantt() {
           onCancel={() => {
             setForecastTasks(null)
           }}
+        />
+      )}
+
+      {showTableView && (
+        <PlanningTableView
+          tasks={ganttTasks}
+          onClose={() => setShowTableView(false)}
+          onTaskUpdate={handleTaskUpdate}
         />
       )}
     </div>

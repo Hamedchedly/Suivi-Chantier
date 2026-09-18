@@ -15,8 +15,15 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
 }
 /** Zones rattachées à la tâche (via « Bâtiments & zones »), pour affichage. */
 const zonesOfTask = (taskId: string): string => {
-  const labels = new Map(getZoneRefs().map(z => [z.refId, z.label]))
-  const names = unitIdsForTask(getTaskUnits(), taskId).map(id => labels.get(id) ?? id)
+  const zones = getZoneRefs()
+  const labels = new Map(zones.map(z => [z.refId, z]))
+  const unitIds = unitIdsForTask(getTaskUnits(), taskId)
+  const names = unitIds.map(id => {
+    const z = labels.get(id)
+    if (!z) return id
+    // Format: "bat A RDC Log 1"
+    return `${z.buildingLabel ?? 'bat'} ${z.label ?? id}`.trim()
+  })
   return names.length ? names.join(', ') : '—'
 }
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr') : '—')

@@ -375,9 +375,8 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
   const renderSubtaskForm = (parentId: string) => {
     return (
       <tr style={{ background: '#f9fbfd' }}>
-        <td colSpan={3} style={{ padding: '8px 10px' }}>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600 }}>Nouvelle sous-tâche :</span>
+        <td style={{ padding: '6px 10px', paddingLeft: `${28 + 14}px` }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', maxWidth: '300px' }}>
             <input
               autoFocus
               type="text"
@@ -394,7 +393,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   setEditingSubtask(null)
                 }
               }}
-              style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1dbe5', fontSize: '11px' }}
+              style={{ flex: 1, padding: '4px 6px', borderRadius: '4px', border: '1px solid #d1dbe5', fontSize: '11px' }}
             />
             <button
               onClick={() => {
@@ -404,14 +403,15 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   setEditingSubtask(null)
                 }
               }}
-              style={{ padding: '3px 10px', borderRadius: '4px', border: '1px solid #018ABE', background: '#018ABE', color: '#fff', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
-            >Ajouter</button>
+              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #018ABE', background: '#018ABE', color: '#fff', fontSize: '10px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >✓</button>
             <button
               onClick={() => { setSubtaskTitle(''); setEditingSubtask(null) }}
-              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: '10px', cursor: 'pointer' }}
-            >Annuler</button>
+              style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: '10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >✕</button>
           </div>
         </td>
+        <td colSpan={2} />
       </tr>
     )
   }
@@ -420,6 +420,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
     const dimmed = !!viewState.highlightCritical && !task.is_critical
+    const isLate = task.actual_end && task.actual_end.getTime() > task.planned_end.getTime()
 
     // Barre principale = dates réelles si elles existent, sinon dates contractuelles.
     // Référence fine (dessous) = dates contractuelles quand les réelles sont posées.
@@ -561,7 +562,8 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   style={{
                     left: bar.leftPx,
                     width: bar.widthPx,
-                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : '0 1px 3px rgba(0, 0, 0, 0.12)',
+                    boxShadow: isLate ? '0 0 0 1.5px #dc2626' : task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : '0 1px 3px rgba(0, 0, 0, 0.12)',
+                    border: isLate ? '1px solid #dc2626' : '1px solid rgba(0,0,0,0.08)',
                     cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
                   }}
                   title={tooltip}
