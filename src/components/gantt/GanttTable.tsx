@@ -202,6 +202,60 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return { leftPx, widthPx }
   }
 
+  // ── Zone segmentation: split bar into contractual | planning | overdue ──
+  interface BarZone {
+    type: 'contractual' | 'planning' | 'overdue'
+    widthPercent: number
+    progressPercent: number
+    isVisible: boolean
+  }
+
+  const calculateZones = (task: GanttTask): BarZone[] => {
+    const contractualStart = task.baseline_start ?? task.planned_start
+    const contractualEnd = task.baseline_end ?? task.planned_end
+    const planningEnd = task.planned_end
+    const actualEnd = task.actual_end ?? task.forecast_end
+
+    // Total span from contractual start to actual/forecast end
+    const totalStart = contractualStart
+    const totalEnd = actualEnd || planningEnd
+    const totalMs = totalEnd.getTime() - totalStart.getTime()
+
+    if (totalMs <= 0) return []
+
+    // Zone 1: Contractuel (baseline/planned start → baseline/planned end)
+    const contractualMs = contractualEnd.getTime() - contractualStart.getTime()
+    const contractualPercent = (contractualMs / totalMs) * 100
+    const contractualProgress = task.actual_start && task.actual_end && task.actual_end >= contractualEnd ? 100 : (task.progress * (contractualMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime()))))
+
+    // Zone 2: Planning (contractual end → planned end)
+    const planningStart = contractualEnd
+    const planningMs = planningEnd.getTime() - planningStart.getTime()
+    const planningPercent = planningMs > 0 ? (planningMs / totalMs) * 100 : 0
+    const planningProgress = planningMs > 0 ? (task.progress * (planningMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime())))) : 0
+
+    // Zone 3: Overdue (planned end → actual/forecast end)
+    const overdueStart = planningEnd
+    const overdueMs = (actualEnd ? actualEnd.getTime() : planningEnd.getTime()) - overdueStart.getTime()
+    const overduePercent = overdueMs > 0 ? (overdueMs / totalMs) * 100 : 0
+    const overdueProgress = overdueMs > 0 && actualEnd && actualEnd > planningEnd ? 100 : 0
+
+    return [
+      { type: 'contractual', widthPercent: contractualPercent, progressPercent: Math.min(100, contractualProgress), isVisible: contractualPercent > 0 },
+      { type: 'planning', widthPercent: planningPercent, progressPercent: Math.min(100, planningProgress), isVisible: planningPercent > 0 },
+      { type: 'overdue', widthPercent: overduePercent, progressPercent: overdueProgress, isVisible: overduePercent > 0 },
+    ]
+  }
+
+  const getSegmentColor = (zoneType: 'contractual' | 'planning' | 'overdue', isCompleted: boolean): string => {
+    const colors = {
+      contractual: { completed: '#64748b', remaining: '#e2e8f0' },
+      planning: { completed: '#2563eb', remaining: '#dbeafe' },
+      overdue: { completed: '#dc2626', remaining: '#fee2e2' },
+    }
+    return colors[zoneType][isCompleted ? 'completed' : 'remaining']
+  }
+
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
     e.preventDefault()
     // Drag always moves actual dates; fall back to planned if no actual yet.
@@ -407,31 +461,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               />
             ) : (
               <div style={{ opacity: dimmed ? 0.28 : 1 }}>
-                {/* Barre du réel constaté, sous la barre du prévisionnel */}
-                {base && <div className="gantt-actual" style={{ left: base.leftPx, width: base.widthPx }} />}
-
-                {/* Baseline bar (thin grey reference line — contractual) */}
-                {showBaseline && task.baseline_start && task.baseline_end && (() => {
-                  const bl = geom(task.baseline_start, task.baseline_end)
-                  return (
-                    <div
-                      title={`Contractuel : ${fmt2(task.baseline_start)} → ${fmt2(task.baseline_end)}`}
-                      style={{ position: 'absolute', left: bl.leftPx, top: 21, width: bl.widthPx, height: 2, background: '#94a3b8', borderRadius: 1, zIndex: 1, opacity: 0.65, pointerEvents: 'none' }}
-                    />
-                  )
-                })()}
-
-                {/* Forecast bar (hatched amber — prévision calculée) */}
-                {showForecast && task.forecast_start && task.forecast_end && (() => {
-                  const f = geom(task.forecast_start, task.forecast_end)
-                  return (
-                    <div
-                      title={`Prévision : ${fmt2(task.forecast_start)} → ${fmt2(task.forecast_end)}`}
-                      style={{ position: 'absolute', left: f.leftPx, top: 17, width: f.widthPx, height: 5, background: 'repeating-linear-gradient(45deg, #f59e0b 0 3px, #fef3c7 3px 6px)', borderRadius: 2, zIndex: 2, opacity: 0.9, pointerEvents: 'none' }}
-                    />
-                  )
-                })()}
-
                 {/* Left resize handle */}
                 {editable && (
                   <div
@@ -476,26 +505,62 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   </div>
                 )}
 
-                {/* Actual/planned bar */}
+                {/* Unified segmented bar */}
                 <div
                   className="gantt-bar"
                   onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
                   style={{
                     left: bar.leftPx,
                     width: bar.widthPx,
-                    backgroundColor: getStatusColor(task.status),
-                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : undefined,
+                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : '0 1px 3px rgba(0, 0, 0, 0.12)',
                     cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
                   }}
                   title={tooltip}
                 >
-                  {task.progress < 100 && (
-                    <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
-                  )}
-                  {bar.widthPx > 30 && (
-                    <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '14px' }}>
+                  {(() => {
+                    const zones = calculateZones(task)
+                    return zones.map((zone, idx) => {
+                      if (!zone.isVisible) return null
+                      const isCompleted = zone.progressPercent >= 100
+                      const bgColor = getSegmentColor(zone.type, isCompleted)
+                      return (
+                        <div
+                          key={zone.type}
+                          className="gantt-bar-segment"
+                          style={{
+                            flex: zone.widthPercent,
+                            backgroundColor: bgColor,
+                            opacity: isCompleted ? 1 : 0.65,
+                          }}
+                        />
+                      )
+                    })
+                  })()}
+
+                  {/* Percentage overlay */}
+                  {bar.widthPx > 50 && (
+                    <div
+                      className="gantt-bar-percentage"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        opacity: 0.9,
+                        pointerEvents: 'none',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                        zIndex: 10,
+                      }}
+                    >
                       {task.progress}%
-                    </span>
+                    </div>
                   )}
                 </div>
 
