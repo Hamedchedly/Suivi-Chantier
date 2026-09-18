@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react'
+import { Plus, Check, RotateCcw, Users, Gavel, ChevronDown, ChevronRight, Pencil, X, Copy } from 'lucide-react'
 import { Meeting, MeetingAction, nextActionRef, overdueActions } from '../../lib/meetings'
 import { getMeetings, saveMeetings, logActivity } from '../../lib/repo'
 
@@ -88,6 +88,18 @@ export function Meetings() {
     setEditId(null); setEditTitle(''); setEditDate('')
   }
 
+  const duplicateMeeting = (m: Meeting) => {
+    const newMeeting: Meeting = {
+      ...m,
+      id: `rc${Date.now()}`,
+      decisions: [...m.decisions],
+      actions: [...m.actions],
+    }
+    setMeetings(prev => [newMeeting, ...prev])
+    setOpen(prev => new Set(prev).add(newMeeting.id))
+    logActivity('doc', `Réunion dupliquée — ${m.title}`)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -132,9 +144,14 @@ export function Meetings() {
                       </div>
                     </div>
                   </button>
-                  <button onClick={() => { setEditId(m.id); setEditTitle(m.title); setEditDate(m.date) }} title="Modifier" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0, marginTop: '8px' }}>
-                    <Pencil size={14} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button onClick={() => { setEditId(m.id); setEditTitle(m.title); setEditDate(m.date) }} title="Modifier" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0 }}>
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => duplicateMeeting(m)} title="Dupliquer" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0 }}>
+                      <Copy size={14} />
+                    </button>
+                  </div>
                 </>
               )}
 
