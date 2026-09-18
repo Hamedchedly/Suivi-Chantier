@@ -106,6 +106,9 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Attribution crNo** | À la clôture sans n° CR, attribue le crNo courant automatiquement | `CrTable.tsx` (follow) | — |
 | **Sélecteur visibilité colonnes** | Cocher/décocher les colonnes à afficher : N°CR, Description, Lot/Entreprise, Type, Échéance, Statut | `CrTable.tsx` (showVisibility, columnVis) | localStorage (sc_cr_columns) |
 | **Imprimer journal CR** | Bouton d'impression avec CSS print dédié ; cache les colonnes masquées | `CrTable.tsx` (window.print) | `src/styles.css` (@media print) |
+| **Query params (deep linking)** | URL ?crNo=N pour filtrer directement sur un CR | `CrTable.tsx` (useEffect URLSearchParams) | Window History API |
+| **Mode paysage impression** | Print CSS responsive : portrait par défaut, paysage si sélectionné dans dialogue | `src/styles.css` (@media print and orientation) | @page CSS rules |
+| **Notes & suivi consolidé** | Vue dédiée : tous les follow-ups de toutes les réserves, triés par date, avec recherche | `Notes.tsx`, `CR.tsx` (onglet) | `src/lib/reserves.ts` (follow array) |
 | **Réunions** | Liste des réunions de chantier (PV, participants, ordre du jour) | `Meetings.tsx` | `src/lib/meetings.ts` |
 | **Réserves terrain** | Vue parallèle des réserves liées aux visites de terrain | `Reserves.tsx` | `src/lib/reserves.ts` |
 
@@ -272,4 +275,4 @@ TOUT ──► repo.ts (localStorage) ──► [Futur : Supabase via sync.ts]
 
 ---
 
-*Dernière mise à jour : 2026-09-18 — PARTIE 0-4 complètes (routing URL, export CR).*
+*Dernière mise à jour : 2026-09-18 — PARTIE 0-5 complètes (routing URL, export CR, query params, notes view, print landscape).*
