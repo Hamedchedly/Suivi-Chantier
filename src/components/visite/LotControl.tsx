@@ -237,15 +237,34 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
   const [subAdded, setSubAdded] = useState<string | null>(null)
+  const [noteForm, setNoteForm] = useState<{ text: string; delayDays: number; important: boolean } | null>(null)
   const gap = progressGap(task)
 
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+  const addDaysToToday = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
   const submitSubTask = () => {
     if (!subForm || !subForm.title.trim() || !onAddSubTask) return
     onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5))
     setSubAdded(subForm.title.trim())
     setSubForm({ title: '', start: subForm.start, duration: '5' })
     setTimeout(() => setSubAdded(null), 3000)
+  }
+  const submitNote = () => {
+    if (!noteForm || !noteForm.text.trim()) return
+    const dueDate = addDaysToToday(noteForm.delayDays)
+    onAddRemark({
+      kind: noteForm.important ? 'action' : 'observation',
+      description: noteForm.text.trim(),
+      lotId: task.lotId,
+      taskId: task.taskId,
+      dueDate: noteForm.delayDays > 0 ? dueDate : undefined,
+      priority: noteForm.important ? 'high' : 'low',
+    })
+    setNoteForm(null)
   }
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
@@ -493,6 +512,42 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         </div>
       )}
 
+      {/* Formulaire note avec délai */}
+      {noteForm && !readOnly && (
+        <div style={{ margin: '4px 0 10px', padding: '10px 12px', borderRadius: '10px', border: '1px solid #fef3c7', background: '#fffbeb' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Plus size={12} /> Note de suivi
+          </div>
+          <textarea
+            autoFocus
+            value={noteForm.text}
+            placeholder="Saisir une note…"
+            onChange={e => setNoteForm({ ...noteForm, text: e.target.value })}
+            onKeyDown={e => { if (e.key === 'Escape') setNoteForm(null) }}
+            style={{ ...input, width: '100%', minHeight: '54px', fontSize: '12px', marginBottom: '8px' }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', color: noteForm.important ? '#dc2626' : 'var(--muted)', fontWeight: 600, cursor: 'pointer' }}>
+              <input type="checkbox" checked={noteForm.important} onChange={e => setNoteForm({ ...noteForm, important: e.target.checked })} style={{ width: '15px', height: '15px' }} />
+              📌 Important
+            </label>
+            <select value={noteForm.delayDays} onChange={e => setNoteForm({ ...noteForm, delayDays: Number(e.target.value) })} style={{ ...input, fontSize: '11px', padding: '6px 8px' }}>
+              <option value={0}>Sans délai</option>
+              <option value={7}>1 semaine</option>
+              <option value={14}>2 semaines</option>
+              <option value={21}>3 semaines</option>
+              <option value={28}>4 semaines</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={submitNote} disabled={!noteForm.text.trim()} style={{ ...ghostBtn, background: noteForm.text.trim() ? '#b45309' : '#e5e7eb', color: noteForm.text.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, fontSize: '12px' }}>
+              Ajouter
+            </button>
+            <button onClick={() => setNoteForm(null)} style={{ ...ghostBtn, fontSize: '12px' }}>Annuler</button>
+          </div>
+        </div>
+      )}
+
       {!readOnly && (
         <>
           {/* P1 — Deux inputs distincts : appareil photo vs galerie */}
@@ -504,6 +559,9 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             <div style={{ display: 'flex', gap: '6px' }}>
               <button onClick={() => setPanel('photo')} style={actBtn('#02457A')}>
                 <Camera size={16} /> Photo
+              </button>
+              <button onClick={() => setNoteForm({ text: '', delayDays: 7, important: false })} style={actBtn('#92400e')}>
+                <Plus size={16} /> Note
               </button>
               <button onClick={() => setPanel('action')} style={actBtn('#b45309')}>
                 <Flag size={16} /> Alerte
