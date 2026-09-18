@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2,
+  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
@@ -210,7 +210,7 @@ export function LotControl(props: Props) {
 
 // ── One task ─────────────────────────────────────────────────────────────────
 
-type Panel = null | 'menu' | 'photo' | 'observation' | 'action' | 'engagement' | 'blockers'
+type Panel = null | 'menu' | 'photo' | 'observation' | 'action' | 'engagement' | 'blockers' | 'overflow-menu'
 
 function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark, onAddSubTask }: {
   task: VisitTaskCheck
@@ -316,14 +316,23 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 <Plus size={11} />↳
               </button>
             )}
-            <button onClick={() => setPanel(p => p === 'engagement' ? null : 'engagement')}
-              title="Engagement de l'entreprise" style={miniBtn('#6d28d9', !!task.promisedWeek)}>
-              <Handshake size={15} />
-            </button>
-            <button onClick={() => onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' })}
-              title={isNa ? 'Rendre applicable' : 'Marquer non applicable'} style={miniBtn('#64748b', isNa)}>
-              <CircleSlash size={15} />
-            </button>
+            {/* Menu overflow: Engagement + Marquer NA */}
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setPanel(p => p === 'overflow-menu' ? null : 'overflow-menu')}
+                title="Plus d'options" style={miniBtn('#64748b', panel === 'overflow-menu')}>
+                <MoreVertical size={15} />
+              </button>
+              {panel === 'overflow-menu' && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '200px' }}>
+                  <button onClick={() => { setPanel(p => p === 'engagement' ? null : 'engagement') }} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: task.promisedWeek ? '#6d28d9' : '#5b7183', textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+                    <Handshake size={14} /> Engagement{task.promisedWeek ? ' ✓' : ''}
+                  </button>
+                  <button onClick={() => { if (window.confirm(isNa ? 'Rendre la tâche applicable ?' : 'Marquer cette tâche comme non applicable ?')) { onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' }); setPanel(null); } }} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: isNa ? '#64748b' : '#5b7183', textAlign: 'left' }}>
+                    <CircleSlash size={14} /> {isNa ? 'Rendre applicable' : 'Marquer N/A'}
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         )}
         {!isNa && (

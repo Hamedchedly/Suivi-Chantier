@@ -57,6 +57,9 @@ La visite est une **session de contrôle de terrain**. Elle passe par plusieurs 
 | **Session terrain (zones)** | Contrôle zone par zone : état, avancement par tâche, observations, photos | `ZoneControl.tsx` | `src/lib/visits.ts`, `src/lib/progress.ts` |
 | **Masquage lots terminés** | En mode session, masquer les zones/lots complètement terminés ; visible dans "tous les lots" | `Visite.tsx` (session rendering), `visits.ts` (buildZonesFromPlanning) | `src/lib/visits.ts` |
 | **Barres d'avancement par zone** | Deux barres visuelles (travaux bleu, contrôle vert) affichant les % pour chaque logement | `Visite.tsx` (zone row rendering) | — |
+| **Tâches terminées pliées** | Par défaut, les tâches à 100% affichées en mode compact ; dépliable au clic | `LotControl.tsx` (TaskCard, collapsed state) | — |
+| **Points à revoir** | Section affichant les réserves ouvertes non levées rattachées à la zone courante | `ZoneControl.tsx` (CarriedPoints) | `src/lib/reserves.ts` (carriedOverPoints) |
+| **Menu overflow sous-tâches** | Actions Engagement + Marquer N/A regroupées dans menu 3 points ; confirmation window.confirm() | `LotControl.tsx` (overflow-menu panel) | — |
 | **Contrôle par lot (LotControl)** | Vue lot : TaskCard par tâche, sous-tâches expandables | `LotControl.tsx` | `src/lib/visits.ts` |
 | **Ajout tâche depuis visite** | Bouton « + » par lot → crée une tâche dans le planning | `LotControl.tsx` (onAddPlanTask) | `src/lib/planning.ts` (createTask) |
 | **Ajout sous-tâche depuis visite** | Bouton « ↳+ » sur TaskCard → crée une sous-tâche | `LotControl.tsx` (onAddSubTask) | `src/lib/planning.ts` (createSubTask) |
