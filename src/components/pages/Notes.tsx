@@ -18,12 +18,15 @@ export function Notes() {
   const reserves = useMemo(() => getReserves(), [])
   const lots = useMemo(() => getLotsConfig(), [])
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const searchParam = params.get('notesSearch')
     if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
+    const statusParam = params.get('notesStatus')
+    if (statusParam) setStatusFilter(new Set(statusParam.split(',')))
   }, [])
 
   // ── URL state sync: update URL when state changes ───────────────────────────
@@ -31,9 +34,11 @@ export function Notes() {
     const params = new URLSearchParams(window.location.search)
     if (searchTerm) params.set('notesSearch', encodeURIComponent(searchTerm))
     else params.delete('notesSearch')
+    if (statusFilter.size > 0) params.set('notesStatus', Array.from(statusFilter).join(','))
+    else params.delete('notesStatus')
     const search = params.toString()
     window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
-  }, [searchTerm])
+  }, [searchTerm, statusFilter])
 
   // Flatten all notes across all reserves
   const allNotes = useMemo(() => {
@@ -77,10 +82,23 @@ export function Notes() {
         (n.note || '').toLowerCase().includes(term)
       )
     }
+    if (statusFilter.size > 0) {
+      result = result.filter(n => statusFilter.has(n.status))
+    }
     return result.sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
-  }, [allNotes, searchTerm, lots])
+  }, [allNotes, searchTerm, lots, statusFilter])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
+
+  const statuses = ['done', 'in_progress', 'rescheduled', 'comment', 'obsolete', 'not_done'] as const
+  const statusLabels: Record<string, string> = {
+    done: 'Résolu',
+    in_progress: 'En cours',
+    rescheduled: 'Reprogrammé',
+    comment: 'Commentaire',
+    obsolete: 'Obsolète',
+    not_done: 'Non résolu',
+  }
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
@@ -95,6 +113,37 @@ export function Notes() {
           style={{ ...input, flex: 1, fontSize: '13px', padding: '8px 10px' }}
         />
         {searchTerm && <button onClick={() => setSearchTerm('')} style={{ ...ghostBtn, padding: '6px 8px' }}><X size={14} /></button>}
+      </div>
+
+      {/* Status filter */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px', paddingLeft: '8px' }}>
+        {statuses.map(status => {
+          const isSelected = statusFilter.has(status)
+          const tone = STATUS_TONE[status]
+          return (
+            <button
+              key={status}
+              onClick={() => {
+                const next = new Set(statusFilter)
+                if (isSelected) next.delete(status)
+                else next.add(status)
+                setStatusFilter(next)
+              }}
+              style={{
+                padding: '5px 10px',
+                borderRadius: '6px',
+                border: isSelected ? `2px solid ${tone.color}` : '1px solid var(--line)',
+                background: isSelected ? tone.bg : '#fff',
+                color: tone.color,
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {statusLabels[status]}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px', paddingLeft: '8px' }}>
