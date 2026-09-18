@@ -370,7 +370,15 @@ export function Visite() {
                       <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
+                        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ flex: 1, height: '6px', background: '#eef2f6', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: '#02457A', width: `${zoneWorksProgress(z)}%` }} />
+                          </div>
+                          <div style={{ flex: 1, height: '6px', background: '#eef2f6', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: '#16a34a', width: `${zoneControlProgress(z)}%` }} />
+                          </div>
+                        </div>
                       </div>
                       {carried > 0 && (
                         <span title={`${carried} point(s) non levé(s)`} style={{ ...badge, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
