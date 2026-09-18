@@ -42,6 +42,12 @@ export function Meetings() {
       ? { ...m, decisions: [...m.decisions, { id: `d${Date.now()}`, text: text.trim() }] } : m))
   }
 
+  const deleteDecision = (mid: string, did: string) => {
+    setMeetings(prev => prev.map(m => m.id === mid
+      ? { ...m, decisions: m.decisions.filter(d => d.id !== did) } : m))
+    logActivity('doc', `Décision supprimée`)
+  }
+
   const addAction = (mid: string, text: string, assignee: string, dueDate: string) => {
     if (!text.trim()) return
     setMeetings(prev => {
@@ -50,6 +56,12 @@ export function Meetings() {
         ? { ...m, actions: [...m.actions, { id: `a${Date.now()}`, ref, text: text.trim(), assignee: assignee.trim() || '—', dueDate, status: 'todo' as const }] }
         : m)
     })
+  }
+
+  const deleteAction = (mid: string, aid: string) => {
+    setMeetings(prev => prev.map(m => m.id === mid
+      ? { ...m, actions: m.actions.filter(a => a.id !== aid) } : m))
+    logActivity('resolve', `Action supprimée`)
   }
 
   const toggleAction = (mid: string, aid: string) =>
@@ -137,7 +149,12 @@ export function Meetings() {
                   <SubTitle icon={<Gavel size={12} />} label="Décisions" />
                   {m.decisions.length === 0 && <Empty>Aucune décision actée.</Empty>}
                   {m.decisions.map(d => (
-                    <div key={d.id} style={{ fontSize: '13px', color: 'var(--ink)', padding: '5px 0 5px 16px', borderLeft: '2px solid var(--sky)', marginBottom: '4px' }}>{d.text}</div>
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'start', gap: '8px', fontSize: '13px', color: 'var(--ink)', padding: '5px 0 5px 16px', borderLeft: '2px solid var(--sky)', marginBottom: '4px' }}>
+                      <span style={{ flex: 1 }}>{d.text}</span>
+                      <button onClick={() => deleteDecision(m.id, d.id)} title="Supprimer" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0 }}>
+                        <X size={13} />
+                      </button>
+                    </div>
                   ))}
                   <InlineAdd placeholder="Nouvelle décision…" onAdd={text => addDecision(m.id, text)} />
 
@@ -145,7 +162,7 @@ export function Meetings() {
                   <SubTitle icon={<Check size={12} />} label="Actions" />
                   {m.actions.length === 0 && <Empty>Aucune action.</Empty>}
                   {m.actions.map(a => (
-                    <ActionRow key={a.id} action={a} overdue={overdue.has(a.id)} onToggle={() => toggleAction(m.id, a.id)} />
+                    <ActionRow key={a.id} action={a} overdue={overdue.has(a.id)} onToggle={() => toggleAction(m.id, a.id)} onDelete={() => deleteAction(m.id, a.id)} />
                   ))}
                   <ActionAdd onAdd={(t, who, due) => addAction(m.id, t, who, due)} />
                 </div>
@@ -158,7 +175,7 @@ export function Meetings() {
   )
 }
 
-function ActionRow({ action, overdue, onToggle }: { action: MeetingAction; overdue: boolean; onToggle: () => void }) {
+function ActionRow({ action, overdue, onToggle, onDelete }: { action: MeetingAction; overdue: boolean; onToggle: () => void; onDelete: () => void }) {
   const done = action.status === 'done'
   return (
     <div style={{ display: 'flex', alignItems: 'start', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
@@ -173,6 +190,9 @@ function ActionRow({ action, overdue, onToggle }: { action: MeetingAction; overd
           {action.assignee} • échéance {fmtDate(action.dueDate)}{overdue && !done ? ' — en retard' : ''}
         </div>
       </div>
+      <button onClick={onDelete} title="Supprimer" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)', flexShrink: 0 }}>
+        <X size={14} />
+      </button>
     </div>
   )
 }
