@@ -254,15 +254,24 @@ body { max-width: 100% }
   .app-wrapper, .app-body { display: block !important; min-height: 0 !important }
   .cr-print { padding: 0 !important; max-width: 100% !important }
   body { background: #fff !important; margin: 0 !important; padding: 0 !important }
+  @page { margin: 10mm; size: A4 portrait }
 
   /* CR table print styles */
-  .cr-list-table { border: 1px solid #ccc !important }
-  .cr-list-table > div { min-width: 100% !important }
+  .cr-list-table { border: 1px solid #ccc !important; width: 100% }
+  .cr-list-table > div { min-width: 100% !important; width: 100% }
   .cr-row { page-break-inside: avoid }
   table { border-collapse: collapse; width: 100% }
   table, th, td { border: 1px solid #999 !important }
-  th, td { padding: 8px !important; text-align: left }
+  th, td { padding: 8px !important; text-align: left; font-size: 10pt }
   th { background: #f5f5f5 !important; font-weight: bold }
+}
+
+/* Landscape print mode: user can set via browser print dialog */
+@media print and (orientation: landscape) {
+  @page { size: A4 landscape; margin: 10mm }
+  body { font-size: 10pt }
+  th, td { padding: 6px !important; font-size: 9pt }
+  .cr-list-table { width: 100% !important; transform: scale(0.95); transform-origin: 0 0 }
 }
 
 /* Sections */

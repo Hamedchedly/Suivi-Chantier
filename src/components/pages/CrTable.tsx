@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
@@ -62,6 +62,27 @@ export function CrTable() {
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
   const today = todayISO()
+
+  // Sync query params: ?crNo=N selects that CR
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const crNoParam = params.get('crNo')
+    if (crNoParam) {
+      const num = Number(crNoParam)
+      if (!isNaN(num)) setSelectedCr(num)
+    }
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (selectedCr !== null) {
+      params.set('crNo', String(selectedCr))
+    } else {
+      params.delete('crNo')
+    }
+    const search = params.toString()
+    window.history.replaceState(null, '', search ? `?${search}` : window.location.pathname)
+  }, [selectedCr])
 
   const toggleColumnVis = (col: keyof ColumnVisibility) => {
     const next = { ...columnVis, [col]: !columnVis[col] }
