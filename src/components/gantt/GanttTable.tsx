@@ -10,7 +10,7 @@ interface GanttTableProps {
   onTaskUpdate?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) => void
   onProgress?: (taskId: string, value: number) => void
   onTaskClick?: (task: GanttTask) => void
-  onTasksReorder?: (action: { type: 'swap'; taskId1: string; taskId2: string } | { type: 'insert'; newTask: GanttTask; beforeTaskId: string }) => void
+  onCommitmentClick?: (commitment: DateCommitment) => void  // click on engagement marker
   readOnly?: boolean
   showForecast?: boolean    // show forecast bars (hatched yellow)
   showBaseline?: boolean    // show baseline thin reference bar
@@ -107,7 +107,6 @@ function isoWeek(d: Date): number {
 }
 
 const fmt2 = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-const fmtDateInput = (d: Date) => d.toISOString().split('T')[0]
 
 // Calcul des écarts (delta) pour affichage mode détail
 function calculateEcarts(task: GanttTask) {
@@ -146,12 +145,11 @@ function calculateEcarts(task: GanttTask) {
   return ecarts
 }
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, showEcarts, commitments, onTasksReorder }: GanttTableProps) {
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, onCommitmentClick, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
   const [editingActualStart, setEditingActualStart] = useState<string | null>(null)
-  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const didAutoScroll = useRef(false)
@@ -202,6 +200,60 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     const leftPx = s * dayWidthPx
     const widthPx = Math.max(1, e - s) * dayWidthPx
     return { leftPx, widthPx }
+  }
+
+  // ── Zone segmentation: split bar into contractual | planning | overdue ──
+  interface BarZone {
+    type: 'contractual' | 'planning' | 'overdue'
+    widthPercent: number
+    progressPercent: number
+    isVisible: boolean
+  }
+
+  const calculateZones = (task: GanttTask): BarZone[] => {
+    const contractualStart = task.baseline_start ?? task.planned_start
+    const contractualEnd = task.baseline_end ?? task.planned_end
+    const planningEnd = task.planned_end
+    const actualEnd = task.actual_end ?? task.forecast_end
+
+    // Total span from contractual start to actual/forecast end
+    const totalStart = contractualStart
+    const totalEnd = actualEnd || planningEnd
+    const totalMs = totalEnd.getTime() - totalStart.getTime()
+
+    if (totalMs <= 0) return []
+
+    // Zone 1: Contractuel (baseline/planned start → baseline/planned end)
+    const contractualMs = contractualEnd.getTime() - contractualStart.getTime()
+    const contractualPercent = (contractualMs / totalMs) * 100
+    const contractualProgress = task.actual_start && task.actual_end && task.actual_end >= contractualEnd ? 100 : (task.progress * (contractualMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime()))))
+
+    // Zone 2: Planning (contractual end → planned end)
+    const planningStart = contractualEnd
+    const planningMs = planningEnd.getTime() - planningStart.getTime()
+    const planningPercent = planningMs > 0 ? (planningMs / totalMs) * 100 : 0
+    const planningProgress = planningMs > 0 ? (task.progress * (planningMs / Math.max(1, (planningEnd.getTime() - contractualStart.getTime())))) : 0
+
+    // Zone 3: Overdue (planned end → actual/forecast end)
+    const overdueStart = planningEnd
+    const overdueMs = (actualEnd ? actualEnd.getTime() : planningEnd.getTime()) - overdueStart.getTime()
+    const overduePercent = overdueMs > 0 ? (overdueMs / totalMs) * 100 : 0
+    const overdueProgress = overdueMs > 0 && actualEnd && actualEnd > planningEnd ? 100 : 0
+
+    return [
+      { type: 'contractual', widthPercent: contractualPercent, progressPercent: Math.min(100, contractualProgress), isVisible: contractualPercent > 0 },
+      { type: 'planning', widthPercent: planningPercent, progressPercent: Math.min(100, planningProgress), isVisible: planningPercent > 0 },
+      { type: 'overdue', widthPercent: overduePercent, progressPercent: overdueProgress, isVisible: overduePercent > 0 },
+    ]
+  }
+
+  const getSegmentColor = (zoneType: 'contractual' | 'planning' | 'overdue', isCompleted: boolean): string => {
+    const colors = {
+      contractual: { completed: '#64748b', remaining: '#e2e8f0' },
+      planning: { completed: '#2563eb', remaining: '#dbeafe' },
+      overdue: { completed: '#dc2626', remaining: '#fee2e2' },
+    }
+    return colors[zoneType][isCompleted ? 'completed' : 'remaining']
   }
 
   const handleBarMouseDown = (task: GanttTask, e: React.MouseEvent, mode: DragState['mode']) => {
@@ -309,62 +361,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return '#6b21a8'
   }
 
-  // Find the index of a task in the visible list
-  const getVisibleIndex = (taskId: string) => visible.findIndex(v => v.task.id === taskId)
-
-  // Move task up in the visible order (swap with previous sibling)
-  const handleMoveUp = (taskId: string) => {
-    const idx = getVisibleIndex(taskId)
-    if (idx <= 0) return
-
-    const current = visible[idx]
-    const previous = visible[idx - 1]
-
-    // Only swap if they're at the same depth (siblings)
-    if (current.depth === previous.depth) {
-      onTasksReorder?.({ type: 'swap', taskId1: current.task.id, taskId2: previous.task.id })
-    }
-  }
-
-  // Move task down in the visible order
-  const handleMoveDown = (taskId: string) => {
-    const idx = getVisibleIndex(taskId)
-    if (idx < 0 || idx >= visible.length - 1) return
-
-    const current = visible[idx]
-    const next = visible[idx + 1]
-
-    // Only swap if they're at the same depth (siblings)
-    if (current.depth === next.depth) {
-      onTasksReorder?.({ type: 'swap', taskId1: current.task.id, taskId2: next.task.id })
-    }
-  }
-
-  // Insert a new task before the current one
-  const handleInsertBefore = (taskId: string) => {
-    const idx = getVisibleIndex(taskId)
-    if (idx < 0) return
-
-    const current = visible[idx]
-    // Create a new task at the same level
-    const newTask: GanttTask = {
-      id: `task-${Date.now()}`,
-      lot_id: current.task.lot_id,
-      title: 'Nouvelle tâche',
-      planned_start: current.task.planned_start,
-      planned_end: new Date(current.task.planned_start.getTime() + 86400000), // +1 day
-      planned_duration: 1,
-      progress: 0,
-      status: 'not-started',
-      priority: 'medium',
-      dependencies: [],
-      is_milestone: false,
-      is_critical: false,
-    }
-
-    onTasksReorder?.({ type: 'insert', newTask, beforeTaskId: current.task.id })
-  }
-
   const renderRow = (task: GanttTask, depth: number) => {
     const hasChildren = !!task.children?.length
     const isExpanded = viewState.expandedTasks.has(task.id)
@@ -385,30 +381,28 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     return (
       <tr key={task.id} className={`gantt-row${task.is_critical ? ' critical' : ''}${task.is_milestone ? ' milestone' : ''}`}>
         <td className="gantt-task-cell">
-          <div style={{ paddingLeft: `${depth * 14}px`, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'space-between', minHeight: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
-              {hasChildren ? (
-                <button
-                  onClick={() => onToggleExpanded(task.id)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: 'var(--navy)', flexShrink: 0 }}
-                >
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-              ) : (
-                <div style={{ width: 16, flexShrink: 0 }} />
-              )}
-              <span
-                onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
-                style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 500, color: task.is_critical ? '#dc2626' : '#1f2937', cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+          <div style={{ paddingLeft: `${depth * 14}px`, display: 'flex', alignItems: 'center', gap: 4 }}>
+            {hasChildren ? (
+              <button
+                onClick={() => onToggleExpanded(task.id)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: 'var(--navy)' }}
               >
-                {task.title}
-              </span>
-            </div>
+                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </button>
+            ) : (
+              <div style={{ width: 14 }} />
+            )}
+            <span
+              onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
+              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default' }}
+            >
+              {task.title}
+            </span>
             {hasChildren && onTaskClick && (
               <button
                 onClick={e => { e.stopPropagation(); onTaskClick(task) }}
-                title="Détails"
-                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
+                title="Détails du lot"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '0 3px', display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 11, flexShrink: 0, lineHeight: 1 }}
               >ⓘ</button>
             )}
           </div>
@@ -424,7 +418,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               type="number" min={0} max={100} step={5}
               defaultValue={task.progress}
               autoFocus
-              style={{ width: '50px', fontSize: '11px', textAlign: 'center', border: '1px solid var(--accent)', borderRadius: '4px', padding: '2px 4px' }}
+              style={{ width: '46px', fontSize: '11px', textAlign: 'center', border: '1px solid var(--accent)', borderRadius: '4px', padding: '1px 2px' }}
               onBlur={e => { onProgress?.(task.id, Math.min(100, Math.max(0, Number(e.target.value)))); setEditingProgress(null) }}
               onKeyDown={e => { if (e.key === 'Enter') { onProgress?.(task.id, Math.min(100, Math.max(0, Number((e.target as HTMLInputElement).value)))); setEditingProgress(null) } else if (e.key === 'Escape') setEditingProgress(null) }}
             />
@@ -432,68 +426,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             <span title={!readOnly && onProgress ? 'Cliquer pour modifier' : undefined}>{task.progress}%</span>
           )}
         </td>
-
-        {editable && (
-          <td
-            style={{ padding: '6px 8px', minWidth: '180px', verticalAlign: 'middle' }}
-            onMouseEnter={() => setHoveredTaskId(task.id)}
-            onMouseLeave={() => setHoveredTaskId(null)}
-          >
-            {editingActualStart === task.id ? (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <input
-                  type="date"
-                  defaultValue={fmtDateInput(task.actual_start ?? task.planned_start)}
-                  autoFocus
-                  style={{ fontSize: '11px', padding: '4px 6px', borderRadius: '4px', border: '1px solid #018ABE', flex: 1, minWidth: '100px' }}
-                  onBlur={e => {
-                    const newDate = new Date(e.target.value + 'T00:00:00')
-                    if (newDate.getTime() !== (task.actual_start ?? task.planned_start).getTime()) {
-                      onTaskUpdate?.(task.id, { actual_start: newDate })
-                    }
-                    setEditingActualStart(null)
-                  }}
-                  onKeyDown={e => { if (e.key === 'Enter') setEditingActualStart(null); if (e.key === 'Escape') setEditingActualStart(null) }}
-                />
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => setEditingActualStart(task.id)}
-                  title="Modifier date réelle"
-                  style={{ border: '1px solid #cbd5e0', background: '#f7fafc', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', color: '#02457A', fontWeight: 600, whiteSpace: 'nowrap', flex: '0 1 auto' }}
-                >
-                  📅 {task.actual_start ? fmt2(task.actual_start) : 'Non défini'}
-                </button>
-                {hoveredTaskId === task.id && (
-                  <div style={{ display: 'flex', gap: '2px' }}>
-                    <button
-                      onClick={() => handleMoveUp(task.id)}
-                      title="Déplacer vers le haut"
-                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#5b7183', fontWeight: 600 }}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      onClick={() => handleMoveDown(task.id)}
-                      title="Déplacer vers le bas"
-                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#5b7183', fontWeight: 600 }}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      onClick={() => handleInsertBefore(task.id)}
-                      title="Insérer une tâche avant"
-                      style={{ border: '1px solid #cbd5e0', background: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', cursor: 'pointer', color: '#02457A', fontWeight: 600 }}
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </td>
-        )}
 
         <td className="gantt-timeline-cell">
           <div
@@ -529,31 +461,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
               />
             ) : (
               <div style={{ opacity: dimmed ? 0.28 : 1 }}>
-                {/* Barre du réel constaté, sous la barre du prévisionnel */}
-                {base && <div className="gantt-actual" style={{ left: base.leftPx, width: base.widthPx }} />}
-
-                {/* Baseline bar (thin grey reference line — contractual) */}
-                {showBaseline && task.baseline_start && task.baseline_end && (() => {
-                  const bl = geom(task.baseline_start, task.baseline_end)
-                  return (
-                    <div
-                      title={`Contractuel : ${fmt2(task.baseline_start)} → ${fmt2(task.baseline_end)}`}
-                      style={{ position: 'absolute', left: bl.leftPx, top: 21, width: bl.widthPx, height: 2, background: '#94a3b8', borderRadius: 1, zIndex: 1, opacity: 0.65, pointerEvents: 'none' }}
-                    />
-                  )
-                })()}
-
-                {/* Forecast bar (hatched amber — prévision calculée) */}
-                {showForecast && task.forecast_start && task.forecast_end && (() => {
-                  const f = geom(task.forecast_start, task.forecast_end)
-                  return (
-                    <div
-                      title={`Prévision : ${fmt2(task.forecast_start)} → ${fmt2(task.forecast_end)}`}
-                      style={{ position: 'absolute', left: f.leftPx, top: 17, width: f.widthPx, height: 5, background: 'repeating-linear-gradient(45deg, #f59e0b 0 3px, #fef3c7 3px 6px)', borderRadius: 2, zIndex: 2, opacity: 0.9, pointerEvents: 'none' }}
-                    />
-                  )
-                })()}
-
                 {/* Left resize handle */}
                 {editable && (
                   <div
@@ -562,46 +469,98 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   />
                 )}
 
-                {/* Écarts display (when enabled) */}
-                {showEcarts && (() => {
-                  const ec = calculateEcarts(task)
-                  return (
-                    <div style={{
-                      position: 'absolute',
-                      left: bar.leftPx + bar.widthPx + 6,
-                      top: 4,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      zIndex: 2,
-                      pointerEvents: 'none',
-                      color: ec.color,
-                    }}>
-                      {ec.dayLabel && `${ec.dayLabel}`}
-                    </div>
-                  )
-                })()}
+                {/* Date label or écarts display */}
+                {showEcarts ? (
+                  (() => {
+                    const ec = calculateEcarts(task)
+                    return (
+                      <div style={{
+                        position: 'absolute',
+                        left: bar.leftPx + bar.widthPx + 6,
+                        top: 2,
+                        fontSize: 8,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        zIndex: 2,
+                        pointerEvents: 'none',
+                        color: ec.color,
+                      }}>
+                        Δ {ec.deltaStart >= 0 ? '+' : ''}{ec.deltaStart}j | {ec.dayLabel}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div style={{
+                    position: 'absolute',
+                    left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
+                    top: 3,
+                    fontSize: 8,
+                    color: '#5b7183',
+                    whiteSpace: 'nowrap',
+                    zIndex: 2,
+                    pointerEvents: 'none',
+                    fontWeight: 500,
+                  }}>
+                    {fmt2(task.planned_start)}
+                  </div>
+                )}
 
-                {/* Actual/planned bar */}
+                {/* Unified segmented bar */}
                 <div
                   className="gantt-bar"
                   onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
                   style={{
                     left: bar.leftPx,
                     width: bar.widthPx,
-                    backgroundColor: getStatusColor(task.status),
-                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : undefined,
+                    boxShadow: task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : '0 1px 3px rgba(0, 0, 0, 0.12)',
                     cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
                   }}
                   title={tooltip}
                 >
-                  {task.progress < 100 && (
-                    <div style={{ position: 'absolute', top: 0, left: `${task.progress}%`, right: 0, bottom: 0, background: 'rgba(255,255,255,.45)', borderRadius: '0 2px 2px 0', pointerEvents: 'none' }} />
-                  )}
-                  {bar.widthPx > 30 && (
-                    <span style={{ position: 'relative', fontSize: 9, fontWeight: 600, color: '#fff', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', display: 'block', lineHeight: '14px' }}>
+                  {(() => {
+                    const zones = calculateZones(task)
+                    return zones.map((zone, idx) => {
+                      if (!zone.isVisible) return null
+                      const isCompleted = zone.progressPercent >= 100
+                      const bgColor = getSegmentColor(zone.type, isCompleted)
+                      return (
+                        <div
+                          key={zone.type}
+                          className="gantt-bar-segment"
+                          style={{
+                            flex: zone.widthPercent,
+                            backgroundColor: bgColor,
+                            opacity: isCompleted ? 1 : 0.65,
+                          }}
+                        />
+                      )
+                    })
+                  })()}
+
+                  {/* Percentage overlay */}
+                  {bar.widthPx > 50 && (
+                    <div
+                      className="gantt-bar-percentage"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        opacity: 0.9,
+                        pointerEvents: 'none',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                        zIndex: 10,
+                      }}
+                    >
                       {task.progress}%
-                    </span>
+                    </div>
                   )}
                 </div>
 
@@ -620,8 +579,9 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   return (
                     <div
                       key={c.id}
+                      onClick={() => onCommitmentClick?.(c)}
                       title={`Engagement : ${c.label ?? c.promisedEnd}${c.company ? ` — ${c.company}` : ''}`}
-                      style={{ position: 'absolute', left: cx - 5, top: 1, fontSize: 10, color: '#7c3aed', zIndex: 5, pointerEvents: 'none', fontWeight: 700, lineHeight: 1 }}
+                      style={{ position: 'absolute', left: cx - 5, top: 1, fontSize: 10, color: '#7c3aed', zIndex: 5, pointerEvents: 'auto', fontWeight: 700, lineHeight: 1, cursor: 'pointer' }}
                     >◆</div>
                   )
                 })}
@@ -640,7 +600,6 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             <tr>
               <th className="gantt-task-header">Tâche</th>
               <th className="gantt-progress-header">%</th>
-              {editable && <th style={{ width: '140px', padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#02457A', textTransform: 'uppercase', letterSpacing: '0.03em', borderBottom: '2px solid #e4ecf2' }}>Réel</th>}
               <th className="gantt-timeline-header" style={{ padding: 0, width: daysInRange * dayWidthPx, position: 'relative' }}>
                 {/* Current-week highlight in header */}
                 {curWeekVisible && (

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X, Search } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
+import { DateCommitment } from '../../lib/commitments'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
@@ -149,6 +150,7 @@ export function Gantt() {
   const [editMode, setEditMode] = useState(false)
   const [snapshot, setSnapshot] = useState<GanttTask[] | null>(null)
   const [addForm, setAddForm] = useState(false)
+  const [selectedCommitment, setSelectedCommitment] = useState<DateCommitment | null>(null)
   const commitments = useMemo(() => getCommitments(), [])
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
@@ -254,62 +256,6 @@ export function Gantt() {
     setAddForm(false)
   }
 
-  const handleTasksReorder = (action: { type: 'swap'; taskId1: string; taskId2: string } | { type: 'insert'; newTask: GanttTask; beforeTaskId: string }) => {
-    if (action.type === 'swap') {
-      setGanttTasks(prev => {
-        const reordered = swapTasksById(prev, action.taskId1, action.taskId2)
-        saveGanttTasks(reordered)
-        logActivity('planning', 'Ordre des tâches modifié')
-        return reordered
-      })
-    } else if (action.type === 'insert') {
-      setGanttTasks(prev => {
-        const reordered = insertTaskBeforeById(prev, action.beforeTaskId, action.newTask)
-        saveGanttTasks(reordered)
-        logActivity('planning', `Tâche insérée : ${action.newTask.title}`)
-        return reordered
-      })
-    }
-  }
-
-  // Helper: swap two tasks by ID in the tree
-  const swapTasksById = (tree: GanttTask[], id1: string, id2: string): GanttTask[] => {
-    return tree.map(t => {
-      if (t.children?.length) {
-        const idx1 = t.children.findIndex(c => c.id === id1)
-        const idx2 = t.children.findIndex(c => c.id === id2)
-
-        if (idx1 >= 0 && idx2 >= 0) {
-          const nc: GanttTask[] = [...t.children]
-          ;[nc[idx1], nc[idx2]] = [nc[idx2], nc[idx1]]
-          return { ...t, children: nc }
-        }
-
-        // Recurse into children
-        return { ...t, children: swapTasksById(t.children, id1, id2) }
-      }
-      return t
-    })
-  }
-
-  // Helper: insert a task before another by ID
-  const insertTaskBeforeById = (tree: GanttTask[], beforeId: string, newTask: GanttTask): GanttTask[] => {
-    return tree.map(t => {
-      if (t.children?.length) {
-        const idx = t.children.findIndex(c => c.id === beforeId)
-        if (idx >= 0) {
-          const nc: GanttTask[] = [...t.children]
-          nc.splice(idx, 0, newTask)
-          return { ...t, children: nc }
-        }
-
-        // Recurse into children
-        return { ...t, children: insertTaskBeforeById(t.children, beforeId, newTask) }
-      }
-      return t
-    })
-  }
-
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -370,92 +316,91 @@ export function Gantt() {
           ) : null}
 
           <div className="g-toolbar">
-            {/* Search bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f7fafc', borderRadius: '6px', padding: '6px 10px', minWidth: '220px', border: '1px solid #cbd5e0' }}>
-              <Search size={13} color="#5b7183" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f7fafc', borderRadius: '6px', padding: '6px 10px', minWidth: '200px' }}>
+              <Search size={14} color="var(--muted)" />
               <input
                 type="text"
-                placeholder="Chercher une tâche…"
+                placeholder="Rechercher une tâche…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                style={{ flex: 1, border: 'none', background: 'none', fontSize: '12px', outline: 'none', color: '#1f2937' }}
+                style={{ flex: 1, border: 'none', background: 'none', fontSize: '12px', outline: 'none', color: 'var(--ink)' }}
               />
-              {searchTerm && <button onClick={() => setSearchTerm('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: '#5b7183' }}><X size={13} /></button>}
+              {searchTerm && <button onClick={() => setSearchTerm('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px', color: 'var(--muted)' }}><X size={13} /></button>}
             </div>
-
-            {/* Filters section */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', paddingRight: '8px', borderRight: '1px solid #cbd5e0' }}>
-              <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
-              <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
-            </div>
-
-            {/* Display options */}
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons entre tâches"><Eye size={13} /></button>
-              <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique"><Zap size={13} /></button>
-              <button className={`gtb ${showEcarts ? 'on' : ''}`} onClick={() => setShowEcarts(v => !v)} title="Écarts"><AlertTriangle size={13} /></button>
-            </div>
-
-            {/* Analysis options */}
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid #cbd5e0' }}>
-              <button className={`gtb ${showBaseline ? 'on' : ''}`} onClick={() => setShowBaseline(v => !v)} title="Contractuel"><History size={13} /></button>
-              <button className={`gtb ${showForecast ? 'on' : ''}`} onClick={() => setShowForecast(v => !v)} title="Prévisions"><TrendingUp size={13} /></button>
-            </div>
-
-            {/* Automation */}
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification"><GitBranch size={13} /></button>
-              <button
-                className="gtb"
-                onClick={() => {
-                  const computed = computeForecasts(ganttTasks, new Date(), calendar)
-                  setForecastTasks(computed)
-                }}
-                title="Recalculer prévisions"
-                style={{ background: '#fef3c7', color: '#92400e' }}
-              >
-                <TrendingUp size={13} />
-              </button>
-              <button
-                className="gtb"
-                onClick={() => {
-                  const locked = lockBaseline(ganttTasks, calendar)
-                  saveGanttTasks(locked)
-                  setGanttTasks(locked)
-                  logActivity('planning', 'Baseline verrouillée')
-                }}
-                title="Verrouiller baseline"
-                style={{ background: '#f0f9ff', color: '#0369a1' }}
-              >
-                <History size={13} />
-              </button>
-            </div>
-
+            <MultiSelect label="Lots" options={LOT_OPTS} selected={selectedLots} onChange={setSelectedLots} />
+            <MultiSelect label="Logements" options={zoneOpts} selected={selectedZones} onChange={setSelectedZones} />
             <div style={{ flex: 1 }} />
-
-            {/* Zoom controls */}
-            <div style={{ display: 'flex', gap: '3px', alignItems: 'center', background: '#f0f4f8', padding: '4px', borderRadius: '6px', border: '1px solid #cbd5e0' }}>
-              <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer" style={{ padding: '6px 8px' }}><ZoomOut size={12} /></button>
-              <span style={{ fontSize: '11px', color: '#5b7183', fontWeight: 600, minWidth: '30px', textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-              <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer" style={{ padding: '6px 8px' }}><ZoomIn size={12} /></button>
-            </div>
-
-            {/* Edit & Add buttons */}
+            <button className={`gtb ${highlightCritical ? 'on' : ''}`} onClick={() => setHighlightCritical(!highlightCritical)} title="Chemin critique (calculé par CPM)">
+              <Zap size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Critique</span>
+            </button>
+            <button className={`gtb ${autoPlan ? 'on' : ''}`} onClick={() => setAutoPlan(!autoPlan)} title="Auto-planification : décaler les tâches liées">
+              <GitBranch size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-planif</span>
+            </button>
+            <button
+              className={`gtb ${showForecast ? 'on' : ''}`}
+              onClick={() => setShowForecast(v => !v)}
+              title="Afficher les barres de prévision (jaune hachuré)"
+            >
+              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Prévision</span>
+            </button>
+            <button
+              className={`gtb ${showBaseline ? 'on' : ''}`}
+              onClick={() => setShowBaseline(v => !v)}
+              title="Afficher le contractuel de référence (gris)"
+            >
+              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Contractuel</span>
+            </button>
+            <button
+              className={`gtb ${showEcarts ? 'on' : ''}`}
+              onClick={() => setShowEcarts(v => !v)}
+              title="Mode ÉCARTS : afficher les différences (début, fin, jours)"
+            >
+              <AlertTriangle size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>ÉCARTS</span>
+            </button>
+            <button
+              className="gtb"
+              onClick={() => {
+                const computed = computeForecasts(ganttTasks, new Date(), calendar)
+                setForecastTasks(computed)
+              }}
+              title="Calculer les prévisions automatiques (sans modifier le planning)"
+              style={{ background: '#fef3c7', color: '#92400e' }}
+            >
+              <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-réplanif</span>
+            </button>
+            <button
+              className="gtb"
+              onClick={() => {
+                const locked = lockBaseline(ganttTasks, calendar)
+                saveGanttTasks(locked)
+                setGanttTasks(locked)
+                logActivity('planning', 'Dates contractuelles verrouillées (baseline créée)')
+              }}
+              title="Figer les dates plannifiées actuelles comme contractuel (baseline immutable)"
+              style={{ background: '#f0f9ff', color: '#0369a1' }}
+            >
+              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Verrouiller</span>
+            </button>
+            <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
+              {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
+            </button>
+            <button className="gtb" onClick={() => setZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Dézoomer"><ZoomOut size={14} /></button>
+            <button className="gtb" onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} title="Zoomer"><ZoomIn size={14} /></button>
             <button
               className={`gtb ${editMode ? 'on' : ''}`}
               onClick={editMode ? confirmEdit : enterEdit}
-              title={editMode ? 'Confirmer' : 'Éditer'}
+              title={editMode ? 'Confirmer les modifications' : 'Passer en mode édition'}
               style={editMode ? { background: '#dcfce7', color: '#15803d' } : {}}
             >
-              <Pencil size={13} />
+              <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
             </button>
             <button
               className="gtb"
               onClick={() => setAddForm(a => !a)}
-              title="Ajouter"
+              title="Ajouter une tâche au planning"
               style={{ background: '#eff6ff', color: '#2563eb' }}
             >
-              <Plus size={13} />
+              <Plus size={14} />
             </button>
           </div>
 
@@ -466,29 +411,6 @@ export function Gantt() {
               onCancel={() => setAddForm(false)}
             />
           )}
-
-          {/* Legend */}
-          <div style={{ marginBottom: '12px', padding: '12px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#02457A', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Légende</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
-                <div style={{ width: '20px', height: '8px', background: 'linear-gradient(to right, #0f766e, #14b8a6)', borderRadius: '2px' }} />
-                <span>Barre verte = date de démarrage réelle constatée</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
-                <div style={{ width: '20px', height: '8px', background: 'repeating-linear-gradient(45deg, #f59e0b 0 3px, #fef3c7 3px 6px)', borderRadius: '2px' }} />
-                <span>Hachuré orange = prévision calculée</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
-                <div style={{ width: '20px', height: '8px', background: '#94a3b8', borderRadius: '2px' }} />
-                <span>Ligne grise = contractuel (baseline)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#5b7183' }}>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>◆</span>
-                <span>Diamant violet = engagement pris en visite</span>
-              </div>
-            </div>
-          </div>
 
           <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2' }}>
             <GanttTable
@@ -503,7 +425,7 @@ export function Gantt() {
               onTaskUpdate={handleTaskUpdate}
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
-              onTasksReorder={handleTasksReorder}
+              onCommitmentClick={setSelectedCommitment}
               showForecast={showForecast}
               showBaseline={showBaseline}
               showEcarts={showEcarts}
@@ -557,6 +479,40 @@ export function Gantt() {
       )}
 
       {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+
+      {/* Commitment details panel */}
+      {selectedCommitment && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: '500px', padding: '20px', borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#02457A' }}>Engagement pris</h3>
+              <button onClick={() => setSelectedCommitment(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: '#5b7183' }}>×</button>
+            </div>
+            <div style={{ fontSize: '13px', lineHeight: '1.6', color: '#1f2937', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 600, color: '#02457A' }}>Date promesse</div>
+                <div>{new Date(selectedCommitment.promisedEnd + 'T00:00:00').toLocaleDateString('fr-FR')}</div>
+              </div>
+              {selectedCommitment.label && (
+                <div>
+                  <div style={{ fontWeight: 600, color: '#02457A' }}>Objet</div>
+                  <div>{selectedCommitment.label}</div>
+                </div>
+              )}
+              {selectedCommitment.company && (
+                <div>
+                  <div style={{ fontWeight: 600, color: '#02457A' }}>Entreprise</div>
+                  <div>{selectedCommitment.company}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontWeight: 600, color: '#02457A' }}>Enregistré le</div>
+                <div>{new Date(selectedCommitment.visitDate + 'T00:00:00').toLocaleDateString('fr-FR')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {forecastTasks && (
         <ForecastPanel
