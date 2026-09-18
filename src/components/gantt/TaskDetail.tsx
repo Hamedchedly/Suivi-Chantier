@@ -28,6 +28,8 @@ interface Props {
   onDates?: (taskId: string, updates: { planned_start?: Date; planned_end?: Date }) => void
   /** Permet de corriger la date de fin réelle (tâches historiques). */
   onActualEnd?: (taskId: string, date: Date | null) => void
+  /** Modifie la méthode de calcul forecast. */
+  onForecastMethod?: (taskId: string, method: 'actual_rate' | 'contractual_duration' | 'manual') => void
   /** Marge totale (jours) issue du CPM — absente pour les regroupements. */
   totalFloat?: number
 }
@@ -38,7 +40,7 @@ const isoDate = (d: Date) => {
 }
 const parseDate = (s: string) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
 
-export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, totalFloat }: Props) {
+export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, onForecastMethod, totalFloat }: Props) {
   const editable = !!onDates && !task.children?.length
   const drift = driftDays(task)
   const st = STATUS_LABEL[task.status] ?? STATUS_LABEL['not-started']
@@ -130,6 +132,23 @@ export function TaskDetail({ task, onClose, onProgress, onDates, onActualEnd, to
                 )}
               </div>
             </div>
+          )}
+          {onForecastMethod && task.forecast_start && (
+            <>
+              <div style={{ height: '1px', background: 'var(--line)', margin: '10px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+                <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Calcul prévision</span>
+                <select
+                  value={task.forecast_method || 'actual_rate'}
+                  onChange={e => onForecastMethod(task.id, e.target.value as 'actual_rate' | 'contractual_duration' | 'manual')}
+                  style={{ width: '140px', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}
+                >
+                  <option value="actual_rate">Rythme réel</option>
+                  <option value="contractual_duration">Durée contractuelle</option>
+                  <option value="manual">Manuel</option>
+                </select>
+              </div>
+            </>
           )}
           <Row label="Écart / contractuel" value={drift > 0 ? `+${drift} j` : 'à jour'} tone={drift > 0 ? 'bad' : 'ok'} />
           {totalFloat !== undefined && (

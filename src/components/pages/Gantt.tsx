@@ -11,7 +11,7 @@ import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
-import { computeForecasts, applyForecastToPlanning, forecastImpact, hasBaseline } from '../../lib/forecast'
+import { computeForecasts, applyForecastToPlanning, forecastImpact, hasBaseline, lockBaseline } from '../../lib/forecast'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -297,6 +297,19 @@ export function Gantt() {
             >
               <TrendingUp size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Auto-réplanif</span>
             </button>
+            <button
+              className="gtb"
+              onClick={() => {
+                const locked = lockBaseline(ganttTasks, calendar)
+                saveGanttTasks(locked)
+                setGanttTasks(locked)
+                logActivity('planning', 'Dates contractuelles verrouillées (baseline créée)')
+              }}
+              title="Figer les dates plannifiées actuelles comme contractuel (baseline immutable)"
+              style={{ background: '#f0f9ff', color: '#0369a1' }}
+            >
+              <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Verrouiller</span>
+            </button>
             <button className={`gtb ${depsVisible ? 'on' : ''}`} onClick={() => setDepsVisible(!depsVisible)} title="Liaisons">
               {depsVisible ? <Eye size={16} /> : <EyeOff size={16} />}<span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Liaisons</span>
             </button>
@@ -381,6 +394,13 @@ export function Gantt() {
           onActualEnd={(id, date) => {
             handleTaskUpdate(id, { actual_end: date ?? undefined })
             setDetailTask(t => (t && t.id === id ? { ...t, actual_end: date ?? undefined } : t))
+          }}
+          onForecastMethod={(id, method) => {
+            const updated = ganttTasks.map(t => t.id === id ? { ...t, forecast_method: method } : t)
+            saveGanttTasks(updated)
+            setGanttTasks(updated)
+            setDetailTask(t => (t && t.id === id ? { ...t, forecast_method: method } : t))
+            logActivity('planning', `Méthode de calcul prévision modifiée : ${method}`)
           }}
           totalFloat={cpm.nodes.get(detailTask.id)?.totalFloat}
         />

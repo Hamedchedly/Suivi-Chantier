@@ -40,6 +40,8 @@
 | **Contractuel (baseline)** | Toggle affichage du planning de référence (gris) | `Gantt.tsx`, `GanttTable.tsx` (showBaseline) | `src/lib/planningHistory.ts` |
 | **Analyse des retards** | Panneau détail des retards par lot et par tâche | `Gantt.tsx` (DelayPanel) | `src/lib/schedule.ts` (lateTasks) |
 | **Mode ÉCARTS** | Affichage détaillé des écarts : Δ start, Δ end, jours ; couleur-codé (vert/orange/rouge) | `Gantt.tsx` (showEcarts button), `GanttTable.tsx` (calculateEcarts) | `src/components/gantt/GanttTable.tsx` |
+| **Verrouiller contractuel** | Figer les dates plannifiées actuelles comme baseline immutable | `Gantt.tsx` (lockBaseline button) | `src/lib/forecast.ts` (lockBaseline) |
+| **Méthode de calcul prévision** | Sélection : Rythme réel / Durée contractuelle / Manuel | `TaskDetail.tsx` (forecast_method select) | `src/types/gantt.ts` |
 | **Config planning** | Configuration de la durée des lots, jalons, congés | `PlanningConfig.tsx` | `src/lib/repo.ts` (getHolidays) |
 
 ---
