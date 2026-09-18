@@ -13,6 +13,7 @@ interface GanttTableProps {
   readOnly?: boolean
   showForecast?: boolean    // show forecast bars (hatched yellow)
   showBaseline?: boolean    // show baseline thin reference bar
+  showEcarts?: boolean      // show detailed écarts (deltas, day counts) in mode
   commitments?: DateCommitment[] // engagement markers on timeline
 }
 
@@ -106,7 +107,44 @@ function isoWeek(d: Date): number {
 
 const fmt2 = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 
-export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, commitments }: GanttTableProps) {
+// Calcul des écarts (delta) pour affichage mode détail
+function calculateEcarts(task: GanttTask) {
+  const dayMs = 86400000
+  const ecarts = { deltaStart: 0, deltaEnd: 0, dayLabel: '', color: '#10b981' } // green by default
+
+  // Δ start : actual vs planned
+  if (task.actual_start && task.planned_start) {
+    ecarts.deltaStart = Math.ceil((task.actual_start.getTime() - task.planned_start.getTime()) / dayMs)
+  }
+
+  // Δ end : forecast vs baseline (or planned if no baseline)
+  if (task.forecast_end && task.baseline_end) {
+    ecarts.deltaEnd = Math.ceil((task.forecast_end.getTime() - task.baseline_end.getTime()) / dayMs)
+  } else if (task.forecast_end && task.planned_end) {
+    ecarts.deltaEnd = Math.ceil((task.forecast_end.getTime() - task.planned_end.getTime()) / dayMs)
+  }
+
+  // Color based on worst écart
+  const maxEcart = Math.max(ecarts.deltaStart, ecarts.deltaEnd)
+  if (maxEcart <= 0) {
+    ecarts.color = '#10b981' // green
+  } else if (maxEcart <= 5) {
+    ecarts.color = '#f59e0b' // orange
+  } else {
+    ecarts.color = '#ef4444' // red
+  }
+
+  // Label for display
+  if (ecarts.deltaEnd > 0) {
+    ecarts.dayLabel = `+${ecarts.deltaEnd}j`
+  } else if (ecarts.deltaEnd < 0) {
+    ecarts.dayLabel = `${ecarts.deltaEnd}j`
+  }
+
+  return ecarts
+}
+
+export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskUpdate, onProgress, onTaskClick, readOnly, showForecast, showBaseline, showEcarts, commitments }: GanttTableProps) {
   const editable = !readOnly
   const [dragState, setDragState] = useState<DragState>({})
   const [editingProgress, setEditingProgress] = useState<string | null>(null)
@@ -400,20 +438,41 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   />
                 )}
 
-                {/* Start date label (always visible — spec: "voir la date de démarrage") */}
-                <div style={{
-                  position: 'absolute',
-                  left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
-                  top: 3,
-                  fontSize: 8,
-                  color: '#5b7183',
-                  whiteSpace: 'nowrap',
-                  zIndex: 2,
-                  pointerEvents: 'none',
-                  fontWeight: 500,
-                }}>
-                  {fmt2(task.planned_start)}
-                </div>
+                {/* Date label or écarts display */}
+                {showEcarts ? (
+                  (() => {
+                    const ec = calculateEcarts(task)
+                    return (
+                      <div style={{
+                        position: 'absolute',
+                        left: bar.leftPx + bar.widthPx + 6,
+                        top: 2,
+                        fontSize: 8,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        zIndex: 2,
+                        pointerEvents: 'none',
+                        color: ec.color,
+                      }}>
+                        Δ {ec.deltaStart >= 0 ? '+' : ''}{ec.deltaStart}j | {ec.dayLabel}
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div style={{
+                    position: 'absolute',
+                    left: bar.leftPx >= 36 ? bar.leftPx - 33 : bar.leftPx + 2,
+                    top: 3,
+                    fontSize: 8,
+                    color: '#5b7183',
+                    whiteSpace: 'nowrap',
+                    zIndex: 2,
+                    pointerEvents: 'none',
+                    fontWeight: 500,
+                  }}>
+                    {fmt2(task.planned_start)}
+                  </div>
+                )}
 
                 {/* Actual/planned bar */}
                 <div

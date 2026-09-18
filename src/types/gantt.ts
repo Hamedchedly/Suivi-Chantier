@@ -19,6 +19,7 @@ export interface GanttTask {
 
   forecast_start?: Date   // computed forecast — never user-entered
   forecast_end?: Date     // computed forecast — never user-entered
+  forecast_method?: 'actual_rate' | 'contractual_duration' | 'manual' // which method was used for forecast
   contractual_working_days?: number // reference duration in working days (from baseline)
 
   progress: number // 0-100

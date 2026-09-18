@@ -39,6 +39,7 @@
 | **Prévision (auto-réplanif)** | Calcul de prévisions sans modifier le planning, puis Appliquer/Conserver/Annuler | `Gantt.tsx` (ForecastPanel) | `src/lib/forecast.ts` |
 | **Contractuel (baseline)** | Toggle affichage du planning de référence (gris) | `Gantt.tsx`, `GanttTable.tsx` (showBaseline) | `src/lib/planningHistory.ts` |
 | **Analyse des retards** | Panneau détail des retards par lot et par tâche | `Gantt.tsx` (DelayPanel) | `src/lib/schedule.ts` (lateTasks) |
+| **Mode ÉCARTS** | Affichage détaillé des écarts : Δ start, Δ end, jours ; couleur-codé (vert/orange/rouge) | `Gantt.tsx` (showEcarts button), `GanttTable.tsx` (calculateEcarts) | `src/components/gantt/GanttTable.tsx` |
 | **Config planning** | Configuration de la durée des lots, jalons, congés | `PlanningConfig.tsx` | `src/lib/repo.ts` (getHolidays) |
 
 ---

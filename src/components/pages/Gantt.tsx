@@ -105,6 +105,7 @@ export function Gantt() {
   const [showDelays, setShowDelays] = useState(false)
   const [showForecast, setShowForecast] = useState(false)
   const [showBaseline, setShowBaseline] = useState(false)
+  const [showEcarts, setShowEcarts] = useState(false)
   const [forecastTasks, setForecastTasks] = useState<GanttTask[] | null>(null) // non-null = panel open
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>(getGanttTasks)
   const [editMode, setEditMode] = useState(false)
@@ -279,6 +280,13 @@ export function Gantt() {
               <History size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>Contractuel</span>
             </button>
             <button
+              className={`gtb ${showEcarts ? 'on' : ''}`}
+              onClick={() => setShowEcarts(v => !v)}
+              title="Mode ÉCARTS : afficher les différences (début, fin, jours)"
+            >
+              <AlertTriangle size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>ÉCARTS</span>
+            </button>
+            <button
               className="gtb"
               onClick={() => {
                 const computed = computeForecasts(ganttTasks, new Date(), calendar)
@@ -335,9 +343,29 @@ export function Gantt() {
               onTaskClick={setDetailTask}
               showForecast={showForecast}
               showBaseline={showBaseline}
+              showEcarts={showEcarts}
               commitments={commitments}
             />
           </div>
+
+          {/* Écarts color legend */}
+          {showEcarts && (
+            <div style={{ marginTop: '12px', padding: '8px 12px', background: '#f8fafc', borderRadius: '6px', fontSize: '12px', display: 'flex', gap: '20px', alignItems: 'center', color: '#475569' }}>
+              <span style={{ fontWeight: 600 }}>Légende écarts :</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: 12, height: 12, background: '#10b981', borderRadius: 2 }} />
+                <span>À jour (≤0j)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: 12, height: 12, background: '#f59e0b', borderRadius: 2 }} />
+                <span>Léger retard (0-5j)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: 12, height: 12, background: '#ef4444', borderRadius: 2 }} />
+                <span>Retard significatif (&gt;5j)</span>
+              </div>
+            </div>
+          )}
         </>
       )}
 
