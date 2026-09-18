@@ -463,7 +463,7 @@ export function Visite() {
       reserves={reservesForVisit(reserves, active.id)}
       photos={photos}
       companies={companiesOf(active)}
-      locked={isLockedFor(active, me)}
+      locked={false}
       canOverride={isDiffused(active) && isSuperadmin(me)}
       currentUsername={me?.displayName ?? me?.username ?? 'Utilisateur'}
       onBack={back}
@@ -1089,6 +1089,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
   companies: string[]
   onBack: () => void
 }) {
+  const [relevéView, setRelevéView] = useState<'logement' | 'lot'>('logement')
   const snap = visit.snapshot
   const cr = visit.cr ?? emptyCr()
   const crPhotos = photos.filter(p => p.includeInCr)
@@ -1189,69 +1190,137 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
           </RSection>
         )}
 
-        {/* P5 — Structure Bâtiment → Logement → Lot */}
-        <RSection title={`${++s}. Relevé par logement`}>
-          {(() => {
-            // Group zones by building
-            const buildings = [...new Map(visit.zones.map(z => [z.buildingId, z.buildingLabel])).entries()]
-            return buildings.map(([bid, blabel]) => {
-              const zones = visit.zones.filter(z => z.buildingId === bid)
-              return (
-                <div key={bid} style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#02457A', borderBottom: '2px solid #02457A', paddingBottom: '4px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                    {blabel}
-                  </div>
-                  {zones.map(z => {
-                    const lotIds = [...new Set(z.tasks.map(t => t.lotId))]
-                    const zoneReserves = reserves.filter(r => r.logementId === z.refId)
-                    return (
-                      <div key={z.refId} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '3px solid #e4ecf2' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937' }}>{z.label}</span>
-                          <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}% · {ZONE_META[zoneState(z)].label}</span>
-                        </div>
-                        {lotIds.map(lotId => {
-                          const lotTasks = z.tasks.filter(t => t.lotId === lotId)
-                          const lotReserves = zoneReserves.filter(r => r.lotId === lotId)
-                          const lotObs = lotReserves.filter(r => reserveKind(r) === 'observation')
-                          const lotActions = lotReserves.filter(r => reserveKind(r) === 'action')
-                          const lotProgress = Math.round(
-                            lotTasks.filter(t => t.state !== 'na').reduce((s, t) => s + (t.progress ?? 0), 0) /
-                            Math.max(1, lotTasks.filter(t => t.state !== 'na').length)
-                          )
-                          if (lotTasks.length === 0 && lotReserves.length === 0) return null
-                          return (
-                            <div key={lotId} style={{ marginBottom: '8px', marginLeft: '10px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#018ABE' }}>{lotId} — {lotLabel(lots, lotId)}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--navy)', fontWeight: 600 }}>{lotProgress}%</span>
-                              </div>
-                              {/* Observations + actions regroupées par sujet */}
-                              {lotObs.map(obs => {
-                                const linkedAction = lotActions.find(a => a.taskId === obs.taskId && !a.taskId === false)
-                                return (
+        {/* P5 — Relevé par logement ou par lot (toggle) */}
+        <RSection title={`${++s}. Relevé — ${relevéView === 'logement' ? 'par logement' : 'par lot'}`}>
+          {/* Toggle no-print */}
+          <div className="no-print" style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#eef2f6', padding: '3px', borderRadius: '8px', width: 'fit-content' }}>
+            {(['logement', 'lot'] as const).map(v => (
+              <button key={v} onClick={() => setRelevéView(v)} style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: relevéView === v ? '#fff' : 'transparent', color: relevéView === v ? '#02457A' : '#5b7183' }}>
+                {v === 'logement' ? 'Par logement' : 'Par lot'}
+              </button>
+            ))}
+          </div>
+
+          {relevéView === 'logement' ? (
+            // ── Par logement : Bâtiment → Logement → Lot ──────────────────────
+            (() => {
+              const buildings = [...new Map(visit.zones.map(z => [z.buildingId, z.buildingLabel])).entries()]
+              return buildings.map(([bid, blabel]) => {
+                const zones = visit.zones.filter(z => z.buildingId === bid)
+                return (
+                  <div key={bid} style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#02457A', borderBottom: '2px solid #02457A', paddingBottom: '4px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                      {blabel}
+                    </div>
+                    {zones.map(z => {
+                      const lotIds = [...new Set(z.tasks.map(t => t.lotId))]
+                      const zoneReserves = reserves.filter(r => r.logementId === z.refId)
+                      return (
+                        <div key={z.refId} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '3px solid #e4ecf2' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937' }}>{z.label}</span>
+                            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}% · {ZONE_META[zoneState(z)].label}</span>
+                          </div>
+                          {lotIds.map(lotId => {
+                            const lotTasks = z.tasks.filter(t => t.lotId === lotId)
+                            const lotReserves = zoneReserves.filter(r => r.lotId === lotId)
+                            const lotObs = lotReserves.filter(r => reserveKind(r) === 'observation')
+                            const lotActions = lotReserves.filter(r => reserveKind(r) === 'action')
+                            const lotProgress = Math.round(
+                              lotTasks.filter(t => t.state !== 'na').reduce((s, t) => s + (t.progress ?? 0), 0) /
+                              Math.max(1, lotTasks.filter(t => t.state !== 'na').length)
+                            )
+                            if (lotTasks.length === 0 && lotReserves.length === 0) return null
+                            return (
+                              <div key={lotId} style={{ marginBottom: '8px', marginLeft: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#018ABE' }}>{lotId} — {lotLabel(lots, lotId)}</span>
+                                  <span style={{ fontSize: '11px', color: 'var(--navy)', fontWeight: 600 }}>{lotProgress}%</span>
+                                </div>
+                                {lotObs.map(obs => (
                                   <div key={obs.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0' }}>
                                     <div style={{ color: '#5b7183' }}>{obs.description}</div>
                                   </div>
-                                )
-                              })}
-                              {lotActions.map(act => (
-                                <div key={act.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #f59e0b', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-                                  <span style={{ color: '#b45309', fontWeight: 800, flexShrink: 0 }}>▶ ACTION :</span>
-                                  <span style={{ color: '#1f2937', fontWeight: 600 }}>{act.description}</span>
-                                  {act.dueDate && <span style={{ color: '#b45309', fontSize: '10px', flexShrink: 0 }}>· {fmtFr(act.dueDate)}</span>}
+                                ))}
+                                {lotActions.map(act => (
+                                  <div key={act.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #f59e0b', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                    <span style={{ color: '#b45309', fontWeight: 800, flexShrink: 0 }}>▶ ACTION :</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{act.description}</span>
+                                    {act.dueDate && <span style={{ color: '#b45309', fontSize: '10px', flexShrink: 0 }}>· {fmtFr(act.dueDate)}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })
+            })()
+          ) : (
+            // ── Par lot : Lot/Entreprise → Bâtiment → Logement → Obs/Actions ──
+            (() => {
+              const allLotIds = [...new Set(visit.zones.flatMap(z => z.tasks.map(t => t.lotId)))]
+              return allLotIds.map(lotId => {
+                const buildings = [...new Map(visit.zones.map(z => [z.buildingId, z.buildingLabel])).entries()]
+                const lotReservesAll = reserves.filter(r => r.lotId === lotId)
+                const totalTasks = visit.zones.flatMap(z => z.tasks.filter(t => t.lotId === lotId))
+                const lotProgress = Math.round(
+                  totalTasks.filter(t => t.state !== 'na').reduce((s, t) => s + (t.progress ?? 0), 0) /
+                  Math.max(1, totalTasks.filter(t => t.state !== 'na').length)
+                )
+                if (totalTasks.length === 0 && lotReservesAll.length === 0) return null
+                return (
+                  <div key={lotId} style={{ marginBottom: '18px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#02457A', borderBottom: '2px solid #02457A', paddingBottom: '4px', marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <span>{lotId} — {lotLabel(lots, lotId)}</span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#018ABE' }}>{lotProgress}%</span>
+                      {lotLabel(lots, lotId) !== lotId && <span style={{ fontSize: '11px', fontWeight: 400, color: '#5b7183' }}>{lots.find(l => l.id === lotId)?.company}</span>}
+                    </div>
+                    {buildings.map(([bid, blabel]) => {
+                      const zones = visit.zones.filter(z => z.buildingId === bid)
+                      const buildingHasData = zones.some(z => z.tasks.some(t => t.lotId === lotId) || reserves.some(r => r.lotId === lotId && r.logementId === z.refId))
+                      if (!buildingHasData) return null
+                      return (
+                        <div key={bid} style={{ marginBottom: '10px', paddingLeft: '8px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#5b7183', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '6px' }}>{blabel}</div>
+                          {zones.map(z => {
+                            const lotTasks = z.tasks.filter(t => t.lotId === lotId)
+                            const zoneReserves = reserves.filter(r => r.lotId === lotId && r.logementId === z.refId)
+                            if (lotTasks.length === 0 && zoneReserves.length === 0) return null
+                            const zoneProgress = Math.round(
+                              lotTasks.filter(t => t.state !== 'na').reduce((s, t) => s + (t.progress ?? 0), 0) /
+                              Math.max(1, lotTasks.filter(t => t.state !== 'na').length)
+                            )
+                            return (
+                              <div key={z.refId} style={{ marginBottom: '8px', marginLeft: '10px', paddingLeft: '8px', borderLeft: '3px solid #e4ecf2' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#1f2937' }}>{z.label}</span>
+                                  <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{zoneProgress}% · {ZONE_META[zoneState(z)].label}</span>
                                 </div>
-                              ))}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })
-          })()}
+                                {zoneReserves.filter(r => reserveKind(r) === 'observation').map(obs => (
+                                  <div key={obs.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', color: '#5b7183' }}>{obs.description}</div>
+                                ))}
+                                {zoneReserves.filter(r => reserveKind(r) === 'action').map(act => (
+                                  <div key={act.id} style={{ fontSize: '11px', marginBottom: '4px', paddingLeft: '8px', borderLeft: '2px solid #f59e0b', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                                    <span style={{ color: '#b45309', fontWeight: 800, flexShrink: 0 }}>▶ ACTION :</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{act.description}</span>
+                                    {act.dueDate && <span style={{ color: '#b45309', fontSize: '10px', flexShrink: 0 }}>· {fmtFr(act.dueDate)}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })
+            })()
+          )}
         </RSection>
 
         {sessionCommitments.length > 0 && (
