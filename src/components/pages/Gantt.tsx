@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Eye, EyeOff, AlertTriangle, Zap, ZoomIn, ZoomOut, GitBranch, TrendingUp, History, Pencil, Plus, Check, X, Search } from 'lucide-react'
 import { GanttTask, GanttViewState } from '../../types/gantt'
+import { DateCommitment } from '../../lib/commitments'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, saveGanttPrefs, GanttGroup, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
@@ -149,6 +150,7 @@ export function Gantt() {
   const [editMode, setEditMode] = useState(false)
   const [snapshot, setSnapshot] = useState<GanttTask[] | null>(null)
   const [addForm, setAddForm] = useState(false)
+  const [selectedCommitment, setSelectedCommitment] = useState<DateCommitment | null>(null)
   const commitments = useMemo(() => getCommitments(), [])
   const holidays = useMemo(() => getHolidays(), [])
   const calendar = useMemo(() => makeCalendar(holidays), [holidays])
@@ -252,62 +254,6 @@ export function Gantt() {
     const res = createTask(ganttTasks, lotId, { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) })
     if (res.ok) { setGanttTasks(res.tasks); saveGanttTasks(res.tasks); logActivity('planning', `Tâche ajoutée : ${title}`) }
     setAddForm(false)
-  }
-
-  const handleTasksReorder = (action: { type: 'swap'; taskId1: string; taskId2: string } | { type: 'insert'; newTask: GanttTask; beforeTaskId: string }) => {
-    if (action.type === 'swap') {
-      setGanttTasks(prev => {
-        const reordered = swapTasksById(prev, action.taskId1, action.taskId2)
-        saveGanttTasks(reordered)
-        logActivity('planning', 'Ordre des tâches modifié')
-        return reordered
-      })
-    } else if (action.type === 'insert') {
-      setGanttTasks(prev => {
-        const reordered = insertTaskBeforeById(prev, action.beforeTaskId, action.newTask)
-        saveGanttTasks(reordered)
-        logActivity('planning', `Tâche insérée : ${action.newTask.title}`)
-        return reordered
-      })
-    }
-  }
-
-  // Helper: swap two tasks by ID in the tree
-  const swapTasksById = (tree: GanttTask[], id1: string, id2: string): GanttTask[] => {
-    return tree.map(t => {
-      if (t.children?.length) {
-        const idx1 = t.children.findIndex(c => c.id === id1)
-        const idx2 = t.children.findIndex(c => c.id === id2)
-
-        if (idx1 >= 0 && idx2 >= 0) {
-          const nc: GanttTask[] = [...t.children]
-          ;[nc[idx1], nc[idx2]] = [nc[idx2], nc[idx1]]
-          return { ...t, children: nc }
-        }
-
-        // Recurse into children
-        return { ...t, children: swapTasksById(t.children, id1, id2) }
-      }
-      return t
-    })
-  }
-
-  // Helper: insert a task before another by ID
-  const insertTaskBeforeById = (tree: GanttTask[], beforeId: string, newTask: GanttTask): GanttTask[] => {
-    return tree.map(t => {
-      if (t.children?.length) {
-        const idx = t.children.findIndex(c => c.id === beforeId)
-        if (idx >= 0) {
-          const nc: GanttTask[] = [...t.children]
-          nc.splice(idx, 0, newTask)
-          return { ...t, children: nc }
-        }
-
-        // Recurse into children
-        return { ...t, children: insertTaskBeforeById(t.children, beforeId, newTask) }
-      }
-      return t
-    })
   }
 
   const groups: { id: GanttGroup; label: string }[] = [
@@ -479,7 +425,7 @@ export function Gantt() {
               onTaskUpdate={handleTaskUpdate}
               onProgress={handleProgress}
               onTaskClick={setDetailTask}
-              onTasksReorder={handleTasksReorder}
+              onCommitmentClick={setSelectedCommitment}
               showForecast={showForecast}
               showBaseline={showBaseline}
               showEcarts={showEcarts}
@@ -533,6 +479,40 @@ export function Gantt() {
       )}
 
       {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+
+      {/* Commitment details panel */}
+      {selectedCommitment && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: '500px', padding: '20px', borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#02457A' }}>Engagement pris</h3>
+              <button onClick={() => setSelectedCommitment(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: '#5b7183' }}>×</button>
+            </div>
+            <div style={{ fontSize: '13px', lineHeight: '1.6', color: '#1f2937', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 600, color: '#02457A' }}>Date promesse</div>
+                <div>{new Date(selectedCommitment.promisedEnd + 'T00:00:00').toLocaleDateString('fr-FR')}</div>
+              </div>
+              {selectedCommitment.label && (
+                <div>
+                  <div style={{ fontWeight: 600, color: '#02457A' }}>Objet</div>
+                  <div>{selectedCommitment.label}</div>
+                </div>
+              )}
+              {selectedCommitment.company && (
+                <div>
+                  <div style={{ fontWeight: 600, color: '#02457A' }}>Entreprise</div>
+                  <div>{selectedCommitment.company}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontWeight: 600, color: '#02457A' }}>Enregistré le</div>
+                <div>{new Date(selectedCommitment.visitDate + 'T00:00:00').toLocaleDateString('fr-FR')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {forecastTasks && (
         <ForecastPanel
