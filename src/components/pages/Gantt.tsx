@@ -18,6 +18,7 @@ import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
 import { TaskDetail } from '../gantt/TaskDetail'
+import { PlanningTableView } from '../gantt/PlanningTableView'
 import '../../styles/gantt.css'
 
 const LOT_OPTS = [
@@ -109,6 +110,7 @@ export function Gantt() {
   const [showBaseline, setShowBaseline] = useState(false)
   const [showEcarts, setShowEcarts] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [showTableView, setShowTableView] = useState(false)
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
@@ -282,6 +284,40 @@ export function Gantt() {
     logActivity('planning', `Sous-tâche ajoutée : ${title}`)
   }
 
+  const handleReorderTask = (taskId: string, targetIndex: number) => {
+    const allTasks = flattenLeaves(ganttTasks)
+    const taskIndex = allTasks.findIndex(t => t.id === taskId)
+    if (taskIndex === -1 || taskIndex === targetIndex) return
+
+    const task = allTasks[taskIndex]
+    let updated = ganttTasks
+
+    // Remove from source
+    updated = updated.flatMap(t => {
+      if (t.id === taskId) return []
+      if (t.children) {
+        const filtered = t.children.filter(c => c.id !== taskId)
+        return filtered.length < (t.children?.length ?? 0) ? { ...t, children: filtered } : t
+      }
+      return t
+    })
+
+    // Insert at target - simplified: just reorder in root level
+    if (taskIndex < targetIndex) {
+      const otherTasks = updated.slice(0, targetIndex)
+      const afterTasks = updated.slice(targetIndex)
+      updated = [...otherTasks, task, ...afterTasks]
+    } else {
+      const beforeTasks = updated.slice(0, targetIndex)
+      const afterTasks = updated.slice(targetIndex)
+      updated = [...beforeTasks, task, ...afterTasks]
+    }
+
+    setGanttTasks(updated)
+    saveGanttTasks(updated)
+    logActivity('planning', `Tâche réordonnée : ${task.title}`)
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -420,6 +456,16 @@ export function Gantt() {
             >
               <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
             </button>
+            {editMode && (
+              <button
+                className="gtb"
+                onClick={() => setShowTableView(true)}
+                title="Ajuster le planning sous forme de tableau"
+                style={{ background: '#f0f9ff', color: '#0369a1' }}
+              >
+                📊 Tableau
+              </button>
+            )}
             <button
               className="gtb"
               onClick={() => setAddForm(a => !a)}
@@ -506,6 +552,14 @@ export function Gantt() {
       )}
 
       {showDelays && <DelayPanel tasks={ganttTasks} onClose={() => setShowDelays(false)} />}
+
+      {showTableView && (
+        <PlanningTableView
+          tasks={ganttTasks}
+          onClose={() => setShowTableView(false)}
+          onReorder={handleReorderTask}
+        />
+      )}
 
       {/* Commitment details panel */}
       {selectedCommitment && (
