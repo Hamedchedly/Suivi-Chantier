@@ -213,6 +213,60 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
     isVisible: boolean
   }
 
+  // Calcule les positions des deux calques: contractuel et réel
+  interface BarLayer {
+    leftPx: number
+    widthPx: number
+  }
+
+  const calculateContractualLayer = (task: GanttTask, barStart: Date, barEnd: Date): BarLayer => {
+    const totalMs = Math.max(1, barEnd.getTime() - barStart.getTime())
+    const contractualStart = task.planned_start.getTime()
+    const contractualEnd = task.planned_end.getTime()
+
+    const contractualLeftPx = Math.max(0, (contractualStart - barStart.getTime()) / totalMs * (daysInRange * dayWidthPx))
+    const contractualWidthPx = Math.max(1, (contractualEnd - contractualStart) / totalMs * (daysInRange * dayWidthPx))
+
+    return { leftPx: contractualLeftPx, widthPx: contractualWidthPx }
+  }
+
+  const calculateRealLayer = (task: GanttTask, barStart: Date, barEnd: Date): { bars: Array<{ leftPx: number; widthPx: number; color: string }> } => {
+    const totalMs = Math.max(1, barEnd.getTime() - barStart.getTime())
+    const actualStart = task.actual_start?.getTime() || task.planned_start.getTime()
+    const actualEnd = task.actual_end?.getTime() || task.planned_end.getTime()
+    const plannedEnd = task.planned_end.getTime()
+
+    const bars: Array<{ leftPx: number; widthPx: number; color: string }> = []
+
+    // Segment 1: De actualStart jusqu'à plannedEnd (bleu - en retard ou à l'heure)
+    if (actualStart < plannedEnd) {
+      const segEnd = Math.min(actualEnd, plannedEnd)
+      const segLeftPx = Math.max(0, (actualStart - barStart.getTime()) / totalMs * (daysInRange * dayWidthPx))
+      const segWidthPx = Math.max(1, (segEnd - actualStart) / totalMs * (daysInRange * dayWidthPx))
+
+      // Saturation bleue basée sur le progrès
+      const progressInSegment = (task.progress / 100)
+      const blueIntensity = Math.min(1, progressInSegment * 1.2)
+      const blueColor = `rgba(37, 99, 235, ${0.3 + blueIntensity * 0.7})`
+
+      bars.push({ leftPx: segLeftPx, widthPx: segWidthPx, color: blueColor })
+    }
+
+    // Segment 2: De plannedEnd à actualEnd (rouge - dépassement)
+    if (actualEnd > plannedEnd) {
+      const segLeftPx = Math.max(0, (plannedEnd - barStart.getTime()) / totalMs * (daysInRange * dayWidthPx))
+      const segWidthPx = Math.max(1, (actualEnd - plannedEnd) / totalMs * (daysInRange * dayWidthPx))
+
+      // Rouge clair si pas encore terminé, rouge foncé si terminé
+      const isComplete = task.progress >= 100
+      const redColor = isComplete ? '#dc2626' : '#fee2e2'
+
+      bars.push({ leftPx: segLeftPx, widthPx: segWidthPx, color: redColor })
+    }
+
+    return { bars }
+  }
+
   const calculateZones = (task: GanttTask, barStart: Date, barEnd: Date): BarZone[] => {
     const planEnd = task.planned_end
     const totalMs = Math.max(1, barEnd.getTime() - barStart.getTime())
@@ -457,7 +511,12 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
             )}
             <span
               onClick={() => hasChildren ? onToggleExpanded(task.id) : onTaskClick?.(task)}
-              style={{ fontSize: 12, fontWeight: hasChildren ? 600 : 400, color: task.is_critical ? '#dc2626' : undefined, cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default' }}
+              style={{
+                fontSize: 12,
+                fontWeight: task.status === 'in-progress' ? 700 : hasChildren ? 600 : 400,
+                color: task.is_critical ? '#dc2626' : undefined,
+                cursor: (hasChildren || onTaskClick) ? 'pointer' : 'default'
+              }}
             >
               {task.title}
             </span>
@@ -562,37 +621,71 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                   )
                 })()}
 
-                {/* Unified segmented bar */}
-                <div
-                  className="gantt-bar"
-                  onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
-                  style={{
-                    left: bar.leftPx,
-                    width: bar.widthPx,
-                    boxShadow: isLate ? '0 0 0 1.5px #dc2626' : task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : '0 1px 3px rgba(0, 0, 0, 0.12)',
-                    border: isLate ? '1px solid #dc2626' : '1px solid rgba(0,0,0,0.08)',
-                    cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
-                  }}
-                  title={tooltip}
-                >
+                {/* TWO-LAYER BAR: Contractual (base) + Real (overlay) */}
+                <div style={{ position: 'relative', height: 28, zIndex: 2 }}>
+                  {/* Layer 1: Contractual bar (light grey, always visible) */}
                   {(() => {
-                    const zones = calculateZones(task, mainStart, mainEnd)
-                    const visibleZones = zones.filter(z => z.isVisible)
-                    // Fallback: always show at least a blue bar
-                    if (visibleZones.length === 0) {
-                      return <div className="gantt-bar-segment" style={{ flex: 1, background: '#bfdbfe' }} />
-                    }
-                    return visibleZones.map(zone => (
+                    const contractual = calculateContractualLayer(task, mainStart, mainEnd)
+                    return (
                       <div
-                        key={zone.type}
-                        className="gantt-bar-segment"
                         style={{
-                          flex: zone.widthPercent,
-                          background: getSegmentBackground(zone.type, zone.progressPercent),
+                          position: 'absolute',
+                          left: contractual.leftPx,
+                          width: contractual.widthPx,
+                          height: 16,
+                          top: 5,
+                          background: '#e2e8f0',
+                          borderRadius: 3,
+                          border: '1px solid rgba(0,0,0,0.08)',
+                          zIndex: 1,
+                          pointerEvents: 'none',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                        }}
+                      />
+                    )
+                  })()}
+
+                  {/* Layer 2: Real bar (blue + red overlay) */}
+                  {(() => {
+                    const real = calculateRealLayer(task, mainStart, mainEnd)
+                    return real.bars.map((segment, idx) => (
+                      <div
+                        key={`real-${idx}`}
+                        style={{
+                          position: 'absolute',
+                          left: segment.leftPx,
+                          width: segment.widthPx,
+                          height: 16,
+                          top: 5,
+                          background: segment.color,
+                          borderRadius: 3,
+                          zIndex: 2,
+                          pointerEvents: 'none',
+                          opacity: 0.85,
                         }}
                       />
                     ))
                   })()}
+
+                  {/* Interactive overlay for dragging */}
+                  <div
+                    className="gantt-bar"
+                    onMouseDown={editable ? e => handleBarMouseDown(task, e, 'move') : undefined}
+                    style={{
+                      position: 'absolute',
+                      left: bar.leftPx,
+                      width: bar.widthPx,
+                      height: 16,
+                      top: 5,
+                      background: 'transparent',
+                      borderRadius: 3,
+                      cursor: !editable ? 'default' : dragState.isDragging && dragState.taskId === task.id ? 'grabbing' : 'grab',
+                      boxShadow: isLate ? '0 0 0 1.5px #dc2626' : task.is_critical && viewState.highlightCritical ? '0 0 0 1.5px #dc2626' : 'none',
+                      border: isLate ? '1px solid #dc2626' : '1px solid rgba(0,0,0,0.08)',
+                      zIndex: 3,
+                    }}
+                    title={tooltip}
+                  />
 
                   {/* Percentage overlay */}
                   {bar.widthPx > 50 && (
@@ -600,10 +693,10 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                       className="gantt-bar-percentage"
                       style={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
+                        top: 5,
+                        left: bar.leftPx,
+                        width: bar.widthPx,
+                        height: 16,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -612,7 +705,7 @@ export default function GanttTable({ tasks, viewState, onToggleExpanded, onTaskU
                         fontWeight: 600,
                         opacity: 0.9,
                         pointerEvents: 'none',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                         zIndex: 10,
                       }}
                     >

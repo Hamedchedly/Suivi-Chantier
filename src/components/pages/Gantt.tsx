@@ -319,6 +319,21 @@ export function Gantt() {
     logActivity('planning', `Tâche réordonnée : ${task.title}`)
   }
 
+  const handleSortChronologically = () => {
+    const sortTasksRecursive = (tasks: GanttTask[]): GanttTask[] => {
+      return tasks
+        .map(t => ({
+          ...t,
+          children: t.children ? sortTasksRecursive(t.children) : undefined,
+        }))
+        .sort((a, b) => a.planned_start.getTime() - b.planned_start.getTime())
+    }
+    const sorted = sortTasksRecursive(ganttTasks)
+    setGanttTasks(sorted)
+    saveGanttTasks(sorted)
+    logActivity('planning', 'Tâches triées chronologiquement')
+  }
+
   const groups: { id: GanttGroup; label: string }[] = [
     { id: 'lot', label: 'Par lot' },
     { id: 'zone', label: 'Par logement' },
@@ -410,14 +425,24 @@ export function Gantt() {
               <Pencil size={14} /><span style={{ fontSize: '10px', fontWeight: 600, marginLeft: '4px' }}>{editMode ? 'Confirmer' : 'Modifier'}</span>
             </button>
             {editMode && (
-              <button
-                className="gtb"
-                onClick={() => setShowTableView(true)}
-                title="Ajuster le planning sous forme de tableau"
-                style={{ background: '#f0f9ff', color: '#0369a1' }}
-              >
-                📊 Tableau
-              </button>
+              <>
+                <button
+                  className="gtb"
+                  onClick={() => setShowTableView(true)}
+                  title="Ajuster le planning sous forme de tableau"
+                  style={{ background: '#f0f9ff', color: '#0369a1' }}
+                >
+                  📊 Tableau
+                </button>
+                <button
+                  className="gtb"
+                  onClick={handleSortChronologically}
+                  title="Trier les tâches chronologiquement"
+                  style={{ background: '#fef3c7', color: '#92400e' }}
+                >
+                  ⏱️ Chrono
+                </button>
+              </>
             )}
             <button
               className="gtb"
