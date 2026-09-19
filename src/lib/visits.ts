@@ -30,6 +30,7 @@ import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, drif
 import { withActualDates } from './actualDates'
 import { forecastDrift } from './forecast'
 import { analyzePlanning, deriveTaskStatus } from './planningEngine'
+import { recomputeAll } from './planning'
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
@@ -577,17 +578,14 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
     return isNaN(observedAt.getTime()) ? next : withActualDates(next, observedAt)
   }
 
-  const walk = (list: GanttTask[]): GanttTask[] => list.map(t => {
-    if (t.children && t.children.length > 0) {
-      const children = walk(t.children)
-      const sum = children.reduce((s, c) => s + c.progress, 0)
-      const progress = Math.round(sum / children.length)
-      return { ...t, children, progress, status: deriveTaskStatus(progress, t.status) }
-    }
-    return applyLeaf(t)
-  })
+  // N'applique la visite qu'aux feuilles : la remontée sur les parents et
+  // les lots passe par recomputeAll (lib/planning.ts), le seul pipeline de
+  // recalcul — jamais une seconde implémentation ad hoc ici.
+  const applyLeaves = (list: GanttTask[]): GanttTask[] => list.map(t =>
+    t.children && t.children.length > 0 ? { ...t, children: applyLeaves(t.children) } : applyLeaf(t),
+  )
 
-  return walk(tasks)
+  return recomputeAll(applyLeaves(tasks))
 }
 
 /** The date promises taken during this session, ready to append to the log. */

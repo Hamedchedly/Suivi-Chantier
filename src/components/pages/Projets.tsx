@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, Check, Pencil, Plus, Trash2, X, Sparkles, RotateCcw, Archive } from 'lucide-react'
+import { Building2, Check, Pencil, Plus, Trash2, X, Sparkles, RotateCcw, Archive, FlaskConical } from 'lucide-react'
 import {
   Project, TrashedProject, ProjectInput, PROJECT_ERROR_LABEL, ProjectError,
   createProject, updateProject, projectSubtitle,
@@ -7,6 +7,7 @@ import {
 import { seedProjectData } from '../../lib/repo'
 import { DEMO_PROJECT, buildDemoSeed } from '../../lib/demoData'
 import { GAMBETTA_PROJECT, buildGambettaSeed } from '../../lib/gambettaData'
+import { TEST_PROJECT, buildTestOperationSeed } from '../../lib/testOperationData'
 import { User } from '../../lib/auth'
 
 interface Props {
@@ -83,6 +84,7 @@ export function Projets({ projects, trash, currentProjectId, currentUser, onChan
   }
   const loadDemo = () => loadPreset(DEMO_PROJECT, buildDemoSeed())
   const loadGambetta = () => loadPreset(GAMBETTA_PROJECT, buildGambettaSeed())
+  const loadTest = () => loadPreset(TEST_PROJECT, buildTestOperationSeed())
 
   return (
     <div style={{ padding: '16px', maxWidth: '680px', margin: '0 auto' }}>
@@ -108,6 +110,13 @@ export function Projets({ projects, trash, currentProjectId, currentUser, onChan
               color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}>
               <Sparkles size={15} /> Exemple
+            </button>
+            <button onClick={loadTest} title="Opération TEST — Validation Planning & Visite (données synthétiques, pour vérifier l'appli sans toucher aux opérations réelles)" style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',
+              borderRadius: '9px', border: '1px solid var(--line)', background: 'var(--surface, #fff)',
+              color: 'var(--navy)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>
+              <FlaskConical size={15} /> TEST
             </button>
             <button onClick={startCreate} title="Nouvelle opération" style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 13px',

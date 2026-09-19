@@ -276,6 +276,25 @@ describe('applyVisitToPlanning', () => {
     const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'blocked' })] })])
     expect(applyVisitToPlanning(tasks(), v)[0].children![0].status).toBe('blocked')
   })
+
+  it('recomputes the parent lot bounds too — one recompute pipeline (lib/planning.ts), not a second one here', () => {
+    // Une date promise repousse la fin d'une feuille au-delà des bornes du lot : le lot doit suivre.
+    const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'ok', progress: 40, promisedEnd: '2026-09-25' })] })])
+    const lot = applyVisitToPlanning(tasks(), v)[0]
+    expect(dayOf(lot.planned_end)).toBe('2026-09-25')
+  })
+
+  it('excludes milestones from the lot progress average, like recomputeLot everywhere else', () => {
+    const withMilestone = () => [
+      parent('T-05-00', 'L05', [
+        leaf({ id: 'T-05-A101', lot_id: 'L05', progress: 0 }),
+        leaf({ id: 'T-05-JAL', lot_id: 'L05', progress: 0, is_milestone: true }),
+      ]),
+    ]
+    const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'ok', progress: 80 })] })])
+    // Sans le jalon : 80 % (moyenne des seules tâches de travail). Avec (bug corrigé) : 40 %.
+    expect(applyVisitToPlanning(withMilestone(), v)[0].progress).toBe(80)
+  })
 })
 
 describe('commitmentsFromVisit', () => {

@@ -8,12 +8,16 @@
 
 import { PlanningTask } from '../types/planning'
 
-export type ZoomLevel = 'day' | 'week' | 'month' | 'quarter'
-export const ZOOM_LEVELS: ZoomLevel[] = ['day', 'week', 'month', 'quarter']
-export const ZOOM_LABEL: Record<ZoomLevel, string> = { day: 'Jour', week: 'Semaine', month: 'Mois', quarter: 'Trimestre' }
+// Semaine = vue temporelle principale et unique (les dates journalières
+// restent visibles comme repères à l'intérieur de chaque semaine, sans
+// exposer de vue « jour » séparée). Mois/trimestre ne restent que comme
+// dézooms de confort pour une vue d'ensemble longue durée.
+export type ZoomLevel = 'week' | 'month' | 'quarter'
+export const ZOOM_LEVELS: ZoomLevel[] = ['week', 'month', 'quarter']
+export const ZOOM_LABEL: Record<ZoomLevel, string> = { week: 'Semaine', month: 'Mois', quarter: 'Trimestre' }
 
-const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { day: 36, week: 14, month: 5, quarter: 1.6 }
-const PADDING_DAYS: Record<ZoomLevel, number> = { day: 5, week: 10, month: 20, quarter: 45 }
+const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: 14, month: 5, quarter: 1.6 }
+const PADDING_DAYS: Record<ZoomLevel, number> = { week: 10, month: 20, quarter: 45 }
 
 const MS_DAY = 86400000
 const startOfDay = (d: Date): Date => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
@@ -84,16 +88,7 @@ const firstOfQuarter = (d: Date): Date => new Date(d.getFullYear(), Math.floor(d
 /** Cellules d'en-tête pour le niveau de zoom courant — jour, semaine, mois ou trimestre. */
 export function headerCells(scale: TimelineScale): HeaderCell[] {
   const cells: HeaderCell[] = []
-  if (scale.zoom === 'day') {
-    for (let cur = scale.start; cur.getTime() < scale.end.getTime(); cur = addDays(cur, 1)) {
-      const dow = cur.getDay()
-      cells.push({
-        x: xForDate(cur, scale), width: scale.dayWidth,
-        label: cur.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' }),
-        isWeekend: dow === 0 || dow === 6,
-      })
-    }
-  } else if (scale.zoom === 'week') {
+  if (scale.zoom === 'week') {
     for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime(); cur = addDays(cur, 7)) {
       cells.push({ x: xForDate(cur, scale), width: scale.dayWidth * 7, label: cur.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' }) })
     }
@@ -109,4 +104,22 @@ export function headerCells(scale: TimelineScale): HeaderCell[] {
     }
   }
   return cells
+}
+
+export interface DayTick { x: number; width: number; label: string; isWeekend: boolean; isToday: boolean }
+
+/** Repères journaliers à l'intérieur de chaque semaine — jamais une vue séparée,
+ * uniquement affichés en sous-ligne de l'en-tête semaine et en grille légère. */
+export function dayTicks(scale: TimelineScale, today: Date): DayTick[] {
+  const ticks: DayTick[] = []
+  for (let cur = scale.start; cur.getTime() < scale.end.getTime(); cur = addDays(cur, 1)) {
+    const dow = cur.getDay()
+    ticks.push({
+      x: xForDate(cur, scale), width: scale.dayWidth,
+      label: String(cur.getDate()),
+      isWeekend: dow === 0 || dow === 6,
+      isToday: diffDays(cur, today) === 0,
+    })
+  }
+  return ticks
 }

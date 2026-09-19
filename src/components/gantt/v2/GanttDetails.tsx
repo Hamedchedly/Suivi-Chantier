@@ -5,7 +5,7 @@
 // l'ancien Gantt (handleProgress/handleTaskUpdate dans pages/Gantt.tsx) via
 // les callbacks optionnels : en lecture seule (ShareView, ex.) on les omet.
 import { useState } from 'react'
-import { X, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { PlanningTask } from '../../../types/planning'
 import { DelayCause, DELAY_CAUSE_LABEL } from '../../../types/gantt'
 import { GanttDependency } from './GanttDependency'
@@ -28,14 +28,18 @@ interface Props {
   onPlannedDates?: (updates: { start?: Date; end?: Date }) => void
   onActualStart?: (date: Date | null) => void
   onActualEnd?: (date: Date | null) => void
+  /** Présent uniquement quand la tâche sélectionnée peut recevoir une sous-tâche
+   * (tâche de profondeur 1, sans enfant — voir createSubTask dans lib/planning.ts). */
+  onSubTaskAdd?: (title: string, start: string, duration: number) => void
 }
 
 export function GanttDetails({
   task, allTasksById, onClose, onDelayCauseChange, onDependencyRemove, onDependencyAdd,
-  onProgress, onPlannedDates, onActualStart, onActualEnd,
+  onProgress, onPlannedDates, onActualStart, onActualEnd, onSubTaskAdd,
 }: Props) {
   const [showHistory, setShowHistory] = useState(false)
   const [depSearch, setDepSearch] = useState('')
+  const [subTaskForm, setSubTaskForm] = useState(false)
   const v = task.variance
 
   return (
@@ -212,9 +216,62 @@ export function GanttDetails({
               </div>
             )}
           </Section>
+
+          {onSubTaskAdd && (
+            <Section title="Sous-tâche">
+              {subTaskForm ? (
+                <SubTaskForm
+                  onAdd={(title, start, duration) => { onSubTaskAdd(title, start, duration); setSubTaskForm(false) }}
+                  onCancel={() => setSubTaskForm(false)}
+                />
+              ) : (
+                <button
+                  onClick={() => setSubTaskForm(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: '#eff6ff',
+                    color: '#2563eb', fontSize: 12, fontWeight: 700, borderRadius: 6, padding: '7px 10px', cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={13} /> Ajouter une sous-tâche
+                </button>
+              )}
+            </Section>
+          )}
         </div>
       </div>
     </>
+  )
+}
+
+function SubTaskForm({ onAdd, onCancel }: {
+  onAdd: (title: string, start: string, duration: number) => void
+  onCancel: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [title, setTitle] = useState('')
+  const [start, setStart] = useState(today)
+  const [duration, setDuration] = useState('3')
+  const inp: React.CSSProperties = { padding: '6px 8px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 12, color: 'var(--ink)', width: '100%', boxSizing: 'border-box' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Titre de la sous-tâche" style={inp} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <input type="date" value={start} onChange={e => setStart(e.target.value)} style={inp} />
+        <input type="number" min={1} value={duration} onChange={e => setDuration(e.target.value)} style={inp} title="Durée (jours)" />
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          disabled={!title.trim()}
+          onClick={() => onAdd(title.trim(), start, parseInt(duration) || 1)}
+          style={{ flex: 1, border: 'none', background: '#018ABE', color: '#fff', fontWeight: 700, fontSize: 12, borderRadius: 6, padding: '7px 10px', cursor: title.trim() ? 'pointer' : 'not-allowed', opacity: title.trim() ? 1 : 0.5 }}
+        >
+          Ajouter
+        </button>
+        <button onClick={onCancel} style={{ border: '1px solid var(--line)', background: '#fff', color: 'var(--muted)', fontSize: 12, borderRadius: 6, padding: '7px 10px', cursor: 'pointer' }}>
+          Annuler
+        </button>
+      </div>
+    </div>
   )
 }
 

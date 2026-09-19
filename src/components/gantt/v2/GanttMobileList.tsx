@@ -51,6 +51,8 @@ export function GanttMobileList({ tasks, onSelect, onShowTimeline }: Props) {
 
 function MobileCard({ task, onClick }: { task: PlanningTask; onClick: () => void }) {
   const v = task.variance
+  const overdue = task.progress < 100 && task.status !== 'cancelled' && new Date().getTime() > task.contract.end.getTime()
+  const alert = task.status === 'blocked' ? 'Bloquée' : overdue ? 'Dépassement contractuel' : null
   return (
     <div
       onClick={onClick}
@@ -68,6 +70,15 @@ function MobileCard({ task, onClick }: { task: PlanningTask; onClick: () => void
         </div>
         <ChevronRight size={16} color="var(--muted)" style={{ flexShrink: 0, marginTop: 2 }} />
       </div>
+
+      {alert && (
+        <span style={{
+          alignSelf: 'flex-start', fontSize: 10, fontWeight: 700, color: 'var(--bad)', background: 'var(--bad-bg)',
+          padding: '2px 8px', borderRadius: 999,
+        }}>
+          {alert}
+        </span>
+      )}
 
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>

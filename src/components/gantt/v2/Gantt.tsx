@@ -7,8 +7,8 @@ import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
 import { toPlanningTasks, analyzePlanning, criticalPath as computeCriticalPath } from '../../../lib/planningEngine'
-import { ZoomLevel, computeTimelineRange, xForDate } from '../../../lib/planningViewModel'
-import { GanttHeaderLabel, GanttHeaderTimeline, HEADER_HEIGHT } from './GanttHeader'
+import { ZoomLevel, computeTimelineRange, xForDate, dayTicks } from '../../../lib/planningViewModel'
+import { GanttHeaderLabel, GanttHeaderTimeline, headerHeightFor } from './GanttHeader'
 import { GanttRowLabel, GanttRowTimeline, ROW_HEIGHT } from './GanttRow'
 import { GanttTooltip } from './GanttTooltip'
 import { GanttDetails } from './GanttDetails'
@@ -45,11 +45,14 @@ interface Props {
   onActualEnd?: (taskId: string, date: Date | null) => void
   onDependencyAdd?: (taskId: string, predecessorId: string) => void
   onDependencyRemove?: (taskId: string, predecessorId: string) => void
+  /** Sous-tâche : uniquement pour une tâche de profondeur 1 (fille directe d'un
+   * lot) sans enfant — createSubTask (lib/planning.ts) ne va pas plus loin. */
+  onSubTaskAdd?: (parentTaskId: string, title: string, start: string, duration: number) => void
 }
 
 export function PlanningGantt({
   tasks, commitments, operationId, onDelayCauseChange,
-  onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove,
+  onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove, onSubTaskAdd,
 }: Props) {
   const today = useMemo(() => new Date(), [])
   const [zoom, setZoom] = useState<ZoomLevel>('week')
@@ -98,6 +101,8 @@ export function PlanningGantt({
   }, [ganttById])
 
   const selectedTask = selectedId ? planningById.get(selectedId) ?? null : null
+  const selectedDepth = selectedId ? rows.find(r => r.task.id === selectedId)?.depth : undefined
+  const canAddSubTask = !!onSubTaskAdd && selectedDepth === 1 && !selectedTask?.children?.length
 
   // Au chargement (ou changement de zoom), recentre la frise sur aujourd'hui.
   useEffect(() => {
@@ -199,10 +204,21 @@ export function PlanningGantt({
           onScroll={syncScroll('timeline')}
           style={{ position: 'relative', flex: 1, maxHeight: '70vh', overflow: 'auto' }}
         >
-          <GanttHeaderTimeline scale={scale} />
+          <GanttHeaderTimeline scale={scale} today={today} />
+          {/* Repères journaliers dans le corps de la frise — grille légère, vue semaine uniquement. */}
+          {scale.zoom === 'week' && dayTicks(scale, today).map((t, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute', top: headerHeightFor(zoom), left: t.x, width: t.width,
+                height: rows.length * ROW_HEIGHT, borderLeft: '1px solid #f1f5f9',
+                background: t.isWeekend ? 'rgba(2,69,122,.02)' : undefined, pointerEvents: 'none',
+              }}
+            />
+          ))}
           {/* Ligne « aujourd'hui » : traverse toutes les lignes, reste alignée pendant le scroll. */}
           <div style={{
-            position: 'absolute', top: HEADER_HEIGHT, left: xForDate(today, scale),
+            position: 'absolute', top: headerHeightFor(zoom), left: xForDate(today, scale),
             width: 2, height: rows.length * ROW_HEIGHT, background: 'var(--bad)', pointerEvents: 'none', zIndex: 1,
           }} />
           {rows.map(({ task }) => (
@@ -239,6 +255,7 @@ export function PlanningGantt({
           onActualEnd={onActualEnd ? date => onActualEnd(selectedTask.id, date) : undefined}
           onDependencyAdd={onDependencyAdd ? predecessorId => onDependencyAdd(selectedTask.id, predecessorId) : undefined}
           onDependencyRemove={onDependencyRemove ? predecessorId => onDependencyRemove(selectedTask.id, predecessorId) : undefined}
+          onSubTaskAdd={canAddSubTask ? (title, start, duration) => onSubTaskAdd!(selectedTask.id, title, start, duration) : undefined}
         />
       )}
 
@@ -259,7 +276,8 @@ function Legend() {
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
       {item('var(--navy)', 'Contractuel', true)}
-      {item('var(--accent)', 'Réel')}
+      {item('var(--accent)', 'Réel (avancement)')}
+      {item('var(--bad)', 'Retard / bloqué', true)}
       {item('var(--warn)', 'Prévision (retard)')}
     </div>
   )

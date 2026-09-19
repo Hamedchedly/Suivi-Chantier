@@ -6,7 +6,7 @@ import {
   getUnits, getTaskUnits, getZoneRefs, getCommitments, getCurrentProjectId,
 } from '../../lib/repo'
 import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
-import { createTask, recomputeAll, durationBetween } from '../../lib/planning'
+import { createTask, createSubTask, recomputeAll, durationBetween } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
@@ -180,6 +180,12 @@ export function Gantt() {
     setAddForm(false)
   }
 
+  const addSubTaskFromForm = (parentTaskId: string, title: string, start: string, duration: number) => {
+    const [y, m, d] = start.split('-').map(Number)
+    const res = createSubTask(ganttTasks, parentTaskId, { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) })
+    if (res.ok) { setGanttTasks(res.tasks); saveGanttTasks(res.tasks); logActivity('planning', `Sous-tâche ajoutée : ${title}`) }
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       <Breadcrumbs crumbs={buildGanttBreadcrumbs(mode, group)} />
@@ -252,6 +258,7 @@ export function Gantt() {
           onDependencyRemove={(id, depId) =>
             setGanttTasks(prev => mapTaskInList(prev, id, t => ({ ...t, dependencies: t.dependencies.filter(d => d !== depId) })))
           }
+          onSubTaskAdd={addSubTaskFromForm}
         />
       )}
     </div>
