@@ -4,6 +4,7 @@ import { DateCommitment } from './commitments'
 import { computeForecasts } from './forecast'
 import {
   calculateScheduleVariance, toPlanningTask, analyzePlanning, criticalPath, whyLate, indexTasksById,
+  deriveTaskStatus,
 } from './planningEngine'
 import { addDays } from './cpm'
 
@@ -17,6 +18,38 @@ const task = (id: string, patch: Partial<GanttTask> = {}): GanttTask => ({
   progress: 0, status: 'not-started', priority: 'medium',
   dependencies: [], is_milestone: false, is_critical: false,
   ...patch,
+})
+
+describe('deriveTaskStatus', () => {
+  // Matrice de transitions demandée : l'avancement seul pilote le statut,
+  // sauf 'blocked'/'cancelled' qui sont des états opérationnels protégés.
+  it('0 → 20 : passe en cours', () => {
+    expect(deriveTaskStatus(20, 'not-started')).toBe('in-progress')
+  })
+  it('20 → 60 : reste en cours', () => {
+    expect(deriveTaskStatus(60, 'in-progress')).toBe('in-progress')
+  })
+  it('60 → 100 : termine', () => {
+    expect(deriveTaskStatus(100, 'in-progress')).toBe('completed')
+  })
+  it('100 → 60 : rouvre — jamais laissée "completed" avec un avancement < 100', () => {
+    expect(deriveTaskStatus(60, 'completed')).toBe('in-progress')
+  })
+  it('60 → 0 : redevient not-started', () => {
+    expect(deriveTaskStatus(0, 'in-progress')).toBe('not-started')
+  })
+  it('un statut bloqué n\'est jamais écrasé par un simple recalcul d\'avancement', () => {
+    expect(deriveTaskStatus(60, 'blocked')).toBe('blocked')
+    expect(deriveTaskStatus(0, 'blocked')).toBe('blocked')
+    expect(deriveTaskStatus(100, 'blocked')).toBe('blocked')
+  })
+  it('un statut annulé n\'est jamais écrasé par un simple recalcul d\'avancement', () => {
+    expect(deriveTaskStatus(60, 'cancelled')).toBe('cancelled')
+  })
+  it('jamais l\'incohérence progress=60 / status=not-started', () => {
+    const result = deriveTaskStatus(60, 'not-started')
+    expect(result).not.toBe('not-started')
+  })
 })
 
 describe('calculateScheduleVariance', () => {

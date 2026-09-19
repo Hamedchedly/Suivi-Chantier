@@ -13,6 +13,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import { GanttTask } from '../types/gantt'
+import { deriveTaskStatus } from './planningEngine'
 
 export type PlanningError = 'title_required' | 'lot_not_found' | 'code_taken' | 'not_found'
 
@@ -59,7 +60,10 @@ export function recomputeTask(task: GanttTask): GanttTask {
   const end = new Date(Math.max(...subs.map(s => s.planned_end.getTime())))
   const work = subs.filter(s => !s.is_milestone)
   const progress = work.length ? Math.round(work.reduce((acc, s) => acc + s.progress, 0) / work.length) : 0
-  return { ...task, planned_start: start, planned_end: end, planned_duration: durationBetween(start, end), progress }
+  return {
+    ...task, planned_start: start, planned_end: end, planned_duration: durationBetween(start, end),
+    progress, status: deriveTaskStatus(progress, task.status),
+  }
 }
 
 /** Bornes et avancement d'un lot, recalculés depuis ses tâches (et leurs sous-tâches). */
@@ -80,6 +84,7 @@ export function recomputeLot(lot: GanttTask): GanttTask {
     planned_end: end,
     planned_duration: durationBetween(start, end),
     progress,
+    status: deriveTaskStatus(progress, lot.status),
     actual_start: leaves.map(k => k.actual_start).filter(Boolean).length
       ? new Date(Math.min(...leaves.filter(k => k.actual_start).map(k => k.actual_start!.getTime())))
       : undefined,

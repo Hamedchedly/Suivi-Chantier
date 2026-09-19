@@ -7,13 +7,14 @@ import {
   getUnits, getTaskUnits, getZoneRefs, getCommitments,
 } from '../../lib/repo'
 import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
-import { createTask } from '../../lib/planning'
+import { createTask, recomputeAll } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { withActualDates } from '../../lib/actualDates'
 import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
 import { computeForecasts, applyForecastToPlanning, forecastImpact, hasBaseline } from '../../lib/forecast'
+import { deriveTaskStatus } from '../../lib/planningEngine'
 import GanttTable from '../gantt/GanttTable'
 import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
@@ -291,15 +292,20 @@ export function Gantt() {
       // Une date contractuelle ou réelle a bougé : la prévision doit suivre.
       return computeForecasts(replanned, new Date(), calendar)
     })
-  /** Saisir un avancement recale aussitôt les dates réelles — et la prévision qui en découle. */
+  /**
+   * Saisir un avancement recale aussitôt le statut, les dates réelles, la
+   * remontée sur le lot parent, et la prévision qui en découle — dans cet
+   * ordre : la prévision doit voir l'avancement du lot déjà à jour.
+   */
   const handleProgress = (id: string, progress: number) => {
     const today = new Date()
     setGanttTasks(prev => {
-      const bumped = updateTaskInList(prev, id, { progress })
+      const bumped = mapTaskInList(prev, id, t => ({ ...t, progress, status: deriveTaskStatus(progress, t.status) }))
       const withActual = mapTaskInList(bumped, id, t => withActualDates(t, today))
-      return computeForecasts(withActual, today, calendar)
+      const rolledUp = recomputeAll(withActual)
+      return computeForecasts(rolledUp, today, calendar)
     })
-    setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
+    setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress, status: deriveTaskStatus(progress, t.status) }, today) : t))
   }
   const enterEdit = () => { setSnapshot(ganttTasks); setEditMode(true) }
   const confirmEdit = () => { setSnapshot(null); setEditMode(false); logActivity('planning', 'Planning modifié (mode édition)') }

@@ -96,6 +96,23 @@ describe('recomputeLot', () => {
     const lot = task('L', { start: '2026-01-01', end: '2026-01-10' })
     expect(recomputeLot(lot)).toEqual(lot)
   })
+  it('remonte aussi le statut du lot, pas seulement l’avancement', () => {
+    const lot: GanttTask = {
+      ...task('L', { start: '2026-01-01', end: '2026-01-10' }),
+      children: [task('a', { start: '2026-01-01', end: '2026-01-05', progress: 60 })],
+    }
+    const out = recomputeLot(lot)
+    expect(out.progress).toBe(60)
+    expect(out.status).toBe('in-progress') // jamais resté "not-started" avec 60 % d'avancement
+  })
+  it('un lot marqué "completed" redevient "in-progress" si un enfant repasse sous 100 %', () => {
+    const lot: GanttTask = {
+      ...task('L', { start: '2026-01-01', end: '2026-01-10' }),
+      status: 'completed',
+      children: [task('a', { start: '2026-01-01', end: '2026-01-05', progress: 60 })],
+    }
+    expect(recomputeLot(lot).status).toBe('in-progress')
+  })
 })
 
 describe('setTaskDates', () => {

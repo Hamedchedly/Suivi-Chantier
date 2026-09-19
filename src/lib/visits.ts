@@ -29,7 +29,7 @@ import type { DateCommitment } from './commitments'
 import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
 import { withActualDates } from './actualDates'
 import { forecastDrift } from './forecast'
-import { analyzePlanning } from './planningEngine'
+import { analyzePlanning, deriveTaskStatus } from './planningEngine'
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
@@ -539,9 +539,7 @@ export function generalNotes(v: Visit): VisitNote[] {
 function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatus {
   if (check.state === 'blocked') return 'blocked'
   if (check.progress === undefined) return current
-  if (check.progress >= 100) return 'completed'
-  if (check.progress > 0) return 'in-progress'
-  return 'not-started'
+  return deriveTaskStatus(check.progress, current)
 }
 
 /**
@@ -583,7 +581,8 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
     if (t.children && t.children.length > 0) {
       const children = walk(t.children)
       const sum = children.reduce((s, c) => s + c.progress, 0)
-      return { ...t, children, progress: Math.round(sum / children.length) }
+      const progress = Math.round(sum / children.length)
+      return { ...t, children, progress, status: deriveTaskStatus(progress, t.status) }
     }
     return applyLeaf(t)
   })

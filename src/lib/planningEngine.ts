@@ -9,7 +9,7 @@
 // Pure, sans I/O : la persistance reste dans repo.ts / sync.ts.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { GanttTask } from '../types/gantt'
+import { GanttTask, TaskStatus } from '../types/gantt'
 import {
   PlanningTask, PlanningVariance, PlanningAnalysis, PlanningCommitment,
   CriticalPathResult, WhyLate,
@@ -19,6 +19,22 @@ import { forecastDrift } from './forecast'
 import { startDrift } from './actualDates'
 import { flattenLeaves, driftDays, diffDays } from './schedule'
 import { computeCpm } from './cpm'
+
+// ── Statut dérivé de l'avancement ─────────────────────────────────────────
+
+/**
+ * Seule fonction autorisée à déduire un statut depuis un avancement.
+ * Règle : 0 % → not-started, 1-99 % → in-progress, 100 % → completed.
+ * 'blocked' et 'cancelled' sont des états opérationnels, jamais déduits d'un
+ * pourcentage — une fois posés (action explicite), un simple recalcul
+ * d'avancement ne doit jamais les écraser silencieusement.
+ */
+export function deriveTaskStatus(progress: number, current: TaskStatus): TaskStatus {
+  if (current === 'blocked' || current === 'cancelled') return current
+  if (progress >= 100) return 'completed'
+  if (progress > 0) return 'in-progress'
+  return 'not-started'
+}
 
 // ── Variance ───────────────────────────────────────────────────────────────
 
@@ -185,6 +201,7 @@ export function indexTasksById(tasks: GanttTask[]): Map<string, GanttTask> {
 }
 
 export const PlanningEngine = {
+  deriveTaskStatus,
   calculateScheduleVariance,
   toPlanningTask,
   toPlanningTasks,
