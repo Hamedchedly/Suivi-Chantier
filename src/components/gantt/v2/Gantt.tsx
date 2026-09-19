@@ -2,7 +2,7 @@
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, ArrowLeft } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
@@ -13,6 +13,7 @@ import { GanttRowLabel, GanttRowTimeline, ROW_HEIGHT } from './GanttRow'
 import { GanttTooltip } from './GanttTooltip'
 import { GanttDetails } from './GanttDetails'
 import { GanttAnalysis } from './GanttAnalysis'
+import { GanttMobileList } from './GanttMobileList'
 
 const LABEL_COLUMN_WIDTH = 240
 
@@ -46,6 +47,10 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [hover, setHover] = useState<{ task: PlanningTask; x: number; y: number } | null>(null)
   const [showAnalysis, setShowAnalysis] = useState(false)
+  // Section 8 du brief : sur mobile, ne pas reproduire la grille desktop —
+  // une liste de cartes par défaut, la frise reste accessible sur demande.
+  const isMobile = useMemo(() => typeof window !== 'undefined' && window.innerWidth < 768, [])
+  const [showTimelineOnMobile, setShowTimelineOnMobile] = useState(false)
   const labelPaneRef = useRef<HTMLDivElement>(null)
   const timelinePaneRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
@@ -95,18 +100,38 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
     syncingRef.current = false
   }
 
+  const showMobileList = isMobile && !showTimelineOnMobile
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <Legend />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+        {isMobile && showTimelineOnMobile ? (
+          <button
+            onClick={() => setShowTimelineOnMobile(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
+            <ArrowLeft size={14} /> Retour à la liste
+          </button>
+        ) : showMobileList ? (
+          <span />
+        ) : (
+          <Legend />
+        )}
         <button
           onClick={() => setShowAnalysis(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: '#eef2f6', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: '#eef2f6', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', flexShrink: 0 }}
         >
           <BarChart3 size={14} /> Analyse
         </button>
       </div>
 
+      {showMobileList ? (
+        <GanttMobileList
+          tasks={planningTasks}
+          onSelect={t => setSelectedId(t.id)}
+          onShowTimeline={() => setShowTimelineOnMobile(true)}
+        />
+      ) : (
       <div style={{ display: 'flex', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
         {/* Volet libellés : scroll vertical uniquement, ne bouge jamais à l'horizontale. */}
         <div
@@ -155,8 +180,9 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
           ))}
         </div>
       </div>
+      )}
 
-      {rows.length === 0 && (
+      {!showMobileList && rows.length === 0 && (
         <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Aucune tâche planifiée.</div>
       )}
 
