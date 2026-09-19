@@ -5,10 +5,10 @@ import {
   LayoutList, Layers, Search, Eye, EyeOff, Printer, Download,
 } from 'lucide-react'
 import {
-  Reserve, ReserveKind, reserveKind, nextReserveNumber, applyFollowUp, crState,
+  Reserve, ReserveKind, ReservePriority, reserveKind, nextReserveNumber, applyFollowUp, crState,
   type FollowUpStatus,
 } from '../../lib/reserves'
-import { getReserves, saveReserves, getLotsConfig, logActivity } from '../../lib/repo'
+import { getReserves, saveReserves, getLotsConfig, getZoneRefs, logActivity } from '../../lib/repo'
 import { sectionLabel, input, ghostBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
 
@@ -26,6 +26,8 @@ const TONE_STYLE: Record<string, { color: string; bg: string; label: string }> =
   done: { color: '#15803d', bg: '#dcfce7', label: 'Terminé' },
   obsolete: { color: '#8595a6', bg: '#f1f5f9', label: 'Obsolète' },
 }
+
+const PRIORITY_LABEL: Record<ReservePriority, string> = { low: 'Basse', medium: 'Moyenne', high: 'Haute' }
 
 const FOLLOW_LABEL: Record<FollowUpStatus, string> = {
   done: 'Terminé', in_progress: 'En cours', not_done: 'Non fait',
@@ -53,6 +55,10 @@ export function CrTable() {
   const [showVisibility, setShowVisibility] = useState(false)
   const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [lotFilter, setLotFilter] = useState<string | null>(null)
+  const [companyFilter, setCompanyFilter] = useState<string | null>(null)
+  const [logementFilter, setLogementFilter] = useState<string | null>(null)
+  const [priorityFilter, setPriorityFilter] = useState<ReservePriority | null>(null)
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
@@ -75,6 +81,11 @@ export function CrTable() {
   })
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
+  const zoneRefs = useMemo(() => getZoneRefs(), [])
+  const companies = useMemo(
+    () => [...new Set(reserves.map(r => r.company).filter((c): c is string => !!c))].sort(),
+    [reserves],
+  )
   const today = todayISO()
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
@@ -181,6 +192,11 @@ export function CrTable() {
       })
     }
 
+    if (lotFilter) result = result.filter(r => r.lotId === lotFilter)
+    if (companyFilter) result = result.filter(r => r.company === companyFilter)
+    if (logementFilter) result = result.filter(r => r.logementId === logementFilter)
+    if (priorityFilter) result = result.filter(r => r.priority === priorityFilter)
+
     // Apply sorting based on sortBy
     if (sortBy === 'crNo') {
       result.sort((a, b) => (b.crNo ?? -1) - (a.crNo ?? -1))
@@ -192,7 +208,7 @@ export function CrTable() {
     // 'status' is already the default sort in rows
 
     return result
-  }, [rows, selectedCr, searchTerm, statusFilter, sortBy, showArchived, today, latestMeetingDate])
+  }, [rows, selectedCr, searchTerm, statusFilter, lotFilter, companyFilter, logementFilter, priorityFilter, sortBy, showArchived, today, latestMeetingDate])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
 
@@ -558,6 +574,44 @@ export function CrTable() {
             </button>
           )
         })}
+      </div>
+
+      {/* Filtres par dimension (section 32 du brief : lot, entreprise, bâtiment/logement, priorité) */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <select value={lotFilter ?? ''} onChange={e => setLotFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+          <option value="">Tous lots</option>
+          {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        <select value={companyFilter ?? ''} onChange={e => setCompanyFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+          <option value="">Toutes entreprises</option>
+          {companies.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={logementFilter ?? ''} onChange={e => setLogementFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+          <option value="">Tous bâtiments / logements</option>
+          {zoneRefs.map(z => <option key={z.refId} value={z.refId}>{z.buildingLabel} — {z.label}</option>)}
+        </select>
+        {(Object.keys(PRIORITY_LABEL) as ReservePriority[]).map(p => (
+          <button
+            key={p}
+            onClick={() => setPriorityFilter(f => f === p ? null : p)}
+            title={`Priorité ${PRIORITY_LABEL[p]}`}
+            style={{
+              fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px',
+              border: '1px solid var(--navy)', background: priorityFilter === p ? 'var(--sky-soft)' : '#fff',
+              color: 'var(--navy)', cursor: 'pointer',
+            }}
+          >
+            {PRIORITY_LABEL[p]}
+          </button>
+        ))}
+        {(lotFilter || companyFilter || logementFilter || priorityFilter) && (
+          <button
+            onClick={() => { setLotFilter(null); setCompanyFilter(null); setLogementFilter(null); setPriorityFilter(null) }}
+            style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
+          >
+            Réinitialiser
+          </button>
+        )}
       </div>
 
       {/* Quick stats */}
