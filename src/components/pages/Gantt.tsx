@@ -60,7 +60,7 @@ function makeParent(id: string, title: string, children: GanttTask[]): GanttTask
 }
 
 // Build the display tree from the raw tasks, applying grouping + multi filters.
-interface ZoneOpt { id: string; label: string }
+interface ZoneOpt { id: string; label: string; group?: string }
 
 function buildTree(
   tasks: GanttTask[], group: GanttGroup, lots: Set<string>, zones: Set<string>,
@@ -93,9 +93,50 @@ function buildTree(
     .filter((t): t is GanttTask => t !== null)
 }
 
+/**
+ * Arborescence Bâtiment › Logement › Lot (mode 2 du nouveau Gantt, section 7
+ * du brief) : les mêmes tâches que le mode « Par lot », réorganisées via les
+ * rattachements tâche→zone déjà saisis dans « Bâtiments & zones ». N'affiche
+ * un lot dans un logement que lorsqu'il s'y applique réellement.
+ */
+function buildLogementTree(
+  tasks: GanttTask[], zoneRefs: ZoneOpt[], concerns: (taskId: string, unitId: string) => boolean,
+): GanttTask[] {
+  const leaves = flattenLeaves(tasks)
+  const lotTitle = new Map(tasks.map(lot => [lot.lot_id, lot.title]))
+
+  const byBuilding = new Map<string, ZoneOpt[]>()
+  for (const z of zoneRefs) {
+    const building = z.group ?? 'Bâtiment'
+    if (!byBuilding.has(building)) byBuilding.set(building, [])
+    byBuilding.get(building)!.push(z)
+  }
+
+  const buildings: GanttTask[] = []
+  for (const [building, zones] of byBuilding) {
+    const logements: GanttTask[] = []
+    for (const z of zones) {
+      const zoneLeaves = leaves.filter(l => concerns(l.id, z.id))
+      if (!zoneLeaves.length) continue
+      const byLot = new Map<string, GanttTask[]>()
+      for (const l of zoneLeaves) {
+        const arr = byLot.get(l.lot_id) ?? []
+        arr.push(l)
+        byLot.set(l.lot_id, arr)
+      }
+      const lots = [...byLot.entries()].map(([lotId, lotLeaves]) =>
+        makeParent(`grp-lg-${z.id}-${lotId}`, lotTitle.get(lotId) ?? lotId, lotLeaves))
+      logements.push(makeParent(`grp-lg-${z.id}`, z.label, lots))
+    }
+    if (logements.length) buildings.push(makeParent(`grp-bld-${building}`, building, logements))
+  }
+  return buildings
+}
+
 export function Gantt() {
   const prefs0 = useMemo(() => getGanttPrefs(), [])
   const [mode, setMode] = useState<'gantt' | 'matrix' | 'v2'>('gantt')
+  const [v2Group, setV2Group] = useState<'lot' | 'logement'>('lot')
   const [group, setGroup] = useState<GanttGroup>(prefs0.group)
   const [zoom, setZoom] = useState(prefs0.zoom)
   const [autoPlan, setAutoPlan] = useState(prefs0.autoSchedule)
@@ -179,6 +220,12 @@ export function Gantt() {
   const displayTree = useMemo(
     () => buildTree(tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns),
     [tasksWithCpm, group, selectedLots, selectedZones, zoneOpts, concerns],
+  )
+
+  // Nouveau Gantt (mode v2) : les deux modes de vue du brief — par lot ou par logement.
+  const v2Tasks = useMemo(
+    () => v2Group === 'logement' ? buildLogementTree(tasksWithCpm, zoneOpts, concerns) : tasksWithCpm,
+    [v2Group, tasksWithCpm, zoneOpts, concerns],
   )
 
   // Filter tasks by search term
@@ -382,12 +429,19 @@ export function Gantt() {
       {mode === 'matrix' ? (
         <LogementMatrix tasks={ganttTasks} />
       ) : mode === 'v2' ? (
-        <PlanningGantt
-          tasks={tasksWithCpm}
-          commitments={commitments}
-          operationId={getCurrentProjectId() ?? 'current'}
-          onDelayCauseChange={(id, cause) => setGanttTasks(prev => updateTaskInList(prev, id, { delay_cause: cause }))}
-        />
+        <>
+          <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px', marginBottom: '10px', width: 'fit-content' }}>
+            {(['lot', 'logement'] as const).map(g => (
+              <button key={g} onClick={() => setV2Group(g)} style={seg(v2Group === g)}>{g === 'lot' ? 'Par lot' : 'Par logement'}</button>
+            ))}
+          </div>
+          <PlanningGantt
+            tasks={v2Tasks}
+            commitments={commitments}
+            operationId={getCurrentProjectId() ?? 'current'}
+            onDelayCauseChange={(id, cause) => setGanttTasks(prev => updateTaskInList(prev, id, { delay_cause: cause }))}
+          />
+        </>
       ) : (
         <>
           {/* Filters + controls */}
