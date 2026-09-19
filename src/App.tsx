@@ -5,6 +5,7 @@ import { Visite } from './components/pages/Visite'
 import { CR } from './components/pages/CR'
 import { Entreprises } from './components/pages/Entreprises'
 import { Reports } from './components/pages/Reports'
+import { Documents } from './components/pages/Documents'
 import { Config } from './components/pages/Config'
 import { Finances } from './components/pages/Finances'
 import { Alertes } from './components/pages/Alertes'
@@ -50,6 +51,7 @@ const PAGE_ROUTES: Record<Page, string> = {
   entreprises: '/entreprises',
   finances: '/finances',
   rapports: '/rapports',
+  documents: '/documents',
   alertes: '/alertes',
   structure: '/structure',
   config: '/config',
@@ -86,6 +88,7 @@ const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
   config:   { title: 'Configuration', sub: 'Paramètres du projet' },
   structure: { title: 'Bâtiments & zones', sub: 'Décrivez le chantier et rattachez-y les tâches' },
   rapports: { title: 'Rapports', sub: 'CRs envoyés et brouillons' },
+  documents: { title: 'Documents', sub: 'RFI, visas de plans et documents' },
   alertes:  { title: 'Alertes & vigilance', sub: 'Retards, dérives et points à évoquer' },
   comptes:  { title: 'Comptes', sub: 'Utilisateurs, droits et accès' },
   demandes: { title: 'Demandes de démo', sub: 'Auto-inscriptions à valider' },
@@ -353,7 +356,7 @@ export default function App() {
   // toujours ouverts ; « Comptes » reste réservé au super-admin.
   const PAGE_FEATURE: Partial<Record<Page, Feature>> = {
     gantt: 'gantt', visite: 'visite', cr: 'cr', entreprises: 'entreprises',
-    finances: 'finances', rapports: 'rapports', alertes: 'alertes',
+    finances: 'finances', rapports: 'rapports', documents: 'documents', alertes: 'alertes',
     structure: 'structure', config: 'config',
   }
   const allowed = (p: Page): boolean => {
@@ -458,6 +461,7 @@ export default function App() {
           {allowed('entreprises') && page === 'entreprises' && <Entreprises />}
           {allowed('finances') && page === 'finances' && <Finances />}
           {allowed('rapports') && page === 'rapports' && <Reports onNavigate={go} />}
+          {allowed('documents') && page === 'documents' && <Documents />}
           {allowed('alertes') && page === 'alertes'  && <Alertes />}
           {allowed('structure') && page === 'structure' && <Structure />}
           {allowed('config') && page === 'config'   && <Config project={project ?? null} onProjectChange={setProjects} projects={projects} />}

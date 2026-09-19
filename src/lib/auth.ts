@@ -25,15 +25,15 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 // toujours disponibles ; « Comptes » reste réservé au super-admin.
 export type Feature =
   | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances'
-  | 'rapports' | 'alertes' | 'structure' | 'config'
+  | 'rapports' | 'documents' | 'alertes' | 'structure' | 'config'
 
 export const ALL_FEATURES: Feature[] = [
-  'gantt', 'visite', 'cr', 'entreprises', 'finances', 'rapports', 'alertes', 'structure', 'config',
+  'gantt', 'visite', 'cr', 'entreprises', 'finances', 'rapports', 'documents', 'alertes', 'structure', 'config',
 ]
 
 export const FEATURE_LABEL: Record<Feature, string> = {
   gantt: 'Planning', visite: 'Visites', cr: 'Réserves & réunions',
-  entreprises: 'Entreprises', finances: 'Finances', rapports: 'Rapports',
+  entreprises: 'Entreprises', finances: 'Finances', rapports: 'Rapports', documents: 'Documents',
   alertes: 'Alertes', structure: 'Bâtiments & zones', config: 'Configuration',
 }
 
