@@ -69,6 +69,8 @@ export function toPlanningTask(task: GanttTask, ctx: PlanningTaskContext): Plann
     operationId: ctx.operationId,
     lotId: task.lot_id,
     parentId: task.parent_id,
+    zoneId: task.zone_id,
+    logementId: task.logement_id,
     title: task.title,
     isMilestone: task.is_milestone,
     isCritical: task.is_critical,

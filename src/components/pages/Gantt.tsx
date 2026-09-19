@@ -19,6 +19,8 @@ import LogementMatrix from '../gantt/LogementMatrix'
 import { MultiSelect } from '../gantt/MultiSelect'
 import { TaskDetail } from '../gantt/TaskDetail'
 import { PlanningTableView } from '../gantt/PlanningTableView'
+import { PlanningGantt } from '../gantt/v2/Gantt'
+import { getCurrentProjectId } from '../../lib/repo'
 import '../../styles/gantt.css'
 
 const LOT_OPTS = [
@@ -93,7 +95,7 @@ function buildTree(
 
 export function Gantt() {
   const prefs0 = useMemo(() => getGanttPrefs(), [])
-  const [mode, setMode] = useState<'gantt' | 'matrix'>('gantt')
+  const [mode, setMode] = useState<'gantt' | 'matrix' | 'v2'>('gantt')
   const [group, setGroup] = useState<GanttGroup>(prefs0.group)
   const [zoom, setZoom] = useState(prefs0.zoom)
   const [autoPlan, setAutoPlan] = useState(prefs0.autoSchedule)
@@ -115,8 +117,8 @@ export function Gantt() {
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const savedMode = params.get('ganttMode') as 'gantt' | 'matrix' | null
-    if (savedMode === 'gantt' || savedMode === 'matrix') setMode(savedMode)
+    const savedMode = params.get('ganttMode') as 'gantt' | 'matrix' | 'v2' | null
+    if (savedMode === 'gantt' || savedMode === 'matrix' || savedMode === 'v2') setMode(savedMode)
     const savedGroup = params.get('ganttGroup') as GanttGroup | null
     if (savedGroup && ['lot', 'zone', 'chrono'].includes(savedGroup)) setGroup(savedGroup)
     if (params.get('showBaseline') === '1') setShowBaseline(true)
@@ -346,8 +348,10 @@ export function Gantt() {
       {/* Mode + grouping */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '4px', background: '#eef2f6', padding: '3px', borderRadius: '8px' }}>
-          {(['gantt', 'matrix'] as const).map(m => (
-            <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>{m === 'gantt' ? 'Gantt' : 'Damier'}</button>
+          {(['gantt', 'matrix', 'v2'] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)} style={seg(mode === m)}>
+              {m === 'gantt' ? 'Gantt' : m === 'matrix' ? 'Damier' : 'Nouveau planning'}
+            </button>
           ))}
         </div>
         {mode === 'gantt' && (
@@ -377,6 +381,13 @@ export function Gantt() {
 
       {mode === 'matrix' ? (
         <LogementMatrix tasks={ganttTasks} />
+      ) : mode === 'v2' ? (
+        <PlanningGantt
+          tasks={tasksWithCpm}
+          commitments={commitments}
+          operationId={getCurrentProjectId() ?? 'current'}
+          onDelayCauseChange={(id, cause) => setGanttTasks(prev => updateTaskInList(prev, id, { delay_cause: cause }))}
+        />
       ) : (
         <>
           {/* Filters + controls */}

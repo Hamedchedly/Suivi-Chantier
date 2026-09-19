@@ -46,6 +46,8 @@ export interface PlanningTask {
   operationId: string
   lotId: string
   parentId?: string
+  zoneId?: string
+  logementId?: string
 
   title: string
   isMilestone: boolean

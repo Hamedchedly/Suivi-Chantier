@@ -74,11 +74,11 @@ export function buildCrBreadcrumbs(section: 'journal' | 'notes' | 'reunions', se
 }
 
 /** Build breadcrumbs for Gantt module */
-export function buildGanttBreadcrumbs(mode: 'gantt' | 'matrix', group?: string): Crumb[] {
+export function buildGanttBreadcrumbs(mode: 'gantt' | 'matrix' | 'v2', group?: string): Crumb[] {
   return [
     { label: 'Planning' },
-    { label: mode === 'gantt' ? 'Gantt' : 'Matrice', active: true },
-    group && group !== 'lot' ? { label: group === 'zone' ? 'par Zone' : 'Chronologique', active: true } : null,
+    { label: mode === 'gantt' ? 'Gantt' : mode === 'matrix' ? 'Matrice' : 'Nouveau planning', active: true },
+    mode === 'gantt' && group && group !== 'lot' ? { label: group === 'zone' ? 'par Zone' : 'Chronologique', active: true } : null,
   ].filter((c): c is Crumb => c !== null)
 }
 
