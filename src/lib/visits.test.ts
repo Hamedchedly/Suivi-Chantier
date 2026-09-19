@@ -301,6 +301,30 @@ describe('buildPlanningSnapshot', () => {
     expect(snap.tasks[0]).toMatchObject({ id: 'T-05-A101', progress: 50 })
     expect(typeof snap.tasks[0].plannedEnd).toBe('string')
   })
+
+  it('n\'a pas de prévision figée tant qu\'aucune tâche n\'en a une', () => {
+    const tasks = [parent('T-05-00', 'L05', [leaf({ id: 'T-05-A101', lot_id: 'L05', progress: 0 })])]
+    const snap = buildPlanningSnapshot(tasks, d('2026-09-05'))
+    expect(snap.tasks[0].forecastDays).toBeNull()
+    expect(snap.tasks[0].forecastEnd).toBeUndefined()
+    expect(snap.lots[0].forecastDays).toBeNull()
+    expect(snap.forecastVarianceDays).toBe(0)
+  })
+
+  it('fige la prévision (et son écart) quand la tâche en a une', () => {
+    const late = leaf({
+      id: 'T-05-A101', lot_id: 'L05', progress: 0,
+      planned_start: d('2026-01-01'), planned_end: d('2026-01-10'), baseline_start: d('2026-01-01'), baseline_end: d('2026-01-10'),
+      forecast_start: d('2026-09-11'), forecast_end: d('2026-09-20'),
+    })
+    const tasks = [parent('T-05-00', 'L05', [late])]
+    const snap = buildPlanningSnapshot(tasks, d('2026-09-11'))
+    expect(snap.tasks[0].forecastDays).toBe(253) // 2026-09-20 vs 2026-01-10
+    expect(snap.tasks[0].forecastEnd).toMatch(/^2026-09-20T/)
+    expect(snap.lots[0].forecastDays).toBe(253)
+    expect(snap.forecastVarianceDays).toBe(253)
+    expect(snap.forecastEnd).toMatch(/^2026-09-20T/)
+  })
 })
 
 describe('newVisit', () => {

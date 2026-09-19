@@ -1389,15 +1389,30 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
               <RKpi label="Avancement global" value={`${snap.overall}%`} />
               <RKpi label="Dérive max" value={`+${snap.maxDrift} j`} accent={snap.maxDrift > 0} />
               <RKpi label="Tâches en retard" value={String(snap.lateCount)} accent={snap.lateCount > 0} />
+              {snap.forecastVarianceDays != null && (
+                <RKpi
+                  label="Écart prévisionnel chantier"
+                  value={snap.forecastVarianceDays > 0 ? `+${snap.forecastVarianceDays} j` : 'à jour'}
+                  accent={snap.forecastVarianceDays > 0}
+                />
+              )}
             </div>
             <table style={tableStyle}>
-              <thead><tr><th style={thStyle}>Lot</th><th style={thStyle}>Avancement</th><th style={thStyle}>Dérive</th><th style={thStyle}>État</th></tr></thead>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Lot</th><th style={thStyle}>Avancement</th><th style={thStyle}>Dérive</th>
+                  <th style={thStyle}>Prévision</th><th style={thStyle}>État</th>
+                </tr>
+              </thead>
               <tbody>
                 {snap.lots.map(l => (
                   <tr key={l.lotId}>
                     <td style={tdStyle}>{l.title.replace(/^LOT \d+ - /, '')}</td>
                     <td style={tdStyle}>{l.progress}%</td>
                     <td style={{ ...tdStyle, color: l.drift > 0 ? '#dc2626' : '#15803d' }}>{l.drift > 0 ? `+${l.drift} j` : 'à jour'}</td>
+                    <td style={{ ...tdStyle, color: (l.forecastDays ?? 0) > 0 ? '#dc2626' : '#5b7183' }}>
+                      {l.forecastDays == null ? '—' : l.forecastDays > 0 ? `+${l.forecastDays} j` : 'à jour'}
+                    </td>
                     <td style={tdStyle}>{l.late ? '⚠ Retard' : '✓ OK'}</td>
                   </tr>
                 ))}

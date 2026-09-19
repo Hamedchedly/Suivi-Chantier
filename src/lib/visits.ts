@@ -28,6 +28,8 @@ import type { GanttTask, TaskStatus } from '../types/gantt'
 import type { DateCommitment } from './commitments'
 import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
 import { withActualDates } from './actualDates'
+import { forecastDrift } from './forecast'
+import { analyzePlanning } from './planningEngine'
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
@@ -141,6 +143,8 @@ export interface PlanningSnapshotLot {
   progress: number
   drift: number
   late: boolean
+  /** Dérive prévisionnelle max du lot (jours). null si aucune tâche n'a de prévision calculée. */
+  forecastDays: number | null
 }
 export interface PlanningSnapshotTask {
   id: string
@@ -152,6 +156,9 @@ export interface PlanningSnapshotTask {
   plannedEnd: string     // ISO
   drift: number
   isMilestone: boolean
+  /** Prévision calculée à la clôture de la session — absente si aucun écart n'était projeté. */
+  forecastEnd?: string   // ISO
+  forecastDays: number | null
 }
 export interface PlanningSnapshot {
   capturedAt: string     // ISO datetime
@@ -160,6 +167,9 @@ export interface PlanningSnapshot {
   lateCount: number
   lots: PlanningSnapshotLot[]
   tasks: PlanningSnapshotTask[]
+  /** Fin de chantier prévisionnelle à date, et son écart vs la fin contractuelle. */
+  forecastEnd?: string   // ISO
+  forecastVarianceDays: number | null
 }
 
 // Editable CR draft, built from the visit then hand-tuned before diffusion.
@@ -606,10 +616,22 @@ export function commitmentsFromVisit(v: Visit): DateCommitment[] {
 
 const iso = (d: Date): string => d.toISOString()
 
+/** Dérive prévisionnelle max d'un lot (jours) — null si aucune de ses tâches n'a de prévision. */
+function lotForecastDays(lot: GanttTask): number | null {
+  return flattenLeaves([lot]).filter(t => !t.is_milestone).reduce<number | null>((worst, t) => {
+    const fd = forecastDrift(t)
+    if (fd === null) return worst
+    return worst === null ? fd : Math.max(worst, fd)
+  }, null)
+}
+
 /** Freeze the live planning into a self-contained historical photograph. */
 export function buildPlanningSnapshot(tasks: GanttTask[], today: Date): PlanningSnapshot {
-  const lots = lotSummaries(tasks, today).map(l => ({
+  const analysis = analyzePlanning(tasks, today)
+  // lotSummaries() parcourt `tasks` dans le même ordre : on peut zipper directement.
+  const lots: PlanningSnapshotLot[] = lotSummaries(tasks, today).map((l, i) => ({
     lotId: l.lotId, title: l.title, progress: l.progress, drift: l.drift, late: l.late,
+    forecastDays: lotForecastDays(tasks[i]),
   }))
   const snapTasks: PlanningSnapshotTask[] = flattenLeaves(tasks).map(t => ({
     id: t.id,
@@ -621,6 +643,8 @@ export function buildPlanningSnapshot(tasks: GanttTask[], today: Date): Planning
     plannedEnd: iso(t.planned_end),
     drift: driftDays(t),
     isMilestone: t.is_milestone,
+    forecastEnd: t.forecast_end ? iso(t.forecast_end) : undefined,
+    forecastDays: forecastDrift(t),
   }))
   return {
     capturedAt: new Date().toISOString(),
@@ -629,6 +653,8 @@ export function buildPlanningSnapshot(tasks: GanttTask[], today: Date): Planning
     lateCount: lateTasks(tasks, today).length,
     lots,
     tasks: snapTasks,
+    forecastEnd: analysis.forecastEnd ? iso(analysis.forecastEnd) : undefined,
+    forecastVarianceDays: analysis.varianceDays,
   }
 }
 
