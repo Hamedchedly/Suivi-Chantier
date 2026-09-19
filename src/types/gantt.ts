@@ -1,5 +1,35 @@
 export type TaskStatus = 'not-started' | 'in-progress' | 'completed' | 'blocked' | 'delayed' | 'cancelled'
 
+/** Cause déclarée d'un retard — saisie par l'utilisateur, jamais déduite. */
+export type DelayCause =
+  | 'dependance'
+  | 'entreprise'
+  | 'approvisionnement'
+  | 'validation_moa'
+  | 'validation_moe'
+  | 'etude'
+  | 'travaux_precedents'
+  | 'acces_logement'
+  | 'meteo'
+  | 'modification'
+  | 'avenant_ts'
+  | 'autre'
+
+export const DELAY_CAUSE_LABEL: Record<DelayCause, string> = {
+  dependance: 'Dépendance',
+  entreprise: 'Entreprise',
+  approvisionnement: 'Approvisionnement',
+  validation_moa: 'Validation MOA',
+  validation_moe: 'Validation MOE',
+  etude: 'Étude',
+  travaux_precedents: 'Travaux précédents',
+  acces_logement: 'Accès logement',
+  meteo: 'Météo',
+  modification: 'Modification',
+  avenant_ts: 'Avenant / TS',
+  autre: 'Autre',
+}
+
 export interface GanttTask {
   id: string
   parent_id?: string
@@ -38,6 +68,8 @@ export interface GanttTask {
 
   is_milestone: boolean
   is_critical: boolean
+
+  delay_cause?: DelayCause
 
   children?: GanttTask[]
 }
