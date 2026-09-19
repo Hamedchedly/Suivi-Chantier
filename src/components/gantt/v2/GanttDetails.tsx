@@ -1,6 +1,9 @@
 // Panneau détail d'une tâche (section 27) : avancement, les trois réalités,
 // écarts, engagements (dernier + historique), dépendances, cause du retard.
-// Tout est lu depuis PlanningTask — rien n'est recalculé ici.
+// Tout ce qui est affiché vient de PlanningTask — rien n'est recalculé ici.
+// L'édition (avancement, dates, dépendances) délègue au même pipeline que
+// l'ancien Gantt (handleProgress/handleTaskUpdate dans pages/Gantt.tsx) via
+// les callbacks optionnels : en lecture seule (ShareView, ex.) on les omet.
 import { useState } from 'react'
 import { X, ChevronDown, ChevronRight } from 'lucide-react'
 import { PlanningTask } from '../../../types/planning'
@@ -8,6 +11,11 @@ import { DelayCause, DELAY_CAUSE_LABEL } from '../../../types/gantt'
 import { GanttDependency } from './GanttDependency'
 
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr') : '—')
+const isoDate = (d: Date): string => {
+  const x = new Date(d)
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+}
+const parseDate = (s: string): Date => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
 
 interface Props {
   task: PlanningTask
@@ -15,10 +23,19 @@ interface Props {
   onClose: () => void
   onDelayCauseChange?: (cause: DelayCause | undefined) => void
   onDependencyRemove?: (predecessorId: string) => void
+  onDependencyAdd?: (predecessorId: string) => void
+  onProgress?: (progress: number) => void
+  onPlannedDates?: (updates: { start?: Date; end?: Date }) => void
+  onActualStart?: (date: Date | null) => void
+  onActualEnd?: (date: Date | null) => void
 }
 
-export function GanttDetails({ task, allTasksById, onClose, onDelayCauseChange, onDependencyRemove }: Props) {
+export function GanttDetails({
+  task, allTasksById, onClose, onDelayCauseChange, onDependencyRemove, onDependencyAdd,
+  onProgress, onPlannedDates, onActualStart, onActualEnd,
+}: Props) {
   const [showHistory, setShowHistory] = useState(false)
+  const [depSearch, setDepSearch] = useState('')
   const v = task.variance
 
   return (
@@ -45,16 +62,48 @@ export function GanttDetails({ task, allTasksById, onClose, onDelayCauseChange, 
               <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{task.progress}%</span>
             </div>
             <div className="progress-bar"><div className="progress-fill" style={{ width: `${task.progress}%` }} /></div>
+            {onProgress && !task.isMilestone && !task.children?.length && (
+              <input
+                type="range" min={0} max={100} step={5} value={task.progress}
+                onChange={e => onProgress(Number(e.target.value))}
+                style={{ width: '100%', marginTop: 8 }}
+              />
+            )}
           </div>
 
           <Section title="Contractuel">
-            <Row label="Début" value={fmt(task.contract.start)} />
-            <Row label="Fin" value={fmt(task.contract.end)} />
+            {onPlannedDates && !task.children?.length ? (
+              <>
+                <EditRow label="Début" value={isoDate(task.contract.start)} onChange={v => onPlannedDates({ start: parseDate(v) })} />
+                <EditRow label="Fin" value={isoDate(task.contract.end)} onChange={v => onPlannedDates({ end: parseDate(v) })} />
+              </>
+            ) : (
+              <>
+                <Row label="Début" value={fmt(task.contract.start)} />
+                <Row label="Fin" value={fmt(task.contract.end)} />
+              </>
+            )}
           </Section>
 
           <Section title="Réel">
-            <Row label="Début" value={fmt(task.actual.start)} />
-            <Row label="Fin" value={task.actual.end ? fmt(task.actual.end) : (task.actual.start ? 'en cours' : '—')} />
+            {onActualStart && !task.children?.length ? (
+              <EditRow
+                label="Début" value={task.actual.start ? isoDate(task.actual.start) : ''}
+                onChange={v => onActualStart(v ? parseDate(v) : null)} clearable={!!task.actual.start}
+                onClear={() => onActualStart(null)}
+              />
+            ) : (
+              <Row label="Début" value={fmt(task.actual.start)} />
+            )}
+            {onActualEnd && !task.children?.length ? (
+              <EditRow
+                label="Fin" value={task.actual.end ? isoDate(task.actual.end) : ''}
+                onChange={v => onActualEnd(v ? parseDate(v) : null)} clearable={!!task.actual.end}
+                onClear={() => onActualEnd(null)}
+              />
+            ) : (
+              <Row label="Fin" value={task.actual.end ? fmt(task.actual.end) : (task.actual.start ? 'en cours' : '—')} />
+            )}
           </Section>
 
           {task.forecast.end && (
@@ -133,7 +182,34 @@ export function GanttDetails({ task, allTasksById, onClose, onDelayCauseChange, 
                 />
               ))
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Aucune liaison.</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: onDependencyAdd ? 8 : 0 }}>Aucune liaison.</div>
+            )}
+            {onDependencyAdd && (
+              <div style={{ marginTop: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Rechercher une tâche…"
+                  value={depSearch}
+                  onChange={e => setDepSearch(e.target.value)}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 12, color: 'var(--ink)', boxSizing: 'border-box' }}
+                />
+                {depSearch.trim().length > 0 && (
+                  <div style={{ marginTop: 4, border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden', maxHeight: 140, overflowY: 'auto' }}>
+                    {[...allTasksById.values()]
+                      .filter(t => t.id !== task.id && !task.dependencies.some(d => d.predecessorId === t.id) && t.title.toLowerCase().includes(depSearch.toLowerCase()))
+                      .slice(0, 8)
+                      .map(t => (
+                        <div
+                          key={t.id}
+                          onClick={() => { onDependencyAdd(t.id); setDepSearch('') }}
+                          style={{ padding: '6px 10px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid #f0f5f9', color: 'var(--ink)' }}
+                        >
+                          <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{t.lotId}</span> · {t.title}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
             )}
           </Section>
         </div>
@@ -157,6 +233,26 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: 'ok'
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '3px 0' }}>
       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
       <span style={{ fontSize: 13, fontWeight: 600, color }}>{value}</span>
+    </div>
+  )
+}
+
+function EditRow({ label, value, onChange, clearable, onClear }: {
+  label: string; value: string; onChange: (v: string) => void; clearable?: boolean; onClear?: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="date" value={value}
+          onChange={e => e.target.value && onChange(e.target.value)}
+          style={{ width: 140, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}
+        />
+        {clearable && onClear && (
+          <button onClick={onClear} title="Effacer" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 12, padding: '2px 4px' }}>✕</button>
+        )}
+      </div>
     </div>
   )
 }

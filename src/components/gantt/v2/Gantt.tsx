@@ -2,7 +2,7 @@
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { BarChart3, ArrowLeft } from 'lucide-react'
+import { BarChart3, ArrowLeft, Search, X as XIcon } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
@@ -38,15 +38,26 @@ interface Props {
   commitments: DateCommitment[]
   operationId: string
   onDelayCauseChange?: (taskId: string, cause: DelayCause | undefined) => void
+  /** Édition — omis (ex. ShareView en lecture seule) : le panneau détail redevient purement informatif. */
+  onProgress?: (taskId: string, progress: number) => void
+  onPlannedDates?: (taskId: string, updates: { start?: Date; end?: Date }) => void
+  onActualStart?: (taskId: string, date: Date | null) => void
+  onActualEnd?: (taskId: string, date: Date | null) => void
+  onDependencyAdd?: (taskId: string, predecessorId: string) => void
+  onDependencyRemove?: (taskId: string, predecessorId: string) => void
 }
 
-export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseChange }: Props) {
+export function PlanningGantt({
+  tasks, commitments, operationId, onDelayCauseChange,
+  onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove,
+}: Props) {
   const today = useMemo(() => new Date(), [])
   const [zoom, setZoom] = useState<ZoomLevel>('week')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [hover, setHover] = useState<{ task: PlanningTask; x: number; y: number } | null>(null)
   const [showAnalysis, setShowAnalysis] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   // Section 8 du brief : sur mobile, ne pas reproduire la grille desktop —
   // une liste de cartes par défaut, la frise reste accessible sur demande.
   const isMobile = useMemo(() => typeof window !== 'undefined' && window.innerWidth < 768, [])
@@ -59,8 +70,22 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
     () => toPlanningTasks(tasks, { operationId, commitments }),
     [tasks, operationId, commitments],
   )
-  const scale = useMemo(() => computeTimelineRange(planningTasks, today, zoom), [planningTasks, today, zoom])
-  const rows = useMemo(() => { const out: Row[] = []; flattenRows(planningTasks, 0, collapsed, out); return out }, [planningTasks, collapsed])
+  // Filtre texte : garde une branche si elle-même ou l'un de ses descendants correspond.
+  const filteredTasks = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return planningTasks
+    const filter = (list: PlanningTask[]): PlanningTask[] => list
+      .map(t => {
+        const children = t.children ? filter(t.children) : undefined
+        const matches = t.title.toLowerCase().includes(term)
+        if (matches || (children && children.length > 0)) return children ? { ...t, children } : t
+        return null
+      })
+      .filter((t): t is PlanningTask => t !== null)
+    return filter(planningTasks)
+  }, [planningTasks, searchTerm])
+  const scale = useMemo(() => computeTimelineRange(filteredTasks, today, zoom), [filteredTasks, today, zoom])
+  const rows = useMemo(() => { const out: Row[] = []; flattenRows(filteredTasks, 0, collapsed, out); return out }, [filteredTasks, collapsed])
   const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
 
@@ -104,6 +129,20 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
 
   return (
     <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f7fafc', borderRadius: 6, padding: '6px 10px', marginBottom: 8, maxWidth: 320 }}>
+        <Search size={14} color="var(--muted)" />
+        <input
+          type="text"
+          placeholder="Rechercher une tâche…"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          style={{ flex: 1, border: 'none', background: 'none', fontSize: 12, outline: 'none', color: 'var(--ink)' }}
+        />
+        {searchTerm && (
+          <button onClick={() => setSearchTerm('')} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, color: 'var(--muted)' }}><XIcon size={13} /></button>
+        )}
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
         {isMobile && showTimelineOnMobile ? (
           <button
@@ -127,7 +166,7 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
 
       {showMobileList ? (
         <GanttMobileList
-          tasks={planningTasks}
+          tasks={filteredTasks}
           onSelect={t => setSelectedId(t.id)}
           onShowTimeline={() => setShowTimelineOnMobile(true)}
         />
@@ -194,6 +233,12 @@ export function PlanningGantt({ tasks, commitments, operationId, onDelayCauseCha
           allTasksById={planningById}
           onClose={() => setSelectedId(null)}
           onDelayCauseChange={onDelayCauseChange ? cause => onDelayCauseChange(selectedTask.id, cause) : undefined}
+          onProgress={onProgress ? progress => onProgress(selectedTask.id, progress) : undefined}
+          onPlannedDates={onPlannedDates ? updates => onPlannedDates(selectedTask.id, updates) : undefined}
+          onActualStart={onActualStart ? date => onActualStart(selectedTask.id, date) : undefined}
+          onActualEnd={onActualEnd ? date => onActualEnd(selectedTask.id, date) : undefined}
+          onDependencyAdd={onDependencyAdd ? predecessorId => onDependencyAdd(selectedTask.id, predecessorId) : undefined}
+          onDependencyRemove={onDependencyRemove ? predecessorId => onDependencyRemove(selectedTask.id, predecessorId) : undefined}
         />
       )}
 

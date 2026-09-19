@@ -1,14 +1,10 @@
-import { useState } from 'react'
 import { Lock, MapPin } from 'lucide-react'
 import { Snapshot } from '../../lib/share'
-import { GanttViewState } from '../../types/gantt'
 import { overallProgress, maxDrift, lateTasks, lotSummaries } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
-import GanttTable from '../gantt/GanttTable'
-import '../../styles/gantt.css'
+import { PlanningGantt } from '../gantt/v2/Gantt'
 
 export function ShareView({ snapshot }: { snapshot: Snapshot }) {
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const today = new Date()
   // Libellés de zone embarqués dans l'instantané (le MOA n'a pas accès au projet).
   const logementLabel = (id?: string) => (id ? snapshot.zones?.[id] ?? id : '')
@@ -20,12 +16,6 @@ export function ShareView({ snapshot }: { snapshot: Snapshot }) {
   const late = lateTasks(tasks, today)
   const lots = lotSummaries(tasks, today)
   const pf = projectFinance(snapshot.marches, snapshot.avenants, snapshot.situations)
-
-  const startDate = new Date(); startDate.setDate(startDate.getDate() - 21); startDate.setHours(0, 0, 0, 0)
-  const endDate = new Date(); endDate.setDate(endDate.getDate() + 63)
-  const viewState: GanttViewState = {
-    view: 'week', startDate, endDate, depsVisible: true, expandedTasks,
-  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: '24px' }}>
@@ -54,17 +44,8 @@ export function ShareView({ snapshot }: { snapshot: Snapshot }) {
 
         {/* Planning (read-only) */}
         <h2 className="section-title" style={{ marginBottom: '8px' }}>Planning</h2>
-        <div style={{ overflow: 'hidden', borderRadius: '6px', border: '1px solid #e4ecf2', marginBottom: '20px' }}>
-          <GanttTable
-            tasks={tasks}
-            viewState={viewState}
-            readOnly
-            onToggleExpanded={(id) => setExpandedTasks(prev => {
-              const next = new Set(prev)
-              if (next.has(id)) next.delete(id); else next.add(id)
-              return next
-            })}
-          />
+        <div style={{ marginBottom: '20px' }}>
+          <PlanningGantt tasks={tasks} commitments={[]} operationId={snapshot.project.ref || 'partage'} />
         </div>
 
         {/* Finance summary */}

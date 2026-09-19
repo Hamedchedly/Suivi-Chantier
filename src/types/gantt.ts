@@ -73,16 +73,3 @@ export interface GanttTask {
 
   children?: GanttTask[]
 }
-
-export interface GanttViewState {
-  view: 'week' | 'month' // zoom level
-  startDate: Date
-  endDate: Date
-  selectedLotId?: string | null // filter by lot
-  selectedZoneId?: string | null // filter by logement
-  depsVisible: boolean
-  highlightCritical?: boolean // dim non-critical tasks
-  zoom?: number // day-width multiplier (default 1)
-  holidays?: { start: Date; end: Date; label?: string }[] // hatched/greyed columns
-  expandedTasks: Set<string>
-}
