@@ -14,6 +14,7 @@ import {
   buildPlanningSnapshot, newVisit, emptyCr,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
+import { computeForecasts } from '../../lib/forecast'
 import { DateCommitment, withoutVisit, commitmentsForTask } from '../../lib/commitments'
 import {
   Reserve, FollowUpStatus, carriedOverPoints, applyFollowUp, nextReserveNumber, reserveKind,
@@ -209,7 +210,10 @@ export function Visite() {
    * — so the CR shows the chantier as it stood at the end of the tour.
    */
   const terminate = (v: Visit) => {
-    const updated = applyVisitToPlanning(getGanttTasks(), v)
+    const withActuals = applyVisitToPlanning(getGanttTasks(), v)
+    // Le réel vient de bouger : la prévision doit être recalculée dessus, pas
+    // sur l'ancien état — sinon le Gantt affiche une prévision périmée.
+    const updated = computeForecasts(withActuals, new Date())
     saveGanttTasks(updated)
     const nextCommitments = [...withoutVisit(getCommitments(), v.id), ...commitmentsFromVisit(v)]
     saveCommitments(nextCommitments)

@@ -280,19 +280,24 @@ export function Gantt() {
     setGanttTasks(prev => {
       const moved = updateTaskInList(prev, id, updates)
       // Auto-schedule uniquement quand les dates contractuelles changent, pas les réelles.
-      if (!autoPlan || (!updates.planned_start && !updates.planned_end)) return moved
-      const { tasks: replanned, shifted } = autoSchedule(moved, calendar)
-      if (shifted.length) {
-        logActivity('planning', `Auto-planification : ${shifted.length} tâche${shifted.length > 1 ? 's' : ''} décalée${shifted.length > 1 ? 's' : ''} suite au déplacement`)
+      let replanned = moved
+      if (autoPlan && (updates.planned_start || updates.planned_end)) {
+        const { tasks, shifted } = autoSchedule(moved, calendar)
+        if (shifted.length) {
+          logActivity('planning', `Auto-planification : ${shifted.length} tâche${shifted.length > 1 ? 's' : ''} décalée${shifted.length > 1 ? 's' : ''} suite au déplacement`)
+        }
+        replanned = tasks
       }
-      return replanned
+      // Une date contractuelle ou réelle a bougé : la prévision doit suivre.
+      return computeForecasts(replanned, new Date(), calendar)
     })
-  /** Saisir un avancement recale aussitôt les dates réelles de la tâche. */
+  /** Saisir un avancement recale aussitôt les dates réelles — et la prévision qui en découle. */
   const handleProgress = (id: string, progress: number) => {
     const today = new Date()
     setGanttTasks(prev => {
       const bumped = updateTaskInList(prev, id, { progress })
-      return mapTaskInList(bumped, id, t => withActualDates(t, today))
+      const withActual = mapTaskInList(bumped, id, t => withActualDates(t, today))
+      return computeForecasts(withActual, today, calendar)
     })
     setDetailTask(t => (t && t.id === id ? withActualDates({ ...t, progress }, today) : t))
   }

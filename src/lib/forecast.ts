@@ -44,6 +44,13 @@ function initialForecast(
     return { start: task.actual_start ?? task.actual_end, end: task.actual_end }
   }
 
+  if (task.progress >= 100) {
+    // Marquée terminée mais sans date réelle enregistrée (import historique,
+    // saisie antérieure à actualDates.ts) : on la sait faite, pas "pas commencée".
+    // Ne pas la projeter comme démarrant aujourd'hui faute de mieux.
+    return null
+  }
+
   if (task.actual_start) {
     // In progress: forecast_start = actual_start, forecast_end = +workDays working days
     const fEnd = addWorkingDays(SOD(task.actual_start), workDays - 1, cal)
