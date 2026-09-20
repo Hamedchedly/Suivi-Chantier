@@ -65,7 +65,9 @@ export default function LogementMatrix({ tasks }: LogementMatrixProps) {
     )
     if (concerned.length === 0) return null
     const progress = Math.round(concerned.reduce((s, c) => s + c.progress, 0) / concerned.length)
-    const late = concerned.some(c => isLate(c, today) || c.status === 'delayed' || c.status === 'blocked')
+    // 'delayed' n'est jamais produit par deriveTaskStatus (planningEngine.ts) : isLate() est déjà
+    // le vrai test de retard, 'blocked' le seul statut opérationnel qui s'y ajoute.
+    const late = concerned.some(c => isLate(c, today) || c.status === 'blocked')
     return { progress, late }
   }
 

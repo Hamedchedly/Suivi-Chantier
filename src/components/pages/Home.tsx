@@ -225,7 +225,10 @@ export function Home({ onNavigate }: HomeProps) {
                     <MapPin size={11} /> {logementLabel(t.logement_id)} • {t.progress}%{driftDays(t) > 0 ? ` • +${driftDays(t)} j` : ''}
                   </div>
                 </div>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: t.status === 'delayed' || t.status === 'blocked' ? 'var(--bad)' : 'var(--navy-2)' }}>{t.progress}%</div>
+                {/* 'delayed' n'est jamais produit par deriveTaskStatus (planningEngine.ts) : seul
+                    'blocked' est un vrai signal ici — driftDays serait structurellement à 0 pour
+                    toute tâche de cette liste (tasksForToday exige planned_end >= aujourd'hui). */}
+                <div style={{ fontSize: '11px', fontWeight: 700, color: t.status === 'blocked' ? 'var(--bad)' : 'var(--navy-2)' }}>{t.progress}%</div>
               </button>
             ))}
           </div>
