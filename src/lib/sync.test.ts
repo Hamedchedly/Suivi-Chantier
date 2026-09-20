@@ -204,4 +204,20 @@ describe('sync : session (fusion dernière-écriture-gagne)', () => {
     await vi.advanceTimersByTimeAsync(900)
     expect(server.get('sc-reserves-v1::p1')?.v).toEqual([{ id: 'local' }])
   })
+
+  it('une modification faite sur un AUTRE appareil (serveur plus récent) écrase le cache local — vrai conflit multi-appareils', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-01T10:00:00.000Z'))
+    // Cet appareil édite en premier : sa valeur devient la plus récente connue localement.
+    srvSet('sc-reserves-v1::p1', [{ id: 'from-device-A' }], '2026-05-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+    saveState('sc-reserves-v1::p1', [{ id: 'from-device-A' }])
+    await vi.advanceTimersByTimeAsync(900)
+
+    // Un AUTRE appareil édite ensuite la même clé, plus tard, directement sur le serveur.
+    srvSet('sc-reserves-v1::p1', [{ id: 'from-device-B' }], '2026-05-01T11:00:00.000Z')
+    // Cet appareil recharge : il doit récupérer la version du device B, pas garder la sienne.
+    await initRemoteSession('u1')
+    expect(loadState('sc-reserves-v1::p1', [])).toEqual([{ id: 'from-device-B' }])
+  })
 })
