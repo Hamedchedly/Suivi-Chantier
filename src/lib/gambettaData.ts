@@ -9,6 +9,7 @@ import type { Marche } from './finance'
 import type { Reserve } from './reserves'
 import type { LotContact, ProjectSeed } from './repo'
 import type { ProjectInput } from './projects'
+import type { Unit, TaskUnitLink } from './units'
 
 export const GAMBETTA_PROJECT: ProjectInput = {
   name: '111 rue Gambetta',
@@ -177,7 +178,66 @@ const reserves: Reserve[] = [
   { id: 'gr-44', number: 'R-045', lotId: 'LOT08', logementId: '', description: 'Lenteur sur les travaux d\'embeillissements.', priority: 'medium', status: 'open', createdAt: '2026-09-08', kind: 'observation', crNo: 17, company: 'SMP', meetingDate: '2026-09-08' },
 ]
 
+// ── Bâtiments & zones ────────────────────────────────────────────────────────
+//
+// Structure réelle transmise pour l'opération (bâtiments A, B, C) :
+//   - A et B sont reliés par un même cheminement RDC et desservis par les
+//     mêmes escaliers → modélisés comme une circulation commune A/B, rattachée
+//     à un troisième « bâtiment » racine dédié (le modèle d'unités ne permet
+//     pas d'imbriquer un bâtiment dans un autre — voir lib/units.ts,
+//     ALLOWED_CHILDREN — donc pas de duplication de la zone commune par
+//     logement, mais pas d'imbrication littérale de A et B non plus).
+//   - Bâtiment A : 2 logements, au 2e étage / R+2 uniquement (aucune autre
+//     information disponible → aucun autre niveau ni logement créé).
+//   - Bâtiment B : 3 logements, un par niveau (RDC, R+1, R+2).
+//   - Bâtiment C : indépendant de A/B — créé seul, sans logement inventé :
+//     sa structure détaillée reste à compléter depuis les documents source.
+// Les identifiants de logement (A-201, A-202, B-001, B-101, B-201) sont des
+// identifiants FONCTIONNELS proposés faute de numérotation officielle connue
+// à ce stade — à remplacer par les vrais numéros dès qu'ils sont disponibles.
+const units: Unit[] = [
+  { id: 'u-gambetta-AB', kind: 'building', name: 'A/B — Parties communes', code: 'AB', sortOrder: 0 },
+  { id: 'u-gambetta-AB-rdc', parentId: 'u-gambetta-AB', kind: 'level', name: 'RDC', sortOrder: 0 },
+  { id: 'u-gambetta-AB-couloir', parentId: 'u-gambetta-AB-rdc', kind: 'common', name: 'Couloir commun RDC', sortOrder: 0 },
+  { id: 'u-gambetta-AB-escaliers', parentId: 'u-gambetta-AB', kind: 'common', name: 'Escaliers A/B', sortOrder: 1 },
+
+  { id: 'u-gambetta-A', kind: 'building', name: 'Bâtiment A', code: 'A', sortOrder: 1 },
+  { id: 'u-gambetta-A-r2', parentId: 'u-gambetta-A', kind: 'level', name: 'R+2', sortOrder: 0 },
+  { id: 'u-gambetta-A-201', parentId: 'u-gambetta-A-r2', kind: 'dwelling', name: 'Logement A-201', code: 'A-201', sortOrder: 0 },
+  { id: 'u-gambetta-A-202', parentId: 'u-gambetta-A-r2', kind: 'dwelling', name: 'Logement A-202', code: 'A-202', sortOrder: 1 },
+
+  { id: 'u-gambetta-B', kind: 'building', name: 'Bâtiment B', code: 'B', sortOrder: 2 },
+  { id: 'u-gambetta-B-rdc', parentId: 'u-gambetta-B', kind: 'level', name: 'RDC', sortOrder: 0 },
+  { id: 'u-gambetta-B-001', parentId: 'u-gambetta-B-rdc', kind: 'dwelling', name: 'Logement B-001', code: 'B-001', sortOrder: 0 },
+  { id: 'u-gambetta-B-r1', parentId: 'u-gambetta-B', kind: 'level', name: 'R+1', sortOrder: 1 },
+  { id: 'u-gambetta-B-101', parentId: 'u-gambetta-B-r1', kind: 'dwelling', name: 'Logement B-101', code: 'B-101', sortOrder: 0 },
+  { id: 'u-gambetta-B-r2', parentId: 'u-gambetta-B', kind: 'level', name: 'R+2', sortOrder: 2 },
+  { id: 'u-gambetta-B-201', parentId: 'u-gambetta-B-r2', kind: 'dwelling', name: 'Logement B-201', code: 'B-201', sortOrder: 0 },
+
+  // Indépendant de A/B — structure détaillée non disponible : pas de niveau
+  // ni de logement inventé, uniquement le bâtiment lui-même.
+  { id: 'u-gambetta-C', kind: 'building', name: 'Bâtiment C', code: 'C', sortOrder: 3 },
+]
+
+// Rattachements tâche ↔ unité : uniquement les tâches dont le TITRE nomme
+// explicitement un bâtiment dans les données source (aucune tâche n'est
+// devinée ou déplacée vers un logement précis, faute de source le confirmant).
+// Rattacher au bâtiment vaut pour tout ce qu'il contient (voir
+// taskConcernsUnit, lib/units.ts) : ces tâches apparaîtront donc dans chacun
+// des logements du bâtiment concerné pendant une visite.
+const taskUnits: TaskUnitLink[] = [
+  { taskId: 'g-LOT01-0', unitId: 'u-gambetta-C' },   // « Curage logement RC Bâtiment C »
+  { taskId: 'g-LOT02-1', unitId: 'u-gambetta-B' },   // « Bâtiment B »
+  { taskId: 'g-LOT02-2', unitId: 'u-gambetta-A' },   // « Bâtiment A »
+  { taskId: 'g-LOT02-4', unitId: 'u-gambetta-B' },   // « Bâtiment B »
+  { taskId: 'g-LOT02-5', unitId: 'u-gambetta-A' },   // « Bâtiment A Coté Cour Int. »
+  { taskId: 'g-LOT02-6', unitId: 'u-gambetta-A' },   // « Bâtiment A Coté Rue »
+  { taskId: 'g-LOT03-1', unitId: 'u-gambetta-C' },   // « Bâtiment C »
+  { taskId: 'g-LOT03-2', unitId: 'u-gambetta-B' },   // « Bâtiment B »
+  { taskId: 'g-LOT03-3', unitId: 'u-gambetta-A' },   // « Bâtiment A »
+]
+
 /** Toutes les tranches de l'opération Gambetta, prêtes pour seedProjectData(). */
 export function buildGambettaSeed(): ProjectSeed {
-  return { gantt, lotsConfig, marches, reserves }
+  return { gantt, lotsConfig, marches, reserves, units, taskUnits }
 }
