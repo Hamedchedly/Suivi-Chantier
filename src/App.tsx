@@ -185,6 +185,29 @@ export default function App() {
     ? findUser(users, session.impersonatorId) ?? null : null
   const project = findProject(projects, projectId)
 
+  // Droits d'accès par module. Accueil / Mes opérations / Mon compte sont
+  // toujours ouverts ; « Comptes » reste réservé au super-admin.
+  const PAGE_FEATURE: Partial<Record<Page, Feature>> = {
+    gantt: 'gantt', visite: 'visite', cr: 'cr', entreprises: 'entreprises',
+    finances: 'finances', rapports: 'rapports', documents: 'documents', alertes: 'alertes',
+    structure: 'structure', config: 'config',
+  }
+  const allowed = (p: Page): boolean => {
+    if (p === 'comptes' || p === 'demandes') return isSuperadmin(currentUser)
+    const f = PAGE_FEATURE[p]
+    return f ? hasFeature(currentUser, f) : true
+  }
+
+  // Le nav (go) applique déjà cette règle, mais currentPage peut aussi venir
+  // de l'URL ou de localStorage au chargement, ou du bouton Précédent du
+  // navigateur (popstate) — deux chemins qui contournaient jusqu'ici le
+  // contrôle d'accès. Ce filet revalide currentPage dès que l'utilisateur ou
+  // la page changent, quelle que soit la façon dont currentPage a été fixé.
+  useEffect(() => {
+    if (!currentUser) return
+    if (!allowed(currentPage)) setCurrentPage('home')
+  }, [currentUser, currentPage])
+
   // Reload admin messages when user navigates (they may have changed in Comptes).
   useEffect(() => { setAdminMsgs(getAdminMessages()) }, [currentPage])
 
@@ -350,19 +373,6 @@ export default function App() {
         onRequestDemo={() => setPreAuth('demo')}
       />
     )
-  }
-
-  // Droits d'accès par module. Accueil / Mes opérations / Mon compte sont
-  // toujours ouverts ; « Comptes » reste réservé au super-admin.
-  const PAGE_FEATURE: Partial<Record<Page, Feature>> = {
-    gantt: 'gantt', visite: 'visite', cr: 'cr', entreprises: 'entreprises',
-    finances: 'finances', rapports: 'rapports', documents: 'documents', alertes: 'alertes',
-    structure: 'structure', config: 'config',
-  }
-  const allowed = (p: Page): boolean => {
-    if (p === 'comptes' || p === 'demandes') return isSuperadmin(currentUser)
-    const f = PAGE_FEATURE[p]
-    return f ? hasFeature(currentUser, f) : true
   }
 
   const go = (p: Page) => { setCurrentPage(allowed(p) ? p : 'home'); setGestionOpen(false) }
