@@ -108,6 +108,14 @@ export function projectFinance(marches: Marche[], avenants: Avenant[], situation
   }
 }
 
+/** Same aggregate as projectFinance, scoped to a single company's marchés — for the page Entreprises. */
+export function companyFinance(company: string, marches: Marche[], avenants: Avenant[], situations: Situation[]): ProjectFinance {
+  const mine = marches.filter(m => m.company === company)
+  const mineIds = new Set(mine.map(m => m.id))
+  const mySituations = situations.filter(s => mineIds.has(s.marcheId))
+  return projectFinance(mine, avenants, mySituations)
+}
+
 /** Format a number as euros (HT), French style, no decimals. */
 export function euros(n: number): string {
   return `${Math.round(n).toLocaleString('fr-FR')} €`

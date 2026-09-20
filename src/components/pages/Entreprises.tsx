@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import {
   Building2, ChevronRight, ArrowLeft, Mail, Phone, AlertTriangle, Flag, Eye,
-  Handshake, CalendarClock, ClipboardCheck, Check, X,
+  Handshake, CalendarClock, ClipboardCheck, Check, X, Wallet,
 } from 'lucide-react'
 import {
   getLotsConfig, getReserves, getCommitments, getVisits, getGanttTasks,
+  getMarches, getAvenants, getSituations,
 } from '../../lib/repo'
 import {
   listCompanies, lotsOfCompany, openActionsOfCompany, observationsOfCompany,
   commitmentsOfCompany, commitmentVerdict, visitsOfCompany, companySummary,
 } from '../../lib/companies'
 import { lotSummaries } from '../../lib/schedule'
+import { companyFinance, euros } from '../../lib/finance'
 import { setBackHandler } from '../../lib/backHandler'
 import { PRIORITY_META, badge, sectionLabel, linkBtn, zoneRow } from '../visite/visiteStyles'
 import { Empty, Bar } from '../visite/visiteBits'
@@ -55,6 +57,9 @@ export function Entreprises() {
         commitments={commitments}
         visits={visits}
         today={today}
+        marches={getMarches()}
+        avenants={getAvenants()}
+        situations={getSituations()}
       />
     )
   }
@@ -92,7 +97,7 @@ export function Entreprises() {
   )
 }
 
-function CompanySheet({ company, onBack, lots, reserves, commitments, visits, today }: {
+function CompanySheet({ company, onBack, lots, reserves, commitments, visits, today, marches, avenants, situations }: {
   company: string
   onBack: () => void
   lots: ReturnType<typeof getLotsConfig>
@@ -100,6 +105,9 @@ function CompanySheet({ company, onBack, lots, reserves, commitments, visits, to
   commitments: ReturnType<typeof getCommitments>
   visits: ReturnType<typeof getVisits>
   today: string
+  marches: ReturnType<typeof getMarches>
+  avenants: ReturnType<typeof getAvenants>
+  situations: ReturnType<typeof getSituations>
 }) {
   const myLots = lotsOfCompany(lots, company)
   const actions = openActionsOfCompany(reserves, lots, company)
@@ -108,6 +116,7 @@ function CompanySheet({ company, onBack, lots, reserves, commitments, visits, to
   const sessions = visitsOfCompany(visits, lots, company)
   const summaries = lotSummaries(getGanttTasks(), new Date())
   const contact = myLots[0]
+  const finance = companyFinance(company, marches, avenants, situations)
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
@@ -140,6 +149,24 @@ function CompanySheet({ company, onBack, lots, reserves, commitments, visits, to
           )
         })}
       </div>
+
+      {finance.budget > 0 && (
+        <>
+          <div style={sectionLabel}>Finances</div>
+          <div style={{ padding: '13px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '9px' }}>
+              <Wallet size={15} color="var(--muted)" />
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>Marché : {euros(finance.budget)}</span>
+            </div>
+            <Bar value={finance.billedPct} color="var(--navy-2)" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
+              <span>Facturé {euros(finance.billed)} ({finance.billedPct}%)</span>
+              <span>Payé {euros(finance.paid)}</span>
+              <span>Reste à facturer {euros(finance.remaining)}</span>
+            </div>
+          </div>
+        </>
+      )}
 
       <div style={sectionLabel}>Actions ouvertes ({actions.length})</div>
       {actions.length === 0 ? <Empty>Aucune action en attente.</Empty> : (

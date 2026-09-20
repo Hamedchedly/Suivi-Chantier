@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   Marche, Avenant, Situation,
   marcheAmount, projectBudget, baseBudget, approvedAvenantsTotal,
-  totalBilled, totalPaid, marcheFinance, projectFinance, euros,
+  totalBilled, totalPaid, marcheFinance, projectFinance, companyFinance, euros,
 } from './finance'
 
 const marche = (id: string, amountHT: number, lotId = 'L05'): Marche => ({ id, lotId, company: 'ACME', amountHT })
@@ -73,6 +73,27 @@ describe('projectFinance', () => {
     expect(f.paid).toBe(50000)
     expect(f.remaining).toBe(140000)
     expect(f.billedPct).toBe(36) // 80000/220000
+  })
+})
+
+describe('companyFinance', () => {
+  it('n\'agrège que les marchés de cette entreprise, jamais les autres', () => {
+    const marches: Marche[] = [
+      { id: 'm1', lotId: 'L01', company: 'ACME', amountHT: 100000 },
+      { id: 'm2', lotId: 'L02', company: 'AUTRE', amountHT: 999999 },
+    ]
+    const avs = [avenant('m1', 10000, 'approved'), avenant('m2', 500000, 'approved')]
+    const sits = [situation('m1', 40000, 'paid'), situation('m2', 300000, 'paid')]
+    const f = companyFinance('ACME', marches, avs, sits)
+    expect(f.budget).toBe(110000) // 100000 + 10000, jamais le budget d'AUTRE
+    expect(f.billed).toBe(40000)
+    expect(f.paid).toBe(40000)
+  })
+
+  it('une entreprise sans marché renvoie des totaux à zéro, pas une erreur', () => {
+    const f = companyFinance('INCONNUE', [], [], [])
+    expect(f.budget).toBe(0)
+    expect(f.billed).toBe(0)
   })
 })
 
