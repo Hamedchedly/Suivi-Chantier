@@ -147,7 +147,7 @@ export function Home({ onNavigate }: HomeProps) {
           <KPICard label="Priorité haute" value={highReserves.length} variant={highReserves.length > 0 ? 'warn' : undefined} />
         </div>
         <div className="kpi-grid">
-          <KPICard label="Complétude CR" value={`${crNumbers.length} numérotés`} />
+          <KPICard label="CR numérotés" value={crNumbers.length} />
           <KPICard label="À tracer" value={toCheck.length} />
           <KPICard label="Résolu / Obsolète" value={reserves.filter(r => r.status === 'resolved' || r.status === 'obsolete').length} />
         </div>
