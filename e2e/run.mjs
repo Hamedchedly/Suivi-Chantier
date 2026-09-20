@@ -7,7 +7,7 @@ const PORT = process.env.E2E_PORT ?? '5199'
 const BASE = `http://localhost:${PORT}`
 const SPECS = [
   'e2e/planning-visite.mjs', 'e2e/multi-operation-isolation.mjs', 'e2e/permissions.mjs',
-  'e2e/finances-chain.mjs', 'e2e/entreprises-synthesis.mjs',
+  'e2e/finances-chain.mjs', 'e2e/entreprises-synthesis.mjs', 'e2e/recipe-metier-complete.mjs',
 ]
 
 function waitForServer(url, timeoutMs = 20000) {

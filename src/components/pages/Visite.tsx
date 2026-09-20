@@ -11,7 +11,7 @@ import {
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, commitmentsFromVisit,
-  buildPlanningSnapshot, newVisit, emptyCr,
+  buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
 import { computeForecasts } from '../../lib/forecast'
@@ -273,10 +273,24 @@ export function Visite() {
               const tasks = getGanttTasks()
               const [y, m, d] = start.split('-').map(Number)
               const input = { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) }
+              // view.lotId est le code du lot (ex. "LOT03", = GanttTask.lot_id) —
+              // createTask attend l'id de la tâche racine du lot (ex. "LOT-LOT03",
+              // = GanttTask.id), jamais son code. Sans cette résolution, la
+              // création échouait silencieusement à tous les coups (lot_not_found).
+              const lot = tasks.find(t => t.lot_id === view.lotId)
               const res = parentTaskId
                 ? createSubTask(tasks, parentTaskId, input)
-                : createTask(tasks, view.lotId, input)
-              if (res.ok) saveGanttTasks(res.tasks)
+                : lot ? createTask(tasks, lot.id, input) : { ok: false as const, tasks, error: 'lot_not_found' as const }
+              if (res.ok) {
+                saveGanttTasks(res.tasks)
+                // Rejoint la tournée en cours immédiatement : sans ça, une tâche
+                // créée pendant la visite reste invisible jusqu'à la prochaine
+                // (les zones d'une session sont figées à son ouverture).
+                if (res.task) {
+                  updateZone(zone.refId, z => ({ ...z, tasks: [...z.tasks, taskCheckFromPlanning(res.task!)] }))
+                }
+              }
+              return res.ok
             }}
           />
         </>
@@ -426,7 +440,7 @@ export function Visite() {
                     : <Flag size={14} color="#b45309" style={{ marginTop: '2px', flexShrink: 0 }} />}
                   <span style={{ flex: 1, textAlign: 'left', fontSize: '12px' }}>
                     <strong style={{ color: 'var(--navy)' }}>{r.number}</strong> {r.description}
-                    <span style={{ color: 'var(--muted)' }}> · {r.logementId} · {lotLabel(lots, r.lotId)}</span>
+                    <span style={{ color: 'var(--muted)' }}> · {active.zones.find(z => z.refId === r.logementId)?.label ?? r.logementId} · {lotLabel(lots, r.lotId)}</span>
                     {r.dueDate && <span style={{ color: '#b45309' }}> · échéance {fmtFr(r.dueDate)}</span>}
                   </span>
                 </button>
@@ -1027,7 +1041,7 @@ function CrEditor(props: {
               ? <Eye size={13} color="#5b7183" style={{ flexShrink: 0 }} />
               : <Flag size={13} color="#b45309" style={{ flexShrink: 0 }} />}
             <span style={{ flex: 1 }}><strong style={{ color: 'var(--navy)' }}>{r.number}</strong> {r.description}
-              <span style={{ color: 'var(--muted)' }}> · {r.logementId} · {lotLabel(lots, r.lotId)}</span></span>
+              <span style={{ color: 'var(--muted)' }}> · {visit.zones.find(z => z.refId === r.logementId)?.label ?? r.logementId} · {lotLabel(lots, r.lotId)}</span></span>
             {r.dueDate && <span style={{ fontSize: '10px', color: '#b45309' }}>{fmtFr(r.dueDate)}</span>}
             {reserveKind(r) === 'action' && (
               <span style={{ ...badge, background: PRIORITY_META[r.priority].bg, color: PRIORITY_META[r.priority].fg }}>{PRIORITY_META[r.priority].label}</span>

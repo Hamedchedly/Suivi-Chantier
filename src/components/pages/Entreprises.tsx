@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   getLotsConfig, getReserves, getCommitments, getVisits, getGanttTasks,
-  getMarches, getAvenants, getSituations,
+  getMarches, getAvenants, getSituations, getZoneRefs,
 } from '../../lib/repo'
 import {
   listCompanies, lotsOfCompany, openActionsOfCompany, observationsOfCompany,
@@ -25,6 +25,12 @@ const fmtFr = (iso?: string) => {
 const todayIso = () => {
   const d = new Date()
   return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`
+}
+// Libellés de zone : lus depuis les unités du projet actif (pas un catalogue figé) —
+// même approche que Home.tsx.
+const zoneLabelLookup = () => {
+  const map = new Map(getZoneRefs().map(z => [z.refId, z.label]))
+  return (id?: string) => (id ? map.get(id) ?? id : '')
 }
 
 /** Everything owed by, and known about, each entreprise on the chantier. */
@@ -109,6 +115,7 @@ function CompanySheet({ company, onBack, lots, reserves, commitments, visits, to
   avenants: ReturnType<typeof getAvenants>
   situations: ReturnType<typeof getSituations>
 }) {
+  const logementLabel = zoneLabelLookup()
   const myLots = lotsOfCompany(lots, company)
   const actions = openActionsOfCompany(reserves, lots, company)
   const observations = observationsOfCompany(reserves, lots, company)
@@ -181,7 +188,7 @@ function CompanySheet({ company, onBack, lots, reserves, commitments, visits, to
                     <strong style={{ color: 'var(--navy)' }}>{a.number}</strong> {a.description}
                   </div>
                   <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                    {a.logementId} · {a.lotId}
+                    {logementLabel(a.logementId)} · {a.lotId}
                     {a.dueDate && <span style={{ color: overdue ? '#dc2626' : 'inherit', fontWeight: overdue ? 700 : 400 }}> · échéance {fmtFr(a.dueDate)}{overdue ? ' — dépassée' : ''}</span>}
                   </div>
                 </div>

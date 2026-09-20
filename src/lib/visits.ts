@@ -243,6 +243,39 @@ export interface ZoneRef {
  * l'ancien champ `logement_id` ; le module Visite passe un résolveur basé sur
  * les rattachements tâche→unité saisis dans « Bâtiments & zones ».
  */
+/**
+ * Un VisitTaskCheck vierge pour une tâche du planning — même construction
+ * que buildZonesFromPlanning en utilise pour peupler une zone, réutilisée
+ * telle quelle quand une tâche créée EN COURS de visite doit rejoindre
+ * immédiatement la tournée en cours (voir Visite.tsx, onAddPlanTask) : une
+ * seule façon de fabriquer un VisitTaskCheck, jamais une deuxième.
+ */
+export function taskCheckFromPlanning(t: GanttTask): VisitTaskCheck {
+  // Planned progress = what % should be done by today based on dates,
+  // not the last recorded progress (which would show old observations).
+  const today = new Date()
+  let plannedProgress: number | undefined
+  if (t.planned_start && t.planned_end) {
+    if (today <= t.planned_start) plannedProgress = 0
+    else if (today >= t.planned_end) plannedProgress = 100
+    else {
+      const total = t.planned_end.getTime() - t.planned_start.getTime()
+      const elapsed = today.getTime() - t.planned_start.getTime()
+      plannedProgress = Math.round((elapsed / total) * 100)
+    }
+  }
+  return {
+    taskId: t.id,
+    lotId: t.lot_id,
+    title: t.title,
+    state: 'not_checked' as TaskState,
+    plannedProgress,
+    baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
+    plannedEnd: isoDay(t.planned_end),
+    company: t.company_id,
+  }
+}
+
 export function buildZonesFromPlanning(
   tasks: GanttTask[], refs: ZoneRef[],
   belongs: (task: GanttTask, refId: string) => boolean = (t, refId) => t.logement_id === refId,
@@ -256,33 +289,7 @@ export function buildZonesFromPlanning(
     buildingId: ref.buildingId,
     buildingLabel: ref.buildingLabel,
     override: null,
-    tasks: leaves
-      .filter(t => belongs(t, ref.refId))
-      .map(t => {
-        // Planned progress = what % should be done by today based on dates,
-        // not the last recorded progress (which would show old observations).
-        const today = new Date()
-        let plannedProgress: number | undefined
-        if (t.planned_start && t.planned_end) {
-          if (today <= t.planned_start) plannedProgress = 0
-          else if (today >= t.planned_end) plannedProgress = 100
-          else {
-            const total = t.planned_end.getTime() - t.planned_start.getTime()
-            const elapsed = today.getTime() - t.planned_start.getTime()
-            plannedProgress = Math.round((elapsed / total) * 100)
-          }
-        }
-        return {
-          taskId: t.id,
-          lotId: t.lot_id,
-          title: t.title,
-          state: 'not_checked' as TaskState,
-          plannedProgress,
-          baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
-          plannedEnd: isoDay(t.planned_end),
-          company: t.company_id,
-        }
-      }),
+    tasks: leaves.filter(t => belongs(t, ref.refId)).map(taskCheckFromPlanning),
   }))
 
   // Filter out zones with only completed tasks if hideCompleted is true

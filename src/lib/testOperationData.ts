@@ -113,6 +113,13 @@ const units: Unit[] = [
 const taskUnits: TaskUnitLink[] = [
   { taskId: 'T-MENU-A101', unitId: 'u-test-A101' },
   { taskId: 'T-MENU-B01', unitId: 'u-test-B01' },
+  // Rattachements supplémentaires : une visite sur le seul logement A-101
+  // doit pouvoir couvrir la recette métier complète (tâche en retard,
+  // bloquée, à venir) sans changer de logement.
+  { taskId: 'T-TERR-RETARD', unitId: 'u-test-A101' },
+  { taskId: 'T-GO-COURS', unitId: 'u-test-A101' },
+  { taskId: 'T-GO-BLOQ', unitId: 'u-test-A101' },
+  { taskId: 'T-GO-AVENIR', unitId: 'u-test-A101' },
 ]
 
 const lotsConfig: LotContact[] = [

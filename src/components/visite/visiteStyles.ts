@@ -37,10 +37,17 @@ export const todayIso = () => {
 
 // ── Meta ─────────────────────────────────────────────────────────────────────
 
+// 'done' veut dire « toutes les tâches ont été relevées pendant cette
+// tournée » (tasksState/zoneState, lib/visits.ts) — un état du CONTRÔLE,
+// jamais de l'avancement physique. Une tâche relevée à 60 % rend son lot
+// "done" au sens de ce badge tout en affichant 60 % juste en dessous
+// (Avancement constaté du lot) : le libellé doit donc rester honnête sur ce
+// qu'il mesure plutôt que dire « Terminé », qui laisserait croire que les
+// travaux sont physiquement finis.
 export const ZONE_META: Record<ZoneState, { label: string; dot: string; bg: string; fg: string }> = {
   not_started: { label: 'Non commencé', dot: '#cbd5e1', bg: '#f1f5f9', fg: '#64748b' },
   in_progress: { label: 'En cours', dot: '#0284c7', bg: '#e0f2fe', fg: '#0369a1' },
-  done: { label: 'Terminé', dot: '#16a34a', bg: '#dcfce7', fg: '#15803d' },
+  done: { label: 'Contrôlé', dot: '#16a34a', bg: '#dcfce7', fg: '#15803d' },
   to_review: { label: 'À revoir', dot: '#f59e0b', bg: '#fef3c7', fg: '#b45309' },
   blocked: { label: 'Bloqué', dot: '#dc2626', bg: '#fee2e2', fg: '#b91c1c' },
 }

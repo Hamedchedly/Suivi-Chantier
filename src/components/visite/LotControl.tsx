@@ -50,8 +50,8 @@ interface Props {
   prevLot: { lotId: string; label: string } | null
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
-  /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. */
-  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string) => void
+  /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. Renvoie le succès réel. */
+  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string) => boolean
 }
 
 export function LotControl(props: Props) {
@@ -66,13 +66,19 @@ export function LotControl(props: Props) {
   const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
+  const [addFailed, setAddFailed] = useState(false)
 
   const submitAdd = () => {
     if (!addForm || !addForm.title.trim() || !onAddPlanTask) return
-    onAddPlanTask(addForm.title.trim(), addForm.start, Math.max(1, parseInt(addForm.duration, 10) || 5))
-    setAddedName(addForm.title.trim())
-    setAddForm({ title: '', start: addForm.start, duration: '5' })
-    setTimeout(() => setAddedName(null), 3000)
+    const ok = onAddPlanTask(addForm.title.trim(), addForm.start, Math.max(1, parseInt(addForm.duration, 10) || 5))
+    if (ok) {
+      setAddedName(addForm.title.trim())
+      setAddForm({ title: '', start: addForm.start, duration: '5' })
+      setTimeout(() => setAddedName(null), 3000)
+    } else {
+      setAddFailed(true)
+      setTimeout(() => setAddFailed(false), 3000)
+    }
   }
 
   return (
@@ -144,6 +150,11 @@ export function LotControl(props: Props) {
               {addedName && (
                 <div style={{ fontSize: '11px', color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <CheckCircle2 size={12} /> « {addedName} » ajouté au planning.
+                </div>
+              )}
+              {addFailed && (
+                <div style={{ fontSize: '11px', color: 'var(--bad)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <X size={12} /> Échec de la création — réessayez.
                 </div>
               )}
               <input

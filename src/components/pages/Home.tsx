@@ -10,7 +10,7 @@ import {
   getZoneRefs, getUnits, getLotsConfig, getProjectMemo, saveProjectMemo,
 } from '../../lib/repo'
 import {
-  overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays,
+  overallProgress, maxDrift, lateTasks, tasksForToday, lotSummaries, driftDays, flattenLeaves,
 } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
 import { isOverdue, reserveKind } from '../../lib/reserves'
@@ -71,7 +71,12 @@ export function Home({ onNavigate }: HomeProps) {
     ? Math.round(observedGaps.reduce((s, g) => s + g, 0) / observedGaps.length)
     : null
 
+  // Bloquée = le signal le plus sévère (voir lib/alerts.ts, severity 100) — en
+  // premier, même quand son échéance contractuelle n'est pas encore dépassée
+  // (donc pas forcément dans `late`, qui ne regarde que les dates).
+  const blocked = flattenLeaves(tasks).filter(t => !t.is_milestone && t.status === 'blocked')
   const risks = [
+    ...blocked.map(t => ({ key: `blocked-${t.id}`, label: `${t.title} bloquée`, sub: logementLabel(t.logement_id) || 'Point bloquant' })),
     ...late.map(t => ({ key: `late-${t.id}`, label: `${t.title} en retard`, sub: `échéance ${t.planned_end.toLocaleDateString('fr')}` })),
     ...lots.filter(l => l.drift > 0).map(l => ({ key: `drift-${l.lotId}`, label: `${l.title.replace(/^LOT \d+ - /, '')} : +${l.drift} j de dérive`, sub: 'vs planning contractuel' })),
     ...highReserves.map(r => ({ key: `res-${r.id}`, label: `${r.number} — ${r.description}`, sub: `${logementLabel(r.logementId)} • priorité haute` })),
