@@ -53,6 +53,21 @@ describe('buildAlerts selection & priority', () => {
   })
 })
 
+describe('engagements non tenus', () => {
+  it('remonte un engagement dont la date promise est dépassée sans avoir été tenu', () => {
+    const commitments = [
+      { id: 'c1', taskId: 't1', lotId: 'L05', company: 'SMP', label: 'Livraison pompe', promisedEnd: '2026-01-10', at: '2026-01-01', visitId: 'v1', visitDate: '2026-01-01' },
+      { id: 'c2', taskId: 't2', lotId: 'L05', company: 'SMP', promisedEnd: '2026-02-01', at: '2026-01-01', visitId: 'v1', visitDate: '2026-01-01' }, // pas encore échu
+      { id: 'c3', taskId: 't3', lotId: 'L05', company: 'SMP', promisedEnd: '2026-01-10', at: '2026-01-01', visitId: 'v1', visitDate: '2026-01-01', outcome: 'kept' as const }, // tenu
+    ]
+    const a = buildAlerts([], [], today, {}, [], commitments)
+    expect(a).toHaveLength(1)
+    expect(a[0].type).toBe('commitment-broken')
+    expect(a[0].severity).toBe(65)
+    expect(a[0].title).toContain('SMP')
+  })
+})
+
 describe('actions de réunion en retard', () => {
   it('remonte une action non faite dont l’échéance est dépassée', () => {
     const meetings = [{

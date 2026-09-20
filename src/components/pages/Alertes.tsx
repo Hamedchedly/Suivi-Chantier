@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, Check, Flag, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react'
-import { getGanttTasks, getReserves, getAlertActions, saveAlertActions, logActivity, getMeetings } from '../../lib/repo'
+import { getGanttTasks, getReserves, getAlertActions, saveAlertActions, logActivity, getMeetings, getCommitments } from '../../lib/repo'
 import { buildAlerts, activeAlerts, Alert, AlertLevel, AlertActions } from '../../lib/alerts'
 import { Journal } from './Journal'
 
@@ -17,7 +17,7 @@ export function Alertes() {
 
   const tasks = getGanttTasks()
   const reserves = getReserves()
-  const all = buildAlerts(tasks, reserves, new Date(), actions, getMeetings())
+  const all = buildAlerts(tasks, reserves, new Date(), actions, getMeetings(), getCommitments())
   const active = activeAlerts(all)
   const resolved = all.filter(a => a.resolved)
 
