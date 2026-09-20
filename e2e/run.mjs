@@ -1,10 +1,11 @@
 // Démarre le serveur de dev sur un port dédié aux tests, attend qu'il
-// réponde, exécute le scénario E2E permanent, puis arrête le serveur.
+// réponde, exécute les scénarios E2E permanents, puis arrête le serveur.
 // `npm run e2e`
 import { spawn } from 'node:child_process'
 
 const PORT = process.env.E2E_PORT ?? '5199'
 const BASE = `http://localhost:${PORT}`
+const SPECS = ['e2e/planning-visite.mjs', 'e2e/multi-operation-isolation.mjs']
 
 function waitForServer(url, timeoutMs = 20000) {
   const deadline = Date.now() + timeoutMs
@@ -31,12 +32,16 @@ async function main() {
 
   try {
     await waitForServer(BASE)
-    const spec = spawn(process.execPath, ['e2e/planning-visite.mjs'], {
-      stdio: 'inherit',
-      env: { ...process.env, E2E_BASE_URL: BASE },
-    })
-    const code = await new Promise(resolve => spec.on('exit', resolve))
-    process.exitCode = code ?? 1
+    for (const specPath of SPECS) {
+      console.log(`\n=== ${specPath} ===`)
+      const spec = spawn(process.execPath, [specPath], {
+        stdio: 'inherit',
+        env: { ...process.env, E2E_BASE_URL: BASE },
+      })
+      const code = await new Promise(resolve => spec.on('exit', resolve))
+      if (code !== 0) { process.exitCode = code ?? 1; return }
+    }
+    process.exitCode = 0
   } finally {
     cleanup()
   }
