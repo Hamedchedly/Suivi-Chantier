@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Check, Plus, Trash2 } from 'lucide-react'
+import { Check, Plus, Trash2, X } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import {
   Marche, Avenant, Situation, AvenantStatus,
@@ -21,7 +21,10 @@ const AVENANT_META: Record<AvenantStatus, { label: string; bg: string; fg: strin
   rejected: { label: 'Rejeté', bg: '#fdecec', fg: '#dc2626' },
 }
 
-const lotShort = (lotId: string) => lotId.replace('L', 'LOT ')
+// lotId vaut déjà "LOT01", "LOT02"… (jamais un code nu) : n'insère qu'un
+// espace après le préfixe. L'ancien `.replace('L', 'LOT ')` remplaçait le
+// premier "L" de la chaîne entière et produisait "LOT OT01".
+const lotShort = (lotId: string) => lotId.replace(/^LOT(\d)/, 'LOT $1')
 
 export function Finances() {
   const [section, setSection] = useState<FinSection>('marches')
@@ -30,6 +33,8 @@ export function Finances() {
   const [situations, setSituations] = useState<Situation[]>(getSituations)
   const [lots] = useState(getLotsConfig)
   const [form, setForm] = useState<{ lotId: string; amountHT: string } | null>(null)
+  const [avenantForm, setAvenantForm] = useState<{ marcheId: string; label: string; amountHT: string; date: string } | null>(null)
+  const [situationForm, setSituationForm] = useState<{ marcheId: string; number: string; amountHT: string; date: string } | null>(null)
 
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
@@ -77,6 +82,39 @@ export function Finances() {
       logActivity('finance', `Avenant validé — ${a.label} (${a.amountHT >= 0 ? '+' : ''}${euros(a.amountHT)})`)
       return { ...a, status: 'approved' }
     }))
+  const rejectAvenant = (id: string) =>
+    setAvenants(prev => prev.map(a => {
+      if (a.id !== id) return a
+      logActivity('finance', `Avenant rejeté — ${a.label} (${a.amountHT >= 0 ? '+' : ''}${euros(a.amountHT)})`)
+      return { ...a, status: 'rejected' }
+    }))
+  const removeAvenant = (id: string) => setAvenants(prev => prev.filter(a => a.id !== id))
+  const addAvenant = () => {
+    if (!avenantForm) return
+    const amountHT = parseFloat(avenantForm.amountHT.replace(',', '.')) || 0
+    const a: Avenant = {
+      id: `av${Date.now()}`, marcheId: avenantForm.marcheId, label: avenantForm.label.trim(),
+      amountHT, status: 'proposed', date: avenantForm.date,
+    }
+    setAvenants(prev => [...prev, a])
+    logActivity('finance', `Avenant proposé — ${a.label} (${amountHT >= 0 ? '+' : ''}${euros(amountHT)})`)
+    setAvenantForm(null)
+  }
+
+  const removeSituation = (id: string) => setSituations(prev => prev.filter(s => s.id !== id))
+  const addSituation = () => {
+    if (!situationForm) return
+    const amountHT = Math.max(0, parseFloat(situationForm.amountHT.replace(',', '.')) || 0)
+    const number = parseInt(situationForm.number, 10) || 1
+    const s: Situation = {
+      id: `st${Date.now()}`, marcheId: situationForm.marcheId, number, date: situationForm.date,
+      amountHT, status: 'pending',
+    }
+    setSituations(prev => [...prev, s])
+    logActivity('finance', `Situation N°${number} créée — ${euros(amountHT)}`)
+    setSituationForm(null)
+  }
+
   const toggleSituation = (id: string) =>
     setSituations(prev => prev.map(s => {
       if (s.id !== id) return s
@@ -203,6 +241,45 @@ export function Finances() {
       {/* Avenants */}
       {section === 'avenants' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {!avenantForm && (
+              <button
+                onClick={() => setAvenantForm({ marcheId: marches[0]?.id ?? '', label: '', amountHT: '', date: new Date().toISOString().slice(0, 10) })}
+                disabled={marches.length === 0}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', border: 'none', background: marches.length ? 'var(--navy)' : '#e8eef4', color: marches.length ? '#fff' : 'var(--muted)', fontSize: '13px', fontWeight: 700, cursor: marches.length ? 'pointer' : 'default' }}
+              >
+                <Plus size={15} /> Nouvel avenant
+              </button>
+            )}
+          </div>
+
+          {avenantForm && (
+            <div style={{ ...card, display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={avenantForm.marcheId} onChange={e => setAvenantForm({ ...avenantForm, marcheId: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', flex: '1 1 160px' }}>
+                {marches.map(m => <option key={m.id} value={m.id}>{lotShort(m.lotId)} — {m.company}</option>)}
+              </select>
+              <input value={avenantForm.label} placeholder="Libellé" onChange={e => setAvenantForm({ ...avenantForm, label: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', flex: '1 1 160px' }} />
+              <input type="number" inputMode="decimal" placeholder="Montant HT (± €)" value={avenantForm.amountHT}
+                onChange={e => setAvenantForm({ ...avenantForm, amountHT: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', width: '150px' }} />
+              <input type="date" value={avenantForm.date} onChange={e => setAvenantForm({ ...avenantForm, date: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }} />
+              <button onClick={addAvenant} disabled={!avenantForm.marcheId || !avenantForm.label.trim()}
+                style={{ padding: '8px 14px', borderRadius: '7px', border: 'none', background: avenantForm.marcheId && avenantForm.label.trim() ? 'var(--accent)' : '#e8eef4', color: avenantForm.marcheId && avenantForm.label.trim() ? '#fff' : 'var(--muted)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                Proposer
+              </button>
+              <button onClick={() => setAvenantForm(null)} style={{ padding: '8px 12px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>Annuler</button>
+            </div>
+          )}
+
+          {avenants.length === 0 && !avenantForm && (
+            <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '18px', border: '1px dashed var(--line)', borderRadius: '10px' }}>
+              Aucun avenant. Proposez-en un pour suivre une modification de marché en attente de validation.
+            </div>
+          )}
+
           {avenants.map(a => {
             const meta = AVENANT_META[a.status]
             const marche = marches.find(m => m.id === a.marcheId)
@@ -216,14 +293,24 @@ export function Finances() {
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--ink)' }}>{a.label}</div>
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: '13px', color: a.amountHT >= 0 ? 'var(--navy-2)' : 'var(--bad)' }}>
-                    {a.amountHT >= 0 ? '+' : ''}{euros(a.amountHT)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: a.amountHT >= 0 ? 'var(--navy-2)' : 'var(--bad)' }}>
+                      {a.amountHT >= 0 ? '+' : ''}{euros(a.amountHT)}
+                    </div>
+                    <button onClick={() => removeAvenant(a.id)} title="Supprimer l'avenant" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '2px' }}>
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
                 {a.status === 'proposed' && (
-                  <button onClick={() => approveAvenant(a.id)} style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--ok)', cursor: 'pointer' }}>
-                    <Check size={13} /> Valider l'avenant
-                  </button>
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                    <button onClick={() => approveAvenant(a.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--ok)', cursor: 'pointer' }}>
+                      <Check size={13} /> Valider l'avenant
+                    </button>
+                    <button onClick={() => rejectAvenant(a.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', fontWeight: 600, color: 'var(--bad)', cursor: 'pointer' }}>
+                      <X size={13} /> Rejeter
+                    </button>
+                  </div>
                 )}
               </div>
             )
@@ -234,6 +321,46 @@ export function Finances() {
       {/* Situations */}
       {section === 'situations' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {!situationForm && (
+              <button
+                onClick={() => setSituationForm({ marcheId: marches[0]?.id ?? '', number: String(situations.length + 1), amountHT: '', date: new Date().toISOString().slice(0, 10) })}
+                disabled={marches.length === 0}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '8px', border: 'none', background: marches.length ? 'var(--navy)' : '#e8eef4', color: marches.length ? '#fff' : 'var(--muted)', fontSize: '13px', fontWeight: 700, cursor: marches.length ? 'pointer' : 'default' }}
+              >
+                <Plus size={15} /> Nouvelle situation
+              </button>
+            )}
+          </div>
+
+          {situationForm && (
+            <div style={{ ...card, display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={situationForm.marcheId} onChange={e => setSituationForm({ ...situationForm, marcheId: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', flex: '1 1 160px' }}>
+                {marches.map(m => <option key={m.id} value={m.id}>{lotShort(m.lotId)} — {m.company}</option>)}
+              </select>
+              <input type="number" min={1} placeholder="N°" value={situationForm.number}
+                onChange={e => setSituationForm({ ...situationForm, number: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', width: '70px' }} />
+              <input type="number" min={0} inputMode="decimal" placeholder="Montant HT (€)" value={situationForm.amountHT}
+                onChange={e => setSituationForm({ ...situationForm, amountHT: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', width: '150px' }} />
+              <input type="date" value={situationForm.date} onChange={e => setSituationForm({ ...situationForm, date: e.target.value })}
+                style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }} />
+              <button onClick={addSituation} disabled={!situationForm.marcheId}
+                style={{ padding: '8px 14px', borderRadius: '7px', border: 'none', background: situationForm.marcheId ? 'var(--accent)' : '#e8eef4', color: situationForm.marcheId ? '#fff' : 'var(--muted)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                Créer
+              </button>
+              <button onClick={() => setSituationForm(null)} style={{ padding: '8px 12px', borderRadius: '7px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>Annuler</button>
+            </div>
+          )}
+
+          {situations.length === 0 && !situationForm && (
+            <div style={{ fontSize: '12px', color: 'var(--muted)', padding: '18px', border: '1px dashed var(--line)', borderRadius: '10px' }}>
+              Aucune situation. Créez-en une à chaque facturation d'une entreprise.
+            </div>
+          )}
+
           {situations.map(s => {
             const marche = marches.find(m => m.id === s.marcheId)
             return (
@@ -245,12 +372,17 @@ export function Finances() {
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{new Date(s.date).toLocaleDateString('fr')} • {euros(s.amountHT)}</div>
                   </div>
-                  <button
-                    onClick={() => toggleSituation(s.id)}
-                    style={{ padding: '5px 10px', borderRadius: '14px', border: 'none', fontSize: '11px', fontWeight: 700, cursor: 'pointer', background: s.status === 'paid' ? 'var(--ok-bg)' : 'var(--warn-bg)', color: s.status === 'paid' ? 'var(--ok)' : 'var(--warn)' }}
-                  >
-                    {s.status === 'paid' ? 'Payée' : 'En attente'}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => toggleSituation(s.id)}
+                      style={{ padding: '5px 10px', borderRadius: '14px', border: 'none', fontSize: '11px', fontWeight: 700, cursor: 'pointer', background: s.status === 'paid' ? 'var(--ok-bg)' : 'var(--warn-bg)', color: s.status === 'paid' ? 'var(--ok)' : 'var(--warn)' }}
+                    >
+                      {s.status === 'paid' ? 'Payée' : 'En attente'}
+                    </button>
+                    <button onClick={() => removeSituation(s.id)} title="Supprimer la situation" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b42318', padding: '2px' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )

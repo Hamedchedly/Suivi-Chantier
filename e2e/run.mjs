@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 
 const PORT = process.env.E2E_PORT ?? '5199'
 const BASE = `http://localhost:${PORT}`
-const SPECS = ['e2e/planning-visite.mjs', 'e2e/multi-operation-isolation.mjs', 'e2e/permissions.mjs']
+const SPECS = ['e2e/planning-visite.mjs', 'e2e/multi-operation-isolation.mjs', 'e2e/permissions.mjs', 'e2e/finances-chain.mjs']
 
 function waitForServer(url, timeoutMs = 20000) {
   const deadline = Date.now() + timeoutMs
