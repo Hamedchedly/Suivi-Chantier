@@ -344,6 +344,21 @@ describe('buildPlanningSnapshot', () => {
     expect(snap.forecastVarianceDays).toBe(253)
     expect(snap.forecastEnd).toMatch(/^2026-09-20T/)
   })
+
+  it('reste figé même si le planning source est modifié après coup (le CR est une photographie, jamais une référence vivante)', () => {
+    const tasks = [parent('T-05-00', 'L05', [leaf({ id: 'T-05-A101', lot_id: 'L05', progress: 33 })])]
+    const snap = buildPlanningSnapshot(tasks, d('2026-09-11'))
+    expect(snap.tasks[0].progress).toBe(33)
+    expect(snap.overall).toBe(33)
+
+    // Le planning « réel » continue de vivre : une visite ultérieure le fait passer à 77 %.
+    tasks[0].children![0].progress = 77
+    tasks[0].children![0].status = 'in-progress'
+
+    // Le CR déjà émis ne doit refléter que l'état au moment de la clôture, jamais l'état courant.
+    expect(snap.tasks[0].progress).toBe(33)
+    expect(snap.overall).toBe(33)
+  })
 })
 
 describe('newVisit', () => {

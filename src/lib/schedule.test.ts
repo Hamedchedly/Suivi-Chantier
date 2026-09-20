@@ -75,6 +75,12 @@ describe('isLate / lateTasks', () => {
   it('does not flag future tasks', () => {
     expect(isLate(leaf('a', { start: '2026-01-20', end: '2026-01-25', progress: 0 }), today)).toBe(false)
   })
+  it('flags a task at 0% whose contractual date has already passed (never started, still overdue)', () => {
+    expect(isLate(leaf('a', { start: '2026-01-01', end: '2026-01-10', progress: 0 }), today)).toBe(true)
+  })
+  it('does not flag a task completed at 100% even once its planned date is in the past', () => {
+    expect(isLate(leaf('a', { start: '2026-01-01', end: '2026-01-05', progress: 100, actualEnd: '2026-01-04' }), today)).toBe(false)
+  })
   it('excludes milestones from lateTasks', () => {
     const tree = [parent('P', [leaf('m', { start: '2026-01-01', end: '2026-01-05', progress: 0, is_milestone: true })])]
     expect(lateTasks(tree, today)).toHaveLength(0)

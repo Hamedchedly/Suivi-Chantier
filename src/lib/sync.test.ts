@@ -205,6 +205,66 @@ describe('sync : session (fusion dernière-écriture-gagne)', () => {
     expect(server.get('sc-reserves-v1::p1')?.v).toEqual([{ id: 'local' }])
   })
 
+  it('POLITIQUE ACTUELLE — deux appareils modifient deux CHAMPS DIFFÉRENTS de la même tâche : pas de fusion par champ, la dernière écriture sur la clé écrase tout (y compris un champ que ce device n’a jamais touché)', async () => {
+    // La granularité de synchronisation est la CLÉ localStorage entière (ex.
+    // tout le tableau de tâches d’un projet), jamais la tâche ni le champ. Ce
+    // test documente le comportement réel — il n’invente aucune nouvelle
+    // politique — pour que la limite soit connue plutôt que découverte en
+    // production : un « merge » par champ n’existe pas.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-01T10:00:00.000Z'))
+    const task = { id: 't1', progress: 50, note: 'initial' }
+    srvSet('sc-gantt-v2::p1', [task], '2026-05-01T09:00:00.000Z')
+
+    // Appareil A : lit l’état serveur, modifie l’avancement (progress), flush.
+    await initRemoteSession('u1')
+    saveState('sc-gantt-v2::p1', [{ ...task, progress: 60 }])
+    await vi.advanceTimersByTimeAsync(900)
+    expect(server.get('sc-gantt-v2::p1')?.v).toEqual([{ id: 't1', progress: 60, note: 'initial' }])
+
+    // Appareil B : session indépendante partie de l’état ORIGINAL (avant l’édit
+    // de A), modifie seulement la note, flush APRÈS A (horodatage plus tardif).
+    disableSync()
+    localStorage.clear()
+    vi.setSystemTime(new Date('2026-05-01T10:05:00.000Z'))
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1')) // même compte, pas de purge
+    enableSync('u1')
+    saveState('sc-gantt-v2::p1', [{ ...task, note: 'modifiée par B' }]) // progress: 50, jamais vu 60
+    await vi.advanceTimersByTimeAsync(900)
+
+    // Le serveur ne contient plus l’avancement 60 de A : B l’a silencieusement
+    // écrasé en renvoyant tout le blob tel qu’il l’avait (progress: 50), alors
+    // qu’il n’a jamais touché à ce champ.
+    expect(server.get('sc-gantt-v2::p1')?.v).toEqual([{ id: 't1', progress: 50, note: 'modifiée par B' }])
+
+    // Appareil A recharge : son avancement à 60 est perdu, sans avertissement.
+    disableSync()
+    localStorage.clear()
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1'))
+    await initRemoteSession('u1')
+    expect(loadState('sc-gantt-v2::p1', [])).toEqual([{ id: 't1', progress: 50, note: 'modifiée par B' }])
+  })
+
+  it('POLITIQUE ACTUELLE — deux appareils modifient le MÊME champ de la même tâche : dernière écriture gagne intégralement (comportement voulu pour un vrai conflit de valeur)', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-01T10:00:00.000Z'))
+    srvSet('sc-gantt-v2::p1', [{ id: 't1', progress: 50 }], '2026-05-01T09:00:00.000Z')
+
+    await initRemoteSession('u1')
+    saveState('sc-gantt-v2::p1', [{ id: 't1', progress: 60 }]) // appareil A
+    await vi.advanceTimersByTimeAsync(900)
+
+    disableSync()
+    localStorage.clear()
+    vi.setSystemTime(new Date('2026-05-01T10:05:00.000Z'))
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1'))
+    enableSync('u1')
+    saveState('sc-gantt-v2::p1', [{ id: 't1', progress: 80 }]) // appareil B, plus tardif
+    await vi.advanceTimersByTimeAsync(900)
+
+    expect(server.get('sc-gantt-v2::p1')?.v).toEqual([{ id: 't1', progress: 80 }]) // B gagne, pas de fusion 60/80
+  })
+
   it('une modification faite sur un AUTRE appareil (serveur plus récent) écrase le cache local — vrai conflit multi-appareils', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-01T10:00:00.000Z'))
