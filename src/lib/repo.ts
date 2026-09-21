@@ -39,7 +39,7 @@ import { DateCommitment } from './commitments'
 import { PlanningSnapshot, ChangeLogEntry } from './planningHistory'
 import type { User, Session } from './auth'
 import type { Project, TrashedProject } from './projects'
-import { resolveCurrent } from './projects'
+import { resolveCurrent, findOrphanProjectIds } from './projects'
 import { loadState, saveState, removeState } from './storage'
 
 // ── Messages administrateur ──────────────────────────────────────────────────
@@ -119,6 +119,26 @@ export function getCurrentProjectId(): string | null {
 
 export function setCurrentProjectId(id: string | null): void {
   saveState(GLOBAL.currentProject, id)
+}
+
+/**
+ * Audit (lecture seule) : identifiants de projet référencés par au moins une
+ * clé cloisonnée du cache local mais absents du registre `sc-projects-v1`.
+ * Ne restaure rien, ne supprime rien — signale seulement (voir
+ * findOrphanProjectIds, lib/projects.ts, et le rapport d'audit
+ * docs/AUDIT_ACACIAS_E2E_2026-09-21.md §A pour l'incident qui a motivé cette
+ * fonction).
+ */
+export function findOrphanProjects(): string[] {
+  const knownIds = getProjects().map(p => p.id)
+  const scopedKeys: string[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) scopedKeys.push(key)
+    }
+  } catch { /* localStorage indisponible */ }
+  return findOrphanProjectIds(knownIds, scopedKeys)
 }
 
 // ── Corbeille des opérations (suppression réversible) ────────────────────────

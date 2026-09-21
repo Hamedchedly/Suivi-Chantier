@@ -15,7 +15,15 @@
 //   • disableSync() — à la déconnexion.
 //
 // Write-through : chaque saveState/removeState (observé via storage.ts) est
-// répercuté (débouncé) en upsert/delete sur app_state.
+// répercuté (débouncé) en upsert/delete sur app_state, clé par clé : la
+// valeur ENTIÈRE de la clé locale remplace la ligne serveur. Pour la plupart
+// des clés (cloisonnées par projet), ce n'est pas un problème. Mais
+// `sc-projects-v1` (le registre « Mes opérations », partagé entre TOUS les
+// projets d'un compte) fait exception : voir reconcileProjectsBeforeFlush
+// ci-dessous, et l'incident documenté dans docs/AUDIT_ACACIAS_E2E_2026-09-21.md
+// (§A) — un appareil dont le cache local ne connaît qu'un sous-ensemble des
+// opérations (nouveau profil navigateur, ou hydratation pas encore terminée)
+// écrasait silencieusement les autres au premier flush.
 //
 // Sécurité : seules l'URL et la clé publiable vivent côté client ; RLS limite
 // chaque ligne à son user_id (= auth.uid()). Jamais de service_role ici.
@@ -211,7 +219,13 @@ async function flush(): Promise<void> {
   if (pendingWrites.size) {
     const sent = [...pendingWrites.entries()]
     const now = new Date().toISOString()
-    const rows = sent.map(([k, raw]) => ({ user_id: uid, k, v: safeParse(raw), updated_at: now }))
+    // sc-projects-v1 est réconcilié par id avant l'upsert (voir plus bas) ;
+    // toutes les autres clés partent telles quelles, comme avant.
+    const rows = await Promise.all(sent.map(async ([key, raw]) => ({
+      user_id: uid, k: key,
+      v: safeParse(key === PROJECTS_KEY ? await reconcileProjectsBeforeFlush(uid, raw) : raw),
+      updated_at: now,
+    })))
     const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'user_id,k' })
     if (error) failed = true
     else for (const [k, raw] of sent) {
@@ -240,4 +254,72 @@ async function flush(): Promise<void> {
 
 function safeParse(raw: string): unknown {
   try { return JSON.parse(raw) } catch { return null }
+}
+
+// ── Fusion sûre du registre des opérations (sc-projects-v1) ─────────────────
+//
+// Un ajout (ou une édition) d'opération ne doit JAMAIS faire disparaître les
+// autres opérations du compte, même quand le cache local qui produit ce flush
+// ne les connaît pas (nouveau profil navigateur, hydratation pas terminée…).
+// L'absence d'un id dans la copie locale ne signifie pas « à supprimer » :
+// seule une suppression EXPLICITE — qui passe toujours par la corbeille
+// locale (sc-trash-v1, voir App.tsx removeProject) — est un signal valable de
+// retrait. Cette fonction fusionne donc par id juste avant l'upsert :
+//   • un id connu du serveur mais absent du local ET absent de la corbeille
+//     locale est CONSERVÉ (préservation par défaut) ;
+//   • un id présent dans le local l'emporte (ajout ou édition) ;
+//   • un id présent dans la corbeille locale est retiré (suppression
+//     explicite, seule voie de retrait).
+//
+// Limite assumée : cette réconciliation lit l'état serveur juste avant
+// d'écrire, ce qui réduit très fortement la fenêtre de course sans
+// l'éliminer totalement (deux flushs vraiment simultanés peuvent encore se
+// baser chacun sur une lecture serveur légèrement périmée). Documenté dans
+// docs/SUPABASE.md plutôt que résolu par une infrastructure transactionnelle
+// hors de portée de ce correctif.
+const PROJECTS_KEY = 'sc-projects-v1'
+const TRASH_KEY = 'sc-trash-v1'
+
+interface Identified { id: string }
+
+function isIdCollection(value: unknown): value is Identified[] {
+  return Array.isArray(value) && value.every(
+    x => x !== null && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string',
+  )
+}
+
+/** Ids présents dans la corbeille locale — seule source de suppression explicite connue ici. */
+function localTrashedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(TRASH_KEY)
+    const trash = raw ? JSON.parse(raw) : []
+    if (!isIdCollection(trash)) return new Set()
+    return new Set(trash.map(t => t.id))
+  } catch { return new Set() }
+}
+
+/**
+ * Calcule la valeur à réellement envoyer au serveur pour sc-projects-v1 :
+ * fusion serveur ∪ local, moins les ids explicitement mis à la corbeille
+ * localement. Retourne `localRaw` tel quel si la forme n'est pas une
+ * collection à id (défensif) ou si le serveur est injoignable/vide (rien à
+ * fusionner, le comportement précédent — écrasement — s'applique).
+ */
+async function reconcileProjectsBeforeFlush(uid: string, localRaw: string): Promise<string> {
+  if (!supabase) return localRaw
+  const local = safeParse(localRaw)
+  if (!isIdCollection(local)) return localRaw
+
+  const { data, error } = await supabase.from(TABLE).select('v').eq('user_id', uid).eq('k', PROJECTS_KEY).maybeSingle()
+  if (error || !data) return localRaw
+  const server = data.v
+  if (!isIdCollection(server)) return localRaw
+
+  const trashed = localTrashedIds()
+  const byId = new Map<string, Identified>()
+  for (const p of server) byId.set(p.id, p)   // base : tout ce que le serveur sait déjà
+  for (const p of local) byId.set(p.id, p)    // le local l'emporte pour ce qu'il connaît
+  for (const id of trashed) byId.delete(id)   // seule suppression légitime : la corbeille locale
+
+  return JSON.stringify([...byId.values()])
 }

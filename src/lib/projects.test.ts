@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   Project, createProject, updateProject, deleteProject, findProject,
-  resolveCurrent, projectLabel, projectSubtitle,
+  resolveCurrent, projectLabel, projectSubtitle, findOrphanProjectIds,
 } from './projects'
 
 const base = (over: Partial<Project> = {}): Project => ({
@@ -125,5 +125,38 @@ describe('findProject', () => {
     expect(findProject([base()], null)).toBeUndefined()
     expect(findProject([base()], undefined)).toBeUndefined()
     expect(findProject([base()], 'p1')?.name).toBe('Gambetta')
+  })
+})
+
+describe('findOrphanProjectIds', () => {
+  it('signale un id référencé par une clé cloisonnée mais absent du registre', () => {
+    const keys = ['sc-gantt-v2::pKnown', 'sc-gantt-v2::pOrphan', 'sc-reserves-v1::pOrphan']
+    expect(findOrphanProjectIds(['pKnown'], keys)).toEqual(['pOrphan'])
+  })
+
+  it('ne signale rien quand tous les ids référencés sont connus', () => {
+    const keys = ['sc-gantt-v2::pA', 'sc-units-v1::pA', 'sc-gantt-v2::pB']
+    expect(findOrphanProjectIds(['pA', 'pB'], keys)).toEqual([])
+  })
+
+  it('ignore les clés globales (sans "::") et ne les compte jamais comme orphelines', () => {
+    const keys = ['sc-projects-v1', 'sc-trash-v1', 'sc-current-project-v1', 'sc-gantt-v2::pOrphan']
+    expect(findOrphanProjectIds([], keys)).toEqual(['pOrphan'])
+  })
+
+  it('dédoublonne un même id orphelin référencé par plusieurs clés', () => {
+    const keys = ['sc-gantt-v2::pOrphan', 'sc-units-v1::pOrphan', 'sc-reserves-v1::pOrphan']
+    expect(findOrphanProjectIds([], keys)).toEqual(['pOrphan'])
+  })
+
+  it('reproduit le constat réel de l’audit Acacias : plusieurs ids orphelins simultanés', () => {
+    const keys = [
+      'sc-lots-config-v1::p1789340565817701', 'sc-lots-config-v1::p1789341672812846',
+      'sc-lots-config-v1::p1789295288813528', 'sc-lots-config-v1::p-test-planning-20260919',
+      'sc-lots-config-v1::p-demo-residence-20260920',
+    ]
+    expect(findOrphanProjectIds(['p-demo-residence-20260920'], keys)).toEqual([
+      'p-test-planning-20260919', 'p1789295288813528', 'p1789340565817701', 'p1789341672812846',
+    ])
   })
 })

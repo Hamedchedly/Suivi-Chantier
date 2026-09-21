@@ -277,6 +277,51 @@ describe('applyVisitToPlanning', () => {
     expect(applyVisitToPlanning(tasks(), v)[0].children![0].status).toBe('blocked')
   })
 
+  it('a blocked task keeps its exact observed progress (47%), never silently reset to 0', () => {
+    const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'blocked', progress: 47 })] })])
+    const t = applyVisitToPlanning(tasks(), v)[0].children![0]
+    expect(t.progress).toBe(47)
+    expect(t.status).toBe('blocked')
+  })
+
+  // ── Vocabulaire hors TaskState (voir docs/AUDIT_ACACIAS_E2E_2026-09-21.md §Item 5) ──
+  // Une valeur de state qui n'appartient pas au vrai TaskState
+  // ('not_checked' | 'ok' | 'to_review' | 'blocked' | 'na') — par exemple
+  // 'done' ou 'reminder', empruntées par erreur au vocabulaire d'un autre
+  // schéma (public.observations.status, non branché) — ne doit JAMAIS être
+  // traitée comme 'ok' : c'est exactement la dérive qui a produit la donnée
+  // Acacias incohérente (progress 55 + state "done"), corrigée à la source
+  // (les données, pas ce contrat). Ce test fige le contrat actuel : une
+  // valeur hors vocabulaire est REJETÉE au sens où elle n'obtient jamais le
+  // traitement spécial de 'ok' — le statut retombe uniquement sur le
+  // pourcentage constaté (deriveTaskStatus), jamais sur ce texte inconnu.
+  it('progress 55 + state hors vocabulaire ("done") : jamais traité comme ok, retombe sur le pourcentage', () => {
+    const v = visit([zone({ refId: 'A-101', tasks: [
+      { ...check({ taskId: 'T-05-A101', lotId: 'L05', progress: 55 }), state: 'done' as VisitTaskCheck['state'] },
+    ] })])
+    const t = applyVisitToPlanning(tasks(), v)[0].children![0]
+    expect(t.status).not.toBe('completed') // jamais "terminé" simplement parce que le texte dit "done"
+    expect(t.status).toBe('in-progress')   // dérivé du seul pourcentage (55 %), comme n'importe quel état inconnu
+    expect(t.progress).toBe(55)
+  })
+
+  it('une valeur "reminder" (empruntée à tort au vocabulaire des observations) n’est pas non plus assimilée à ok', () => {
+    const v = visit([zone({ refId: 'A-101', tasks: [
+      { ...check({ taskId: 'T-05-A101', lotId: 'L05', progress: 25 }), state: 'reminder' as VisitTaskCheck['state'] },
+    ] })])
+    const t = applyVisitToPlanning(tasks(), v)[0].children![0]
+    expect(t.status).not.toBe('completed')
+    expect(t.status).toBe('in-progress')
+  })
+
+  it('N/A n’est jamais assimilé à 0 % : la tâche garde son avancement d’origine, intouchée', () => {
+    const withProgress = () => [parent('T-05-00', 'L05', [leaf({ id: 'T-05-A101', lot_id: 'L05', progress: 40 })])]
+    const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'na' })] })])
+    const t = applyVisitToPlanning(withProgress(), v)[0].children![0]
+    expect(t.progress).toBe(40) // ni 0, ni modifié : la tâche N/A n'est jamais touchée par applyVisitToPlanning
+    expect(t.status).toBe('not-started') // statut d'origine inchangé lui aussi
+  })
+
   it('recomputes the parent lot bounds too — one recompute pipeline (lib/planning.ts), not a second one here', () => {
     // Une date promise repousse la fin d'une feuille au-delà des bornes du lot : le lot doit suivre.
     const v = visit([zone({ refId: 'A-101', tasks: [check({ taskId: 'T-05-A101', lotId: 'L05', state: 'ok', progress: 40, promisedEnd: '2026-09-25' })] })])

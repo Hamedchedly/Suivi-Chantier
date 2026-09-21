@@ -132,3 +132,27 @@ export function projectSubtitle(p: Project): string | undefined {
   if (p.address && p.reference) return `${p.reference} • ${p.address}`
   return p.address || p.reference || undefined
 }
+
+/**
+ * Détection des projets orphelins : un identifiant référencé par au moins
+ * une clé cloisonnée (`<base>::<projectId>`) mais absent du registre
+ * `sc-projects-v1` a des données réelles quelque part sans plus être
+ * visible dans « Mes opérations » (voir docs/AUDIT_ACACIAS_E2E_2026-09-21.md
+ * §A). Fonction pure : ne lit ni n'écrit rien elle-même — repo.ts
+ * (findOrphanProjects) lui fournit les clés réellement stockées.
+ *
+ * N'EST PAS une fonction de restauration : elle se contente de signaler.
+ * Restaurer un projet orphelin sans en connaître l'origine reste une
+ * décision humaine (voir la limite documentée dans le rapport d'audit).
+ */
+export function findOrphanProjectIds(knownProjectIds: string[], scopedStorageKeys: string[]): string[] {
+  const known = new Set(knownProjectIds)
+  const orphans = new Set<string>()
+  for (const key of scopedStorageKeys) {
+    const sep = key.lastIndexOf('::')
+    if (sep === -1) continue
+    const projectId = key.slice(sep + 2)
+    if (projectId && !known.has(projectId)) orphans.add(projectId)
+  }
+  return [...orphans].sort()
+}

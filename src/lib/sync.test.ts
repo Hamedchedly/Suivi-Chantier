@@ -14,14 +14,27 @@ vi.mock('./supabase', () => ({
   supabase: {
     from: () => ({
       select: () => ({
-        eq: () => Promise.resolve(
-          ctrl.failSelect
+        // Chaînable ET awaitable directement : les appelants existants font
+        // `await select(...).eq('user_id', uid)` (toutes les lignes), tandis
+        // que reconcileProjectsBeforeFlush ajoute `.eq('k', ...).maybeSingle()`
+        // (une seule clé). Les deux formes doivent marcher sur ce même mock.
+        eq: () => {
+          const rows = [...server.entries()].map(([k, r]) => ({ k, v: r.v, updated_at: r.updated_at }))
+          const base = ctrl.failSelect
             ? { data: null, error: { message: 'offline' } }
-            : {
-                data: [...server.entries()].map(([k, r]) => ({ k, v: r.v, updated_at: r.updated_at })),
-                error: null,
-              },
-        ),
+            : { data: rows, error: null }
+          const chain = Promise.resolve(base) as Promise<typeof base> & {
+            eq: (col: string, key: string) => { maybeSingle: () => Promise<{ data: { v: unknown } | null; error: unknown }> }
+          }
+          chain.eq = (_col: string, key: string) => ({
+            maybeSingle: () => Promise.resolve(
+              ctrl.failSelect
+                ? { data: null, error: { message: 'offline' } }
+                : { data: (() => { const found = rows.find(r => r.k === key); return found ? { v: found.v } : null })(), error: null },
+            ),
+          })
+          return chain
+        },
       }),
       upsert: (rows: { k: string; v: unknown; updated_at?: string }[]) => {
         if (ctrl.failWrites) return Promise.resolve({ error: { message: 'boom' } })
@@ -279,5 +292,112 @@ describe('sync : session (fusion dernière-écriture-gagne)', () => {
     // Cet appareil recharge : il doit récupérer la version du device B, pas garder la sienne.
     await initRemoteSession('u1')
     expect(loadState('sc-reserves-v1::p1', [])).toEqual([{ id: 'from-device-B' }])
+  })
+})
+
+// ── sc-projects-v1 : fusion sûre du registre des opérations ─────────────────
+//
+// Reproduit et corrige l'incident documenté dans
+// docs/AUDIT_ACACIAS_E2E_2026-09-21.md §A : un appareil dont le cache local ne
+// connaît qu'un sous-ensemble des opérations du compte ne doit plus jamais
+// faire disparaître les autres au premier flush.
+describe('sync : registre des projets (sc-projects-v1) — fusion par id', () => {
+  const P = (id: string, name = id) => ({ id, name })
+
+  it('TEST 1 — ajouter C à [A, B] donne [A, B, C]', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('A'), P('B')], '2026-05-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+    saveState('sc-projects-v1', [P('A'), P('B'), P('C')])
+    await vi.advanceTimersByTimeAsync(900)
+    expect((server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()).toEqual(['A', 'B', 'C'])
+  })
+
+  it('TEST 2 — modifier B dans [A, B, C] donne [A, B_modifié, C]', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('A'), P('B'), P('C')], '2026-05-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+    saveState('sc-projects-v1', [P('A'), { id: 'B', name: 'B modifié' }, P('C')])
+    await vi.advanceTimersByTimeAsync(900)
+    const v = server.get('sc-projects-v1')?.v as { id: string; name: string }[]
+    expect(v.find(p => p.id === 'B')?.name).toBe('B modifié')
+    expect(v.map(p => p.id).sort()).toEqual(['A', 'B', 'C'])
+  })
+
+  it('TEST 3 — supprimer B explicitement (via la corbeille) donne [A, C]', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('A'), P('B'), P('C')], '2026-05-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+    // La suppression réelle (App.tsx removeProject) écrit toujours la corbeille
+    // ET le nouveau registre — dans cet ordre ou l'autre, peu importe ici.
+    saveState('sc-trash-v1', [{ id: 'B', name: 'B', deletedAt: '2026-05-01T10:00:00.000Z' }])
+    saveState('sc-projects-v1', [P('A'), P('C')])
+    await vi.advanceTimersByTimeAsync(900)
+    expect((server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()).toEqual(['A', 'C'])
+  })
+
+  it('TEST 4 — un appareil parti de [A, B] ne doit jamais faire perdre C déjà connu du serveur', async () => {
+    vi.useFakeTimers()
+    // Le serveur a déjà avancé à [A, B, C] (un autre appareil a ajouté C).
+    srvSet('sc-projects-v1', [P('A'), P('B'), P('C')], '2026-05-01T09:00:00.000Z')
+    // Cet appareil-ci a un cache local plus ancien/incomplet : [A, B] seulement,
+    // et son horodatage local est ANTÉRIEUR à celui du serveur pour cette clé
+    // → initRemoteSession ne le pousse donc pas lui-même (ce n'est pas le
+    // scénario testé ici) ; on simule directement un flush de ce cache via
+    // enableSync, le cas réel étant une hydratation incomplète (nouveau profil
+    // navigateur, page rechargée avant la fin du fetch serveur).
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1'))
+    enableSync('u1')
+    saveState('sc-projects-v1', [P('A'), P('B')]) // ignore C, ne sait pas qu'il existe
+    await vi.advanceTimersByTimeAsync(900)
+    const v = server.get('sc-projects-v1')?.v as { id: string }[]
+    expect(v.map(p => p.id).sort()).toEqual(['A', 'B', 'C']) // C préservé, pas perdu
+  })
+
+  it('TEST 5 — modifier A sur un appareil ne fait jamais disparaître B ajouté ailleurs entre-temps', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('A')], '2026-05-01T09:00:00.000Z')
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1'))
+    enableSync('u1')
+    // Ce device ne connaît que A (édité), mais B a été ajouté côté serveur
+    // par un autre appareil juste avant ce flush.
+    srvSet('sc-projects-v1', [P('A'), P('B')], '2026-05-01T09:05:00.000Z')
+    saveState('sc-projects-v1', [{ id: 'A', name: 'A modifié' }])
+    await vi.advanceTimersByTimeAsync(900)
+    const v = server.get('sc-projects-v1')?.v as { id: string; name: string }[]
+    expect(v.map(p => p.id).sort()).toEqual(['A', 'B'])
+    expect(v.find(p => p.id === 'A')?.name).toBe('A modifié')
+  })
+
+  it('TEST 6 — les données cloisonnées d’un projet ne sont jamais supprimées par sa simple disparition d’une copie locale de sc-projects-v1', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('A'), P('B')], '2026-05-01T09:00:00.000Z')
+    srvSet('sc-units-v1::B', [{ id: 'u1' }], '2026-05-01T09:00:00.000Z')
+    srvSet('sc-gantt-v2::B', [{ id: 't1' }], '2026-05-01T09:00:00.000Z')
+    srvSet('sc-visits-v3::B', [{ id: 'v1' }], '2026-05-01T09:00:00.000Z')
+    localStorage.setItem('sc-sync-owner-v1', JSON.stringify('u1'))
+    enableSync('u1')
+    // Ce flush ne touche QUE sc-projects-v1 (B en disparaît localement, sans
+    // corbeille) — aucune des clés cloisonnées de B n'est jamais écrite ni
+    // supprimée par ce mécanisme : il n'agit que sur la clé qu'on lui donne.
+    saveState('sc-projects-v1', [P('A')])
+    await vi.advanceTimersByTimeAsync(900)
+    // B reste dans le registre fusionné (comme TEST 4)…
+    expect((server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()).toEqual(['A', 'B'])
+    // …et ses données cloisonnées n'ont jamais été touchées.
+    expect(server.get('sc-units-v1::B')?.v).toEqual([{ id: 'u1' }])
+    expect(server.get('sc-gantt-v2::B')?.v).toEqual([{ id: 't1' }])
+    expect(server.get('sc-visits-v3::B')?.v).toEqual([{ id: 'v1' }])
+  })
+
+  it('reproduit l’incident réel : un profil navigateur neuf qui ne crée qu’Acacias ne doit plus écraser Gambetta/Tilleuls/TEST', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('gambetta', 'Gambetta'), P('tilleuls', 'Les Tilleuls'), P('test', 'TEST')], '2026-09-01T09:00:00.000Z')
+    // Profil navigateur neuf : jamais hydraté, sc-sync-owner-v1 absent.
+    enableSync('u1')
+    saveState('sc-projects-v1', [P('acacias', 'Résidence des Acacias')])
+    await vi.advanceTimersByTimeAsync(900)
+    const ids = (server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()
+    expect(ids).toEqual(['acacias', 'gambetta', 'test', 'tilleuls'])
   })
 })
