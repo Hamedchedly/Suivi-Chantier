@@ -65,12 +65,35 @@ sur le backend déployé (connexion, hydratation, write-through, suppression).
      échouer le lot).
    - Clés `sc-users-v1` / `sc-session-v1` **exclues** (gérées par Supabase Auth).
 
-## Limite connue
+## Limite connue — confirmée en direct sur la base réelle (21/09/2026)
 
-Modèle **serveur-autoritaire** à l'hydratation : une édition faite **hors-ligne**
-puis écrasée par l'état serveur au rechargement n'est pas fusionnée (pas de
-résolution de conflit par horodatage). Acceptable pour un usage mono-session en
-ligne ; à renforcer si l'usage hors-ligne devient courant.
+L'hydratation fusionne bien clé par clé par horodatage (`initRemoteSession`,
+`sync.ts`) — ce paragraphe a été corrigé, la version précédente de ce document
+affirmait à tort qu'aucune fusion n'existait.
+
+La vraie limite, **prouvée contre la base Supabase de production** (compte de
+test jetable, requêtes SQL exécutées avec `role authenticated` + `request.jwt.claims`
+pour respecter RLS comme le ferait le vrai front, aucune trace laissée après
+coup) : la granularité de sync est la **clé entière**, jamais le champ. Deux
+appareils EN LIGNE tous les deux, partis du même état, qui modifient chacun un
+champ différent d'un même enregistrement, puis flushent chacun leur copie
+locale complète : le second `upsert` écrase intégralement la valeur du
+premier, y compris le champ que le second appareil n'a jamais touché — sans
+erreur, sans conflit visible, la donnée est juste perdue silencieusement.
+Scénario rejoué tel quel :
+1. État initial poussé : Tâche A `in_progress/50`, Tâche B `not_started/0`.
+2. Appareil 1 : Tâche A → `done/100`, flush (upsert de tout le tableau).
+3. Appareil 2 (resté sur l'état initial) : Tâche B → `blocked`, flush.
+4. Lecture finale : Tâche A repasse `in_progress/50` (la mise à jour de
+   l'appareil 1 a disparu), Tâche B est bien `blocked`.
+
+Seule protection avant flush : l'auteur du bug 3 plus haut (unicité de la
+tâche visée). Pour deux tâches différentes de la même opération, rien
+n'empêche la perte. `sync.test.ts` documentait déjà ce comportement contre un
+mock ; c'est désormais vérifié contre la vraie base. Correction possible sans
+réécrire le modèle : réduire la granularité de `k` (une ligne par tâche plutôt
+que par opération) pour les domaines à forte contention, ou un merge JSON
+côté `flush()` avant l'upsert.
 
 ## Sécurité
 
@@ -78,3 +101,26 @@ ligne ; à renforcer si l'usage hors-ligne devient courant.
   `service_role`.
 - RLS : chaque ligne est privée à son `user_id` (`= auth.uid()`).
 - Aucun secret dans le dépôt (`.env.local` est ignoré par Git).
+
+### Compte créé « en attente » — le trigger seul ne suffit pas (vérifié 21/09/2026)
+
+`public.profiles.disabled` a `DEFAULT false`, et le trigger `handle_new_user()`
+insère la ligne de profil sans jamais fixer `disabled` — vérifié en créant un
+utilisateur réel dans `auth.users` : son profil sort du trigger avec
+`disabled = false`. La mise en attente (« compte créé, en attente de
+validation ») n'est donc appliquée **que côté applicatif**, par la fonction Edge
+`demo-signup` (`UPDATE profiles SET disabled = true` juste après
+`admin.auth.admin.createUser`) — jamais au niveau de la base ou du trigger.
+
+Tant que seule cette fonction Edge crée des comptes, le comportement observé
+est correct. Mais si l'auto-inscription native de Supabase Auth
+(`supabase.auth.signUp`, joignable avec la seule clé publiable, activée par
+défaut sauf désactivation explicite dans Authentication → Providers → Email)
+est encore ouverte sur ce projet, n'importe qui peut créer un compte **déjà
+activé** en contournant entièrement `demo-signup` et la validation
+super-admin — la base ne s'y oppose pas. Non vérifiable en SQL (c'est un
+réglage de la plateforme Auth, pas une table) : à confirmer dans le dashboard
+Supabase. Si l'auto-inscription native est ouverte, la couvrir en profondeur
+est peu coûteux : `alter table public.profiles alter column disabled set default true;`
+et faire pointer `handle_new_user()` sur cette valeur par défaut au lieu de
+compter sur la fonction Edge seule.
