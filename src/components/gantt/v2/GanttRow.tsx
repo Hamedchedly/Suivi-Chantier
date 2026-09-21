@@ -2,12 +2,14 @@
 // jamais à l'horizontale) et la frise (volet droit, bar/jalon + engagement).
 // Les deux widgets restent alignés car l'orchestrateur les rend dans deux
 // volets synchronisés verticalement — voir GanttHeader.tsx.
+import { memo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { PlanningTask } from '../../../types/planning'
 import { TimelineScale, xForDate, timelineWidth } from '../../../lib/planningViewModel'
 import { GanttBar } from './GanttBar'
 import { GanttMilestone } from './GanttMilestone'
+import { sameRenderTask } from './ganttMemo'
 
 export const ROW_HEIGHT = 34
 
@@ -21,7 +23,7 @@ interface LabelProps {
   highlighted?: boolean
 }
 
-export function GanttRowLabel({ task, depth, isLot, isExpanded, onToggleExpand, onSelect, highlighted }: LabelProps) {
+export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, isExpanded, onToggleExpand, onSelect, highlighted }: LabelProps) {
   return (
     <div
       style={{
@@ -48,7 +50,12 @@ export function GanttRowLabel({ task, depth, isLot, isExpanded, onToggleExpand, 
       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{task.progress}%</span>
     </div>
   )
-}
+}, (prev, next) =>
+  prev.depth === next.depth &&
+  prev.isLot === next.isLot &&
+  prev.isExpanded === next.isExpanded &&
+  prev.highlighted === next.highlighted &&
+  sameRenderTask(prev.task, next.task))
 
 interface TimelineProps {
   task: PlanningTask
@@ -60,7 +67,7 @@ interface TimelineProps {
   highlighted?: boolean
 }
 
-export function GanttRowTimeline({ task, scale, today, onSelect, onHover, onLeave, highlighted }: TimelineProps) {
+export const GanttRowTimeline = memo(function GanttRowTimeline({ task, scale, today, onSelect, onHover, onLeave, highlighted }: TimelineProps) {
   const commitmentX = task.latestCommitment ? xForDate(new Date(task.latestCommitment.promisedEnd), scale) : null
 
   return (
@@ -84,4 +91,11 @@ export function GanttRowTimeline({ task, scale, today, onSelect, onHover, onLeav
       )}
     </div>
   )
-}
+}, (prev, next) =>
+  prev.highlighted === next.highlighted &&
+  prev.today.getTime() === next.today.getTime() &&
+  prev.scale.start.getTime() === next.scale.start.getTime() &&
+  prev.scale.end.getTime() === next.scale.end.getTime() &&
+  prev.scale.dayWidth === next.scale.dayWidth &&
+  prev.scale.zoom === next.scale.zoom &&
+  sameRenderTask(prev.task, next.task))

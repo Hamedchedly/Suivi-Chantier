@@ -1,7 +1,9 @@
 // Jalon (échéance ponctuelle) : losange sur sa date de référence. Réel > prévision > contractuel.
+import { memo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { PlanningTask } from '../../../types/planning'
 import { TimelineScale, xForDate } from '../../../lib/planningViewModel'
+import { sameRenderTask } from './ganttMemo'
 
 interface Props {
   task: PlanningTask
@@ -11,7 +13,7 @@ interface Props {
   onClick?: () => void
 }
 
-export function GanttMilestone({ task, scale, onEnter, onLeave, onClick }: Props) {
+export const GanttMilestone = memo(function GanttMilestone({ task, scale, onEnter, onLeave, onClick }: Props) {
   const date = task.actual.end ?? task.forecast.end ?? task.contract.end
   const x = xForDate(date, scale)
   const done = task.progress >= 100
@@ -32,4 +34,9 @@ export function GanttMilestone({ task, scale, onEnter, onLeave, onClick }: Props
       }}
     />
   )
-}
+}, (prev, next) =>
+  prev.scale.start.getTime() === next.scale.start.getTime() &&
+  prev.scale.end.getTime() === next.scale.end.getTime() &&
+  prev.scale.dayWidth === next.scale.dayWidth &&
+  prev.scale.zoom === next.scale.zoom &&
+  sameRenderTask(prev.task, next.task))

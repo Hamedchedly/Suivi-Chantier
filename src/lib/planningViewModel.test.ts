@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PlanningTask } from '../types/planning'
 import {
   computeTimelineRange, xForDate, widthForRange, timelineWidth, headerCells, dayTicks, zoomIn, zoomOut, addDays,
+  monthBands, weekNumbers, currentWeekBand,
 } from './planningViewModel'
 
 const BASE = new Date(2026, 0, 1)
@@ -75,6 +76,53 @@ describe('headerCells', () => {
     const scale = { start: d(0), end: d(3), dayWidth: 10, zoom: 'week' as const }
     // headerCells ne connaît que week/month/quarter — vérifié par le typage de ZoomLevel lui-même.
     expect(headerCells(scale).length).toBeGreaterThan(0)
+  })
+})
+
+describe('monthBands', () => {
+  it('regroupe les semaines par mois : largeur totale = largeur totale des semaines', () => {
+    const scale = computeTimelineRange([task({ contract: { start: d(0), end: d(60) } })], d(0), 'week')
+    const weeks = headerCells(scale)
+    const bands = monthBands(scale)
+    const totalWeeks = weeks.reduce((s, w) => s + w.width, 0)
+    const totalBands = bands.reduce((s, b) => s + b.width, 0)
+    expect(totalBands).toBe(totalWeeks)
+    expect(bands.length).toBeGreaterThan(1) // plusieurs mois sur ~60 jours + marges
+  })
+
+  it('un mois n\'apparaît jamais deux fois séparément (pas de bandeau scindé)', () => {
+    const scale = computeTimelineRange([task({ contract: { start: d(0), end: d(20) } })], d(0), 'week')
+    const labels = monthBands(scale).map(b => b.label)
+    expect(new Set(labels).size).toBe(labels.length)
+  })
+})
+
+describe('weekNumbers', () => {
+  it('semaine 1 = la semaine de la toute première tâche réelle, pas la marge de confort', () => {
+    // d(0) = 2026-01-01, un jeudi → lundi de sa semaine = d(-3).
+    const scale = computeTimelineRange([task({ contract: { start: d(0), end: d(9) } })], d(0), 'week')
+    const weekOfTask = weekNumbers(scale).find(n => n.x === xForDate(d(-3), scale))
+    expect(weekOfTask?.label).toBe('1')
+  })
+
+  it('sans taskStart (compat TimelineScale littéral existant), s\'ancre sur scale.start', () => {
+    const scale = { start: d(-3), end: d(21), dayWidth: 10, zoom: 'week' as const }
+    expect(weekNumbers(scale)[0].label).toBe('1')
+  })
+})
+
+describe('currentWeekBand', () => {
+  it('couvre toute la semaine (lundi→dimanche) contenant aujourd\'hui', () => {
+    const scale = computeTimelineRange([task()], d(0), 'week')
+    const band = currentWeekBand(scale, d(0))
+    expect(band).not.toBeNull()
+    expect(band!.width).toBe(scale.dayWidth * 7)
+    expect(band!.x).toBe(xForDate(d(-3), scale)) // d(-3) = lundi de la semaine de d(0), jeudi
+  })
+
+  it('null quand aujourd\'hui est hors de la plage affichée', () => {
+    const scale = { start: d(0), end: d(10), dayWidth: 10, zoom: 'week' as const }
+    expect(currentWeekBand(scale, d(100))).toBeNull()
   })
 })
 

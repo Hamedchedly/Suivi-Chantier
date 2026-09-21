@@ -18,7 +18,7 @@ import { DateCommitment, commitmentsForTask, latestCommitment as latestCommitmen
 import { forecastDrift } from './forecast'
 import { startDrift } from './actualDates'
 import { flattenLeaves, driftDays, diffDays } from './schedule'
-import { computeCpm } from './cpm'
+import { computeCpm, CpmResult } from './cpm'
 
 // ── Statut dérivé de l'avancement ─────────────────────────────────────────
 
@@ -159,10 +159,10 @@ export function analyzePlanning(tasks: GanttTask[], today: Date = new Date()): P
 
 /** Chemin critique, déterministe, jamais inventé : indisponible tant que le
  * réseau de dépendances est vide (ou cyclique). */
-export function criticalPath(tasks: GanttTask[]): CriticalPathResult {
+export function criticalPath(tasks: GanttTask[], precomputed?: CpmResult): CriticalPathResult {
   const leaves = flattenLeaves(tasks)
   const edgeCount = leaves.reduce((n, t) => n + (t.dependencies?.length ?? 0), 0)
-  const cpm = computeCpm(tasks)
+  const cpm = precomputed ?? computeCpm(tasks)
 
   if (edgeCount === 0 || cpm.hasCycle || cpm.criticalIds.size === 0) {
     return { available: false, path: [], criticalIds: new Set() }

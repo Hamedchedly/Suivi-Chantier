@@ -16,7 +16,7 @@ export type ZoomLevel = 'week' | 'month' | 'quarter'
 export const ZOOM_LEVELS: ZoomLevel[] = ['week', 'month', 'quarter']
 export const ZOOM_LABEL: Record<ZoomLevel, string> = { week: 'Semaine', month: 'Mois', quarter: 'Trimestre' }
 
-const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: 14, month: 5, quarter: 1.6 }
+export const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: 14, month: 5, quarter: 1.6 }
 const PADDING_DAYS: Record<ZoomLevel, number> = { week: 10, month: 20, quarter: 45 }
 
 const MS_DAY = 86400000
@@ -41,6 +41,11 @@ export interface TimelineScale {
   end: Date
   dayWidth: number
   zoom: ZoomLevel
+  /** Ancre de la semaine n°1 (weekNumbers) : borne réelle la plus ancienne
+   * parmi les dates des tâches, avant marge de confort et indépendamment
+   * d'« aujourd'hui ». Optionnel pour ne pas casser les TimelineScale
+   * littéraux existants (tests) qui ne le renseignent pas. */
+  taskStart?: Date
 }
 
 function collectDates(tasks: PlanningTask[], acc: Date[]): void {
@@ -58,8 +63,9 @@ function collectDates(tasks: PlanningTask[], acc: Date[]): void {
  * Ne recadre jamais sur une plage arbitraire : uniquement ce que les données contiennent. */
 export function computeTimelineRange(tasks: PlanningTask[], today: Date, zoom: ZoomLevel = 'week', dayWidth?: number): TimelineScale {
   const width = dayWidth ?? BASE_DAY_WIDTH[zoom]
-  const dates: Date[] = [today]
-  collectDates(tasks, dates)
+  const taskDates: Date[] = []
+  collectDates(tasks, taskDates)
+  const dates: Date[] = [today, ...taskDates]
   const minT = Math.min(...dates.map(d => d.getTime()))
   let maxT = Math.max(...dates.map(d => d.getTime()))
   // Clippe la plage pathologique (voir MAX_DAY_ITERATIONS) plutôt que de
@@ -69,7 +75,14 @@ export function computeTimelineRange(tasks: PlanningTask[], today: Date, zoom: Z
   const maxSpanMs = MAX_DAY_ITERATIONS * MS_DAY
   if (Number.isFinite(minT) && Number.isFinite(maxT) && maxT - minT > maxSpanMs) maxT = minT + maxSpanMs
   const pad = PADDING_DAYS[zoom]
-  return { start: addDays(new Date(minT), -pad), end: addDays(new Date(maxT), pad), dayWidth: width, zoom }
+  // taskStart ignore « aujourd'hui » : la semaine 1 (weekNumbers) doit rester
+  // ancrée sur la toute première tâche réelle, jamais déplacée par la date du
+  // jour (ex. planning saisi pour un chantier qui démarre plus tard).
+  const taskMinT = taskDates.length ? Math.min(...taskDates.map(d => d.getTime())) : minT
+  return {
+    start: addDays(new Date(minT), -pad), end: addDays(new Date(maxT), pad), dayWidth: width, zoom,
+    taskStart: new Date(taskMinT),
+  }
 }
 
 export function xForDate(date: Date, scale: TimelineScale): number {
@@ -108,8 +121,10 @@ export function headerCells(scale: TimelineScale): HeaderCell[] {
   const cells: HeaderCell[] = []
   let guard = 0
   if (scale.zoom === 'week') {
+    // Jour seul (le lundi de la semaine) : le mois est porté par monthBands()
+    // et n'a pas besoin d'être répété dans chaque cellule semaine.
     for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addDays(cur, 7)) {
-      cells.push({ x: xForDate(cur, scale), width: scale.dayWidth * 7, label: cur.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' }) })
+      cells.push({ x: xForDate(cur, scale), width: scale.dayWidth * 7, label: cur.toLocaleDateString('fr', { day: '2-digit' }) })
     }
   } else if (scale.zoom === 'month') {
     for (let cur = firstOfMonth(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addMonths(cur, 1)) {
@@ -123,6 +138,59 @@ export function headerCells(scale: TimelineScale): HeaderCell[] {
     }
   }
   return cells
+}
+
+export interface MonthBand { x: number; width: number; label: string }
+
+/** Bandeau mois (vue semaine uniquement) : une cellule fusionnée par mois,
+ * large de 4-5 colonnes semaine selon le nombre de lundis qu'elle contient —
+ * regroupe les mêmes semaines (lundi par lundi) que headerCells('week') pour
+ * rester aligné au pixel près avec la ligne de cellules semaine. */
+export function monthBands(scale: TimelineScale): MonthBand[] {
+  const bands: MonthBand[] = []
+  let guard = 0
+  let current: { key: string; label: string; x: number; width: number } | null = null
+  for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addDays(cur, 7)) {
+    const key = `${cur.getFullYear()}-${cur.getMonth()}`
+    const x = xForDate(cur, scale)
+    const width = scale.dayWidth * 7
+    if (current && current.key === key) {
+      current.width += width
+    } else {
+      if (current) bands.push(current)
+      current = { key, label: cur.toLocaleDateString('fr', { month: 'long', year: 'numeric' }), x, width }
+    }
+  }
+  if (current) bands.push(current)
+  return bands.map(({ x, width, label }) => ({ x, width, label }))
+}
+
+export interface WeekNumberCell { x: number; width: number; label: string }
+
+/** N° de semaine séquentiel depuis le début réel du chantier (pas un n° ISO
+ * calendaire) : semaine 1 = la semaine du lundi de la toute première tâche
+ * réelle (scale.taskStart). Sans taskStart (littéraux de test existants),
+ * s'ancre sur scale.start pour rester utilisable sans casser leur typage. */
+export function weekNumbers(scale: TimelineScale): WeekNumberCell[] {
+  const anchor = mondayOf(scale.taskStart ?? scale.start)
+  const cells: WeekNumberCell[] = []
+  let guard = 0
+  for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addDays(cur, 7)) {
+    const weekIndex = Math.round(diffDays(cur, anchor) / 7) + 1
+    cells.push({ x: xForDate(cur, scale), width: scale.dayWidth * 7, label: String(weekIndex) })
+  }
+  return cells
+}
+
+export interface CurrentWeekBand { x: number; width: number }
+
+/** Bande verticale surlignant la semaine courante (« aujourd'hui »), sur
+ * toute la colonne — remplace la ligne fine d'origine, format du planning de
+ * référence. null si aujourd'hui tombe hors de la plage affichée. */
+export function currentWeekBand(scale: TimelineScale, today: Date): CurrentWeekBand | null {
+  if (today.getTime() < scale.start.getTime() || today.getTime() >= scale.end.getTime()) return null
+  const monday = mondayOf(today)
+  return { x: xForDate(monday, scale), width: scale.dayWidth * 7 }
 }
 
 export interface DayTick { x: number; width: number; label: string; isWeekend: boolean; isToday: boolean }

@@ -4,7 +4,7 @@
 // L'édition (avancement, dates, dépendances) délègue au même pipeline que
 // l'ancien Gantt (handleProgress/handleTaskUpdate dans pages/Gantt.tsx) via
 // les callbacks optionnels : en lecture seule (ShareView, ex.) on les omet.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { PlanningTask } from '../../../types/planning'
 import { DelayCause, DELAY_CAUSE_LABEL } from '../../../types/gantt'
@@ -40,6 +40,11 @@ export function GanttDetails({
   const [showHistory, setShowHistory] = useState(false)
   const [depSearch, setDepSearch] = useState('')
   const [subTaskForm, setSubTaskForm] = useState(false)
+  // Tampon local pendant le glissement du curseur : évite de relancer le
+  // recalcul complet (CPM/forecast/geometry) + la sauvegarde à chaque pixel
+  // déplacé — seul le relâchement propage la vraie mise à jour.
+  const [localProgress, setLocalProgress] = useState(task.progress)
+  useEffect(() => { setLocalProgress(task.progress) }, [task.progress])
   const v = task.variance
 
   return (
@@ -63,13 +68,16 @@ export function GanttDetails({
           <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Avancement</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{task.progress}%</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{localProgress}%</span>
             </div>
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${task.progress}%` }} /></div>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${localProgress}%` }} /></div>
             {onProgress && !task.isMilestone && !task.children?.length && (
               <input
-                type="range" min={0} max={100} step={5} value={task.progress}
-                onChange={e => onProgress(Number(e.target.value))}
+                type="range" min={0} max={100} step={5} value={localProgress}
+                onChange={e => setLocalProgress(Number(e.target.value))}
+                onMouseUp={e => onProgress(Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={e => onProgress(Number((e.target as HTMLInputElement).value))}
+                onKeyUp={e => onProgress(Number((e.target as HTMLInputElement).value))}
                 style={{ width: '100%', marginTop: 8 }}
               />
             )}
@@ -297,13 +305,19 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: 'ok'
 function EditRow({ label, value, onChange, clearable, onClear }: {
   label: string; value: string; onChange: (v: string) => void; clearable?: boolean; onClear?: () => void
 }) {
+  // Tampon local : le recalcul complet (dates → CPM/forecast/geometry) ne
+  // doit se déclencher qu'une fois la sélection terminée, pas à chaque
+  // caractère saisi ou étape du sélecteur de date natif.
+  const [local, setLocal] = useState(value)
+  useEffect(() => { setLocal(value) }, [value])
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '3px 0' }}>
       <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <input
-          type="date" value={value}
-          onChange={e => e.target.value && onChange(e.target.value)}
+          type="date" value={local}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={() => { if (local && local !== value) onChange(local) }}
           style={{ width: 140, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}
         />
         {clearable && onClear && (

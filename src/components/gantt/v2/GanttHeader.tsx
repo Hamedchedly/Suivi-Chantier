@@ -6,15 +6,17 @@
 // l'horizontale). Les deux volets sont synchronisés verticalement par
 // l'orchestrateur (Gantt.tsx) — un seul bloc avec `position: sticky` ne
 // suffit pas à garder la colonne en place pendant le scroll horizontal.
-import { TimelineScale, ZoomLevel, ZOOM_LEVELS, ZOOM_LABEL, headerCells, timelineWidth, dayTicks } from '../../../lib/planningViewModel'
+import { TimelineScale, ZoomLevel, ZOOM_LEVELS, ZOOM_LABEL, headerCells, timelineWidth, monthBands, weekNumbers } from '../../../lib/planningViewModel'
 
 export const HEADER_HEIGHT = 34
-export const DAY_SUBROW_HEIGHT = 16
+export const MONTH_BAND_HEIGHT = 18
+export const WEEK_NUMBER_HEIGHT = 16
 
-/** Hauteur totale de l'en-tête : la sous-ligne des repères journaliers
- * n'existe qu'en vue semaine — jamais une vue séparée, juste plus de détail. */
+/** Hauteur totale de l'en-tête : en vue semaine, 3 lignes empilées (mois /
+ * semaine / n° de semaine) — mois/trimestre restent une seule ligne, comme
+ * avant, ils n'ont ni bandeau mois ni numéro de semaine. */
 export function headerHeightFor(zoom: ZoomLevel): number {
-  return zoom === 'week' ? HEADER_HEIGHT + DAY_SUBROW_HEIGHT : HEADER_HEIGHT
+  return zoom === 'week' ? MONTH_BAND_HEIGHT + HEADER_HEIGHT + WEEK_NUMBER_HEIGHT : HEADER_HEIGHT
 }
 
 interface LabelProps {
@@ -49,16 +51,36 @@ export function GanttHeaderLabel({ zoom, onZoomChange }: LabelProps) {
   )
 }
 
-export function GanttHeaderTimeline({ scale, today }: { scale: TimelineScale; today: Date }) {
+export function GanttHeaderTimeline({ scale }: { scale: TimelineScale; today: Date }) {
   const cells = headerCells(scale)
-  const ticks = scale.zoom === 'week' ? dayTicks(scale, today) : []
+  const isWeek = scale.zoom === 'week'
+  const bands = isWeek ? monthBands(scale) : []
+  const numbers = isWeek ? weekNumbers(scale) : []
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: '2px solid var(--navy)', width: timelineWidth(scale), height: headerHeightFor(scale.zoom) }}>
+      {/* Bandeau mois — vue semaine uniquement : une cellule fusionnée par mois,
+          4-5 colonnes semaine selon son nombre de lundis (format du planning de
+          référence). */}
+      {bands.map((b, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute', left: b.x, width: b.width, top: 0, height: MONTH_BAND_HEIGHT,
+            borderLeft: '1px solid var(--line)', boxSizing: 'border-box',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, fontWeight: 700, color: 'var(--navy)', textTransform: 'capitalize',
+            background: '#f8fafc',
+          }}
+        >
+          {b.label}
+        </div>
+      ))}
       {cells.map((c, i) => (
         <div
           key={i}
           style={{
-            position: 'absolute', left: c.x, width: c.width, top: 0, height: HEADER_HEIGHT, borderLeft: '1px solid var(--line)',
+            position: 'absolute', left: c.x, width: c.width, top: isWeek ? MONTH_BAND_HEIGHT : 0, height: HEADER_HEIGHT,
+            borderLeft: '1px solid var(--line)',
             background: c.isWeekend ? '#f8fafc' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 10, fontWeight: 600, color: 'var(--muted)', boxSizing: 'border-box',
           }}
@@ -66,19 +88,18 @@ export function GanttHeaderTimeline({ scale, today }: { scale: TimelineScale; to
           {c.label}
         </div>
       ))}
-      {/* Repères journaliers — uniquement en vue semaine, jamais une vue séparée. */}
-      {ticks.map((t, i) => (
+      {/* N° de semaine depuis le début réel du chantier — vue semaine uniquement. */}
+      {numbers.map((n, i) => (
         <div
           key={i}
           style={{
-            position: 'absolute', left: t.x, width: t.width, top: HEADER_HEIGHT, height: DAY_SUBROW_HEIGHT,
+            position: 'absolute', left: n.x, width: n.width, top: MONTH_BAND_HEIGHT + HEADER_HEIGHT, height: WEEK_NUMBER_HEIGHT,
             borderLeft: '1px solid var(--line)', boxSizing: 'border-box',
-            background: t.isToday ? 'rgba(220,38,38,.08)' : t.isWeekend ? '#f8fafc' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 9, fontWeight: t.isToday ? 800 : 500, color: t.isToday ? 'var(--bad)' : 'var(--muted)',
+            fontSize: 9, fontWeight: 600, color: 'var(--muted)', background: '#fbfcfe',
           }}
         >
-          {t.label}
+          S{n.label}
         </div>
       ))}
     </div>

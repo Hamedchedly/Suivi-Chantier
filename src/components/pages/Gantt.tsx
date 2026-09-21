@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { GanttTask } from '../../types/gantt'
 import {
@@ -121,7 +121,18 @@ export function Gantt() {
   const zoneOpts = useMemo(() => getZoneRefs().map(z => ({ id: z.refId, label: z.label, group: z.buildingLabel })), [])
   const concerns = useMemo(() => (taskId: string, unitId: string) => taskConcernsUnit(units, links, taskId, unitId), [units, links])
 
-  useEffect(() => { saveGanttTasks(ganttTasks) }, [ganttTasks])
+  // Écriture localStorage regroupée : évite une écriture synchrone à chaque
+  // frappe/drag (slider, dates) — l'état React reste à jour immédiatement,
+  // seule la persistance disque est différée. Un flush au démontage garantit
+  // qu'une dernière modification faite juste avant de quitter la page n'est
+  // jamais perdue.
+  const ganttTasksRef = useRef(ganttTasks)
+  useEffect(() => { ganttTasksRef.current = ganttTasks }, [ganttTasks])
+  useEffect(() => {
+    const timeout = setTimeout(() => saveGanttTasks(ganttTasks), 400)
+    return () => clearTimeout(timeout)
+  }, [ganttTasks])
+  useEffect(() => () => { saveGanttTasks(ganttTasksRef.current) }, [])
 
   // CPM : chemin critique + marges recalculés depuis le réseau de dépendances.
   const cpm = useMemo(() => computeCpm(ganttTasks), [ganttTasks])
@@ -244,6 +255,7 @@ export function Gantt() {
           tasks={displayTasks}
           commitments={commitments}
           operationId={getCurrentProjectId() ?? 'current'}
+          cpm={cpm}
           onDelayCauseChange={(id, cause) => setGanttTasks(prev => updateTaskInList(prev, id, { delay_cause: cause }))}
           onProgress={handleProgress}
           onPlannedDates={(id, updates) => handleTaskUpdate(id, {

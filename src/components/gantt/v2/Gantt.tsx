@@ -2,12 +2,13 @@
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { BarChart3, ArrowLeft, Search, X as XIcon } from 'lucide-react'
+import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
+import { CpmResult } from '../../../lib/cpm'
 import { toPlanningTasks, analyzePlanning, criticalPath as computeCriticalPath } from '../../../lib/planningEngine'
-import { ZoomLevel, computeTimelineRange, xForDate, dayTicks } from '../../../lib/planningViewModel'
+import { ZoomLevel, computeTimelineRange, xForDate, dayTicks, currentWeekBand, BASE_DAY_WIDTH } from '../../../lib/planningViewModel'
 import { GanttHeaderLabel, GanttHeaderTimeline, headerHeightFor } from './GanttHeader'
 import { GanttRowLabel, GanttRowTimeline, ROW_HEIGHT } from './GanttRow'
 import { GanttTooltip } from './GanttTooltip'
@@ -16,6 +17,13 @@ import { GanttAnalysis } from './GanttAnalysis'
 import { GanttMobileList } from './GanttMobileList'
 
 const LABEL_COLUMN_WIDTH = 240
+
+// Zoom continu (+/-) : facteur appliqué à BASE_DAY_WIDTH[zoom], indépendant
+// du sélecteur Semaine/Mois/Trimestre — ne recalcule jamais une date, comme
+// le zoom par palier existant (computeTimelineRange ne recadre que dayWidth).
+const ZOOM_MULTIPLIER_MIN = 0.4
+const ZOOM_MULTIPLIER_MAX = 3
+const ZOOM_MULTIPLIER_STEP = 0.2
 
 interface Row { task: PlanningTask; depth: number }
 
@@ -37,6 +45,10 @@ interface Props {
   tasks: GanttTask[]
   commitments: DateCommitment[]
   operationId: string
+  /** CPM déjà calculé par l'appelant (ex. pages/Gantt.tsx, pour appliquer la
+   * criticité à l'affichage) — évite de relancer computeCpm ici sur le même
+   * réseau de dépendances. Recalculé en interne si omis. */
+  cpm?: CpmResult
   onDelayCauseChange?: (taskId: string, cause: DelayCause | undefined) => void
   /** Édition — omis (ex. ShareView en lecture seule) : le panneau détail redevient purement informatif. */
   onProgress?: (taskId: string, progress: number) => void
@@ -51,11 +63,12 @@ interface Props {
 }
 
 export function PlanningGantt({
-  tasks, commitments, operationId, onDelayCauseChange,
+  tasks, commitments, operationId, cpm: precomputedCpm, onDelayCauseChange,
   onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove, onSubTaskAdd,
 }: Props) {
   const today = useMemo(() => new Date(), [])
   const [zoom, setZoom] = useState<ZoomLevel>('week')
+  const [zoomMultiplier, setZoomMultiplier] = useState(1)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [hover, setHover] = useState<{ task: PlanningTask; x: number; y: number } | null>(null)
@@ -87,13 +100,17 @@ export function PlanningGantt({
       .filter((t): t is PlanningTask => t !== null)
     return filter(planningTasks)
   }, [planningTasks, searchTerm])
-  const scale = useMemo(() => computeTimelineRange(filteredTasks, today, zoom), [filteredTasks, today, zoom])
+  const scale = useMemo(
+    () => computeTimelineRange(filteredTasks, today, zoom, BASE_DAY_WIDTH[zoom] * zoomMultiplier),
+    [filteredTasks, today, zoom, zoomMultiplier],
+  )
+  const todayBand = useMemo(() => currentWeekBand(scale, today), [scale, today])
   const rows = useMemo(() => { const out: Row[] = []; flattenRows(filteredTasks, 0, collapsed, out); return out }, [filteredTasks, collapsed])
   const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
 
   const analysis = useMemo(() => analyzePlanning(tasks, today), [tasks, today])
-  const cp = useMemo(() => computeCriticalPath(tasks), [tasks])
+  const cp = useMemo(() => computeCriticalPath(tasks, precomputedCpm), [tasks, precomputedCpm])
   const titleById = useMemo(() => {
     const m = new Map<string, string>()
     for (const [id, t] of ganttById) m.set(id, t.title)
@@ -161,12 +178,17 @@ export function PlanningGantt({
         ) : (
           <Legend />
         )}
-        <button
-          onClick={() => setShowAnalysis(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: '#eef2f6', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', flexShrink: 0 }}
-        >
-          <BarChart3 size={14} /> Analyse
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {!showMobileList && (
+            <ZoomControl multiplier={zoomMultiplier} onChange={setZoomMultiplier} />
+          )}
+          <button
+            onClick={() => setShowAnalysis(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: '#eef2f6', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', flexShrink: 0 }}
+          >
+            <BarChart3 size={14} /> Analyse
+          </button>
+        </div>
       </div>
 
       {showMobileList ? (
@@ -216,11 +238,15 @@ export function PlanningGantt({
               }}
             />
           ))}
-          {/* Ligne « aujourd'hui » : traverse toutes les lignes, reste alignée pendant le scroll. */}
-          <div style={{
-            position: 'absolute', top: headerHeightFor(zoom), left: xForDate(today, scale),
-            width: 2, height: rows.length * ROW_HEIGHT, background: 'var(--bad)', pointerEvents: 'none', zIndex: 1,
-          }} />
+          {/* Bande « aujourd'hui » : toute la colonne de la semaine courante,
+              traverse toutes les lignes, reste alignée pendant le scroll —
+              format du planning de référence (remplace l'ancienne ligne fine). */}
+          {todayBand && (
+            <div style={{
+              position: 'absolute', top: headerHeightFor(zoom), left: todayBand.x, width: todayBand.width,
+              height: rows.length * ROW_HEIGHT, background: 'rgba(220,38,38,.07)', pointerEvents: 'none', zIndex: 1,
+            }} />
+          )}
           {rows.map(({ task }) => (
             <GanttRowTimeline
               key={task.id}
@@ -245,6 +271,7 @@ export function PlanningGantt({
 
       {selectedTask && (
         <GanttDetails
+          key={selectedTask.id}
           task={selectedTask}
           allTasksById={planningById}
           onClose={() => setSelectedId(null)}
@@ -262,6 +289,37 @@ export function PlanningGantt({
       {showAnalysis && (
         <GanttAnalysis analysis={analysis} criticalPath={cp} taskTitleById={titleById} onClose={() => setShowAnalysis(false)} />
       )}
+    </div>
+  )
+}
+
+/** Zoom continu, indépendant du sélecteur Semaine/Mois/Trimestre — ne change
+ * que l'échelle graphique (dayWidth), jamais une date. */
+function ZoomControl({ multiplier, onChange }: { multiplier: number; onChange: (m: number) => void }) {
+  const btnStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26,
+    border: '1px solid var(--line)', borderRadius: 6, background: '#fff', color: 'var(--navy)', cursor: 'pointer',
+  }
+  const disabledStyle: React.CSSProperties = { opacity: 0.4, cursor: 'not-allowed' }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button
+        onClick={() => onChange(Math.max(ZOOM_MULTIPLIER_MIN, Math.round((multiplier - ZOOM_MULTIPLIER_STEP) * 10) / 10))}
+        disabled={multiplier <= ZOOM_MULTIPLIER_MIN}
+        title="Dézoomer"
+        style={multiplier <= ZOOM_MULTIPLIER_MIN ? { ...btnStyle, ...disabledStyle } : btnStyle}
+      >
+        <ZoomOut size={13} />
+      </button>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', width: 32, textAlign: 'center' }}>{Math.round(multiplier * 100)}%</span>
+      <button
+        onClick={() => onChange(Math.min(ZOOM_MULTIPLIER_MAX, Math.round((multiplier + ZOOM_MULTIPLIER_STEP) * 10) / 10))}
+        disabled={multiplier >= ZOOM_MULTIPLIER_MAX}
+        title="Zoomer"
+        style={multiplier >= ZOOM_MULTIPLIER_MAX ? { ...btnStyle, ...disabledStyle } : btnStyle}
+      >
+        <ZoomIn size={13} />
+      </button>
     </div>
   )
 }

@@ -1,9 +1,11 @@
 // Barre de tâche à trois couches : contractuel (référence), réel (constaté),
 // prévision (uniquement quand elle diffère du contractuel — jamais 4 couches
 // à la fois : le prévisionnel n'est affiché QUE lorsqu'il y a un écart).
+import { memo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { PlanningTask } from '../../../types/planning'
 import { TimelineScale, xForDate, widthForRange } from '../../../lib/planningViewModel'
+import { sameRenderTask } from './ganttMemo'
 
 export const BAR_HEIGHT = 16
 
@@ -45,7 +47,7 @@ interface Props {
   onClick?: () => void
 }
 
-export function GanttBar({ task, scale, today, onEnter, onLeave, onClick }: Props) {
+export const GanttBar = memo(function GanttBar({ task, scale, today, onEnter, onLeave, onClick }: Props) {
   const contractX = xForDate(task.contract.start, scale)
   const contractW = widthForRange(task.contract.start, task.contract.end, scale)
 
@@ -113,4 +115,10 @@ export function GanttBar({ task, scale, today, onEnter, onLeave, onClick }: Prop
       )}
     </div>
   )
-}
+}, (prev, next) =>
+  prev.today.getTime() === next.today.getTime() &&
+  prev.scale.start.getTime() === next.scale.start.getTime() &&
+  prev.scale.end.getTime() === next.scale.end.getTime() &&
+  prev.scale.dayWidth === next.scale.dayWidth &&
+  prev.scale.zoom === next.scale.zoom &&
+  sameRenderTask(prev.task, next.task))
