@@ -2,13 +2,13 @@
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut } from 'lucide-react'
+import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut, LayoutList, GanttChartSquare } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
 import { CpmResult } from '../../../lib/cpm'
-import { toPlanningTasks, analyzePlanning, criticalPath as computeCriticalPath } from '../../../lib/planningEngine'
-import { ZoomLevel, computeTimelineRange, xForDate, dayTicks, currentWeekBand, BASE_DAY_WIDTH } from '../../../lib/planningViewModel'
+import { toPlanningTasks, analyzePlanning, criticalPath as computeCriticalPath, isTaskGroupCompleted } from '../../../lib/planningEngine'
+import { ZoomLevel, computeTimelineRange, xForDate, headerCells, currentWeekBand, BASE_DAY_WIDTH } from '../../../lib/planningViewModel'
 import { GanttHeaderLabel, GanttHeaderTimeline, headerHeightFor } from './GanttHeader'
 import { GanttRowLabel, GanttRowTimeline, ROW_HEIGHT } from './GanttRow'
 import { GanttTooltip } from './GanttTooltip'
@@ -78,9 +78,14 @@ export function PlanningGantt({
   // une liste de cartes par défaut, la frise reste accessible sur demande.
   const isMobile = useMemo(() => typeof window !== 'undefined' && window.innerWidth < 768, [])
   const [showTimelineOnMobile, setShowTimelineOnMobile] = useState(false)
+  // Section 4 du sprint Planning/Journal CR : même choix [Liste][Gantt] sur
+  // desktop que sur mobile (bouton « Voir le Gantt »/« Retour à la liste »),
+  // vue par défaut = Gantt sur desktop (Liste sur mobile, inchangé).
+  const [desktopView, setDesktopView] = useState<'gantt' | 'liste'>('gantt')
   const labelPaneRef = useRef<HTMLDivElement>(null)
   const timelinePaneRef = useRef<HTMLDivElement>(null)
   const syncingRef = useRef(false)
+  const collapseInitDone = useRef(false)
 
   const planningTasks = useMemo(
     () => toPlanningTasks(tasks, { operationId, commitments }),
@@ -108,6 +113,35 @@ export function PlanningGantt({
   const rows = useMemo(() => { const out: Row[] = []; flattenRows(filteredTasks, 0, collapsed, out); return out }, [filteredTasks, collapsed])
   const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
+
+  // Section 1.1 : groupes (lots, et toute tâche à enfants) terminés au sens
+  // isTaskGroupCompleted — calculé une seule fois ici (jamais dans la ligne
+  // elle-même, dont le comparateur React.memo ne regarde pas les enfants).
+  const completedGroupIds = useMemo(() => {
+    const ids = new Set<string>()
+    const walk = (list: PlanningTask[]) => {
+      for (const t of list) {
+        if (t.children?.length) {
+          if (isTaskGroupCompleted(t)) ids.add(t.id)
+          walk(t.children)
+        }
+      }
+    }
+    walk(planningTasks)
+    return ids
+  }, [planningTasks])
+
+  // Section 1.2 : repli automatique au CHARGEMENT uniquement — un lot terminé
+  // démarre replié, un lot non terminé reste ouvert, mais un repli/dépli
+  // manuel ultérieur de l'utilisateur n'est plus jamais écrasé par ce calcul
+  // (collapseInitDone garde l'effet à un seul déclenchement, à la première
+  // fois que des tâches sont disponibles).
+  useEffect(() => {
+    if (collapseInitDone.current || planningTasks.length === 0) return
+    collapseInitDone.current = true
+    if (completedGroupIds.size === 0) return
+    setCollapsed(prev => new Set([...prev, ...completedGroupIds]))
+  }, [planningTasks, completedGroupIds])
 
   const analysis = useMemo(() => analyzePlanning(tasks, today), [tasks, today])
   const cp = useMemo(() => computeCriticalPath(tasks, precomputedCpm), [tasks, precomputedCpm])
@@ -147,7 +181,13 @@ export function PlanningGantt({
     syncingRef.current = false
   }
 
-  const showMobileList = isMobile && !showTimelineOnMobile
+  // Section 4 : même bascule [Liste]/[Gantt] des deux côtés — sur mobile elle
+  // reste pilotée par showTimelineOnMobile (bouton « Voir le Gantt » interne à
+  // GanttMobileList, inchangé) ; sur desktop par desktopView (nouveaux boutons
+  // dans la barre d'outils, ci-dessous). Le mode Par lot / Par logement (hors
+  // de ce composant) reste indépendant de ce choix.
+  const showListView = isMobile ? !showTimelineOnMobile : desktopView === 'liste'
+  const goToGanttView = () => (isMobile ? setShowTimelineOnMobile(true) : setDesktopView('gantt'))
 
   return (
     <div>
@@ -173,13 +213,16 @@ export function PlanningGantt({
           >
             <ArrowLeft size={14} /> Retour à la liste
           </button>
-        ) : showMobileList ? (
+        ) : showListView ? (
           <span />
         ) : (
           <Legend />
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {!showMobileList && (
+          {!isMobile && (
+            <ViewToggle view={desktopView} onChange={setDesktopView} />
+          )}
+          {!showListView && (
             <ZoomControl multiplier={zoomMultiplier} onChange={setZoomMultiplier} />
           )}
           <button
@@ -191,11 +234,11 @@ export function PlanningGantt({
         </div>
       </div>
 
-      {showMobileList ? (
+      {showListView ? (
         <GanttMobileList
           tasks={filteredTasks}
           onSelect={t => setSelectedId(t.id)}
-          onShowTimeline={() => setShowTimelineOnMobile(true)}
+          onShowTimeline={goToGanttView}
         />
       ) : (
       <div style={{ display: 'flex', border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden' }}>
@@ -216,6 +259,7 @@ export function PlanningGantt({
               onToggleExpand={() => toggle(task.id)}
               onSelect={t => setSelectedId(t.id)}
               highlighted={cp.criticalIds.has(task.id)}
+              isCompleted={completedGroupIds.has(task.id)}
             />
           ))}
         </div>
@@ -227,24 +271,28 @@ export function PlanningGantt({
           style={{ position: 'relative', flex: 1, maxHeight: '70vh', overflow: 'auto' }}
         >
           <GanttHeaderTimeline scale={scale} today={today} />
-          {/* Repères journaliers dans le corps de la frise — grille légère, vue semaine uniquement. */}
-          {scale.zoom === 'week' && dayTicks(scale, today).map((t, i) => (
+          {/* Seule grille verticale du corps : les colonnes SEMAINE (section 2 du
+              sprint Planning/Journal CR) — plus de repères journaliers, plus de
+              distinction samedi/dimanche, alignés pixel pour pixel sur l'en-tête
+              (mêmes cellules que headerCells, réutilisées par GanttHeaderTimeline). */}
+          {scale.zoom === 'week' && headerCells(scale).map((c, i) => (
             <div
               key={i}
               style={{
-                position: 'absolute', top: headerHeightFor(zoom), left: t.x, width: t.width,
-                height: rows.length * ROW_HEIGHT, borderLeft: '1px solid #f1f5f9',
-                background: t.isWeekend ? 'rgba(2,69,122,.02)' : undefined, pointerEvents: 'none',
+                position: 'absolute', top: headerHeightFor(zoom), left: c.x, width: c.width,
+                height: rows.length * ROW_HEIGHT, borderLeft: '1px solid #f1f5f9', pointerEvents: 'none',
               }}
             />
           ))}
-          {/* Bande « aujourd'hui » : toute la colonne de la semaine courante,
-              traverse toutes les lignes, reste alignée pendant le scroll —
-              format du planning de référence (remplace l'ancienne ligne fine). */}
+          {/* Bande « semaine courante » : toute la colonne, traverse toutes les
+              lignes, reste alignée pendant le scroll (section 3) — teinte navy
+              discrète, cohérente avec le reste de l'UI (déjà utilisée pour les
+              barres contractuelles), pour ne pas être confondue avec le rouge
+              qui signale un blocage/retard ailleurs sur cette même page. */}
           {todayBand && (
             <div style={{
               position: 'absolute', top: headerHeightFor(zoom), left: todayBand.x, width: todayBand.width,
-              height: rows.length * ROW_HEIGHT, background: 'rgba(220,38,38,.07)', pointerEvents: 'none', zIndex: 1,
+              height: rows.length * ROW_HEIGHT, background: 'rgba(2,69,122,.06)', pointerEvents: 'none', zIndex: 1,
             }} />
           )}
           {rows.map(({ task }) => (
@@ -263,7 +311,7 @@ export function PlanningGantt({
       </div>
       )}
 
-      {!showMobileList && rows.length === 0 && (
+      {!showListView && rows.length === 0 && (
         <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Aucune tâche planifiée.</div>
       )}
 
@@ -320,6 +368,22 @@ function ZoomControl({ multiplier, onChange }: { multiplier: number; onChange: (
       >
         <ZoomIn size={13} />
       </button>
+    </div>
+  )
+}
+
+/** Bascule [Liste][Gantt] desktop (section 4) — même choix que mobile, vue
+ * par défaut = Gantt. Le mode Par lot / Par logement reste indépendant. */
+function ViewToggle({ view, onChange }: { view: 'gantt' | 'liste'; onChange: (v: 'gantt' | 'liste') => void }) {
+  const btn = (v: 'gantt' | 'liste'): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 5, border: 'none',
+    cursor: 'pointer', fontSize: 11, fontWeight: 600,
+    background: view === v ? '#fff' : 'transparent', color: view === v ? '#02457A' : '#5b7183',
+  })
+  return (
+    <div style={{ display: 'flex', gap: 2, background: '#eef2f6', padding: 2, borderRadius: 7, flexShrink: 0 }}>
+      <button onClick={() => onChange('liste')} style={btn('liste')}><LayoutList size={13} /> Liste</button>
+      <button onClick={() => onChange('gantt')} style={btn('gantt')}><GanttChartSquare size={13} /> Gantt</button>
     </div>
   )
 }

@@ -36,6 +36,27 @@ export function deriveTaskStatus(progress: number, current: TaskStatus): TaskSta
   return 'not-started'
 }
 
+function collectLeaves(task: PlanningTask, acc: PlanningTask[] = []): PlanningTask[] {
+  if (task.children?.length) { for (const c of task.children) collectLeaves(c, acc) } else acc.push(task)
+  return acc
+}
+
+/**
+ * Un groupe (lot, ou toute tâche à enfants) est TERMINÉ quand son avancement
+ * remonté (déjà pondéré par planned_duration, milestones/N-A déjà exclus —
+ * voir rollup.ts) vaut 100 % ET qu'aucun blocage actif ne subsiste dans ses
+ * feuilles. Ne dépend jamais du seul champ `status` du groupe lui-même : un
+ * blocage posé sur une feuille peut laisser le statut du lot obsolète
+ * (« in-progress ») alors que le rollup réel a déjà atteint 100 % ailleurs,
+ * ou inversement laisser un lot à 100 % afficher « terminé » alors qu'une de
+ * ses feuilles reste bloquée (section 1.1 du sprint Planning/Journal CR).
+ */
+export function isTaskGroupCompleted(task: PlanningTask): boolean {
+  if (task.progress < 100) return false
+  if (task.status === 'blocked') return false
+  return !collectLeaves(task).some(t => t.status === 'blocked')
+}
+
 // ── Variance ───────────────────────────────────────────────────────────────
 
 /** calculateScheduleVariance — les quatre écarts distincts (section 15 du brief) :
@@ -202,6 +223,7 @@ export function indexTasksById(tasks: GanttTask[]): Map<string, GanttTask> {
 
 export const PlanningEngine = {
   deriveTaskStatus,
+  isTaskGroupCompleted,
   calculateScheduleVariance,
   toPlanningTask,
   toPlanningTasks,
