@@ -20,6 +20,7 @@ import { Comptes } from './components/pages/Comptes'
 import { MonCompte } from './components/pages/MonCompte'
 import { Projets } from './components/pages/Projets'
 import { Structure } from './components/pages/Structure'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Navigation } from './components/layout/Navigation'
 import { SideNav } from './components/layout/SideNav'
 import { GestionSheet } from './components/layout/GestionSheet'
@@ -431,6 +432,7 @@ export default function App() {
         ))}
         <Topbar title={meta.title} sub={meta.sub} right={accountMenu} />
         <div className="app-body">
+        <ErrorBoundary key={page} onBack={() => go('home')}>
           {page === 'projets' && (
             <Projets
               projects={projects}
@@ -475,6 +477,7 @@ export default function App() {
           {allowed('alertes') && page === 'alertes'  && <Alertes />}
           {allowed('structure') && page === 'structure' && <Structure />}
           {allowed('config') && page === 'config'   && <Config project={project ?? null} onProjectChange={setProjects} projects={projects} />}
+        </ErrorBoundary>
         </div>
       </div>
 
