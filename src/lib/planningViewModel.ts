@@ -20,6 +20,18 @@ const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: 14, month: 5, quarter:
 const PADDING_DAYS: Record<ZoomLevel, number> = { week: 10, month: 20, quarter: 45 }
 
 const MS_DAY = 86400000
+
+// Garde-fou (même principe que calendar.ts : nextWorkingDay/addWorkingDays/
+// workingDaysBetween, qui bornent déjà leurs boucles jour par jour avec un
+// guard). Une date de tâche corrompue mais valide au sens JS (donc jamais
+// détectée par un typeof/instanceof) peut échapper à toute validation en
+// amont ; sans plafond, la frise calculée ferait tourner headerCells/
+// dayTicks des dizaines de milliers de fois et produirait une largeur CSS
+// démesurée — CPU proche de 100 %, mémoire qui grossit en continu (tuiles
+// DOM créées en boucle), sans jamais lever d'exception. 20 000 jours
+// (~54 ans) dépasse très largement tout planning de chantier réel.
+const MAX_DAY_ITERATIONS = 20_000
+
 const startOfDay = (d: Date): Date => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 export const addDays = (d: Date, n: number): Date => new Date(startOfDay(d).getTime() + n * MS_DAY)
 export const diffDays = (a: Date, b: Date): number => Math.round((startOfDay(a).getTime() - startOfDay(b).getTime()) / MS_DAY)
@@ -49,7 +61,13 @@ export function computeTimelineRange(tasks: PlanningTask[], today: Date, zoom: Z
   const dates: Date[] = [today]
   collectDates(tasks, dates)
   const minT = Math.min(...dates.map(d => d.getTime()))
-  const maxT = Math.max(...dates.map(d => d.getTime()))
+  let maxT = Math.max(...dates.map(d => d.getTime()))
+  // Clippe la plage pathologique (voir MAX_DAY_ITERATIONS) plutôt que de
+  // laisser la largeur de frise et les boucles de rendu grossir sans borne ;
+  // une plage normale (bornée aux vraies dates des tâches) n'est jamais
+  // affectée, seul le cas aberrant l'est.
+  const maxSpanMs = MAX_DAY_ITERATIONS * MS_DAY
+  if (Number.isFinite(minT) && Number.isFinite(maxT) && maxT - minT > maxSpanMs) maxT = minT + maxSpanMs
   const pad = PADDING_DAYS[zoom]
   return { start: addDays(new Date(minT), -pad), end: addDays(new Date(maxT), pad), dayWidth: width, zoom }
 }
@@ -88,17 +106,18 @@ const firstOfQuarter = (d: Date): Date => new Date(d.getFullYear(), Math.floor(d
 /** Cellules d'en-tête pour le niveau de zoom courant — jour, semaine, mois ou trimestre. */
 export function headerCells(scale: TimelineScale): HeaderCell[] {
   const cells: HeaderCell[] = []
+  let guard = 0
   if (scale.zoom === 'week') {
-    for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime(); cur = addDays(cur, 7)) {
+    for (let cur = mondayOf(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addDays(cur, 7)) {
       cells.push({ x: xForDate(cur, scale), width: scale.dayWidth * 7, label: cur.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' }) })
     }
   } else if (scale.zoom === 'month') {
-    for (let cur = firstOfMonth(scale.start); cur.getTime() < scale.end.getTime(); cur = addMonths(cur, 1)) {
+    for (let cur = firstOfMonth(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addMonths(cur, 1)) {
       const next = addMonths(cur, 1)
       cells.push({ x: xForDate(cur, scale), width: diffDays(next, cur) * scale.dayWidth, label: cur.toLocaleDateString('fr', { month: 'short', year: '2-digit' }) })
     }
   } else {
-    for (let cur = firstOfQuarter(scale.start); cur.getTime() < scale.end.getTime(); cur = addMonths(cur, 3)) {
+    for (let cur = firstOfQuarter(scale.start); cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addMonths(cur, 3)) {
       const next = addMonths(cur, 3)
       cells.push({ x: xForDate(cur, scale), width: diffDays(next, cur) * scale.dayWidth, label: `T${Math.floor(cur.getMonth() / 3) + 1} ${cur.getFullYear()}` })
     }
@@ -112,7 +131,8 @@ export interface DayTick { x: number; width: number; label: string; isWeekend: b
  * uniquement affichés en sous-ligne de l'en-tête semaine et en grille légère. */
 export function dayTicks(scale: TimelineScale, today: Date): DayTick[] {
   const ticks: DayTick[] = []
-  for (let cur = scale.start; cur.getTime() < scale.end.getTime(); cur = addDays(cur, 1)) {
+  let guard = 0
+  for (let cur = scale.start; cur.getTime() < scale.end.getTime() && guard++ < MAX_DAY_ITERATIONS; cur = addDays(cur, 1)) {
     const dow = cur.getDay()
     ticks.push({
       x: xForDate(cur, scale), width: scale.dayWidth,

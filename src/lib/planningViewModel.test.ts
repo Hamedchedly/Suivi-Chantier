@@ -104,3 +104,38 @@ describe('zoomIn / zoomOut', () => {
     expect(zoomOut('week')).toBe('month')
   })
 })
+
+// Reproduction du crash Planning en production (CPU ~100 %, mémoire qui
+// grossit en continu, aucune exception dans la console — signature d'une
+// boucle non bornée, pas d'un throw JS). Une date de tâche valide au sens JS
+// mais aberrante (des décennies d'écart) faisait tourner headerCells/
+// dayTicks des dizaines de milliers de fois et produisait une largeur CSS
+// démesurée. Ces tests prouvent que le garde-fou borne bien le résultat,
+// sans changer le comportement d'une plage normale (déjà couvert ci-dessus).
+describe('garde-fou plage pathologique (bug Planning — CPU/mémoire sans exception)', () => {
+  it('computeTimelineRange clippe une plage de plusieurs siècles au lieu de la laisser exploser', () => {
+    const farFuture = new Date(2400, 0, 1) // des centaines d'années après d(0)
+    const scale = computeTimelineRange([task({ contract: { start: d(0), end: farFuture } })], d(0), 'week')
+    const spanDays = Math.round((scale.end.getTime() - scale.start.getTime()) / 86_400_000)
+    expect(spanDays).toBeLessThan(20_100) // MAX_DAY_ITERATIONS (20 000) + marge, pas des siècles
+  })
+
+  it('une plage normale (des mois, pas des siècles) n\'est jamais clippée — même comportement qu\'avant', () => {
+    const scale = computeTimelineRange([task({ contract: { start: d(0), end: d(390) } })], d(0), 'week')
+    expect(scale.start.getTime()).toBeLessThanOrEqual(d(0).getTime())
+    expect(scale.end.getTime()).toBeGreaterThanOrEqual(d(390).getTime())
+  })
+
+  it('dayTicks reste borné (pas des dizaines de milliers d\'éléments) même sur une plage pathologique directe', () => {
+    const pathological = { start: new Date(2026, 0, 1), end: new Date(2400, 0, 1), dayWidth: 14, zoom: 'week' as const }
+    const ticks = dayTicks(pathological, new Date(2026, 0, 1))
+    expect(ticks.length).toBeLessThanOrEqual(20_000)
+  })
+
+  it('headerCells reste borné sur une plage pathologique directe, dans les trois niveaux de zoom', () => {
+    const pathological = { start: new Date(2026, 0, 1), end: new Date(2400, 0, 1), dayWidth: 5, zoom: 'month' as const }
+    expect(headerCells(pathological).length).toBeLessThanOrEqual(20_000)
+    expect(headerCells({ ...pathological, zoom: 'quarter' }).length).toBeLessThanOrEqual(20_000)
+    expect(headerCells({ ...pathological, zoom: 'week' }).length).toBeLessThanOrEqual(20_000)
+  })
+})
