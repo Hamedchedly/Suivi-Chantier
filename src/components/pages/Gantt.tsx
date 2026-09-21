@@ -7,7 +7,7 @@ import {
   getProgressHistory, saveProgressHistory, getActualDateOverrides, saveActualDateOverrides,
 } from '../../lib/repo'
 import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
-import { createTask, createSubTask, recomputeAll, durationBetween } from '../../lib/planning'
+import { createTask, createSubTask, recomputeAll, durationBetween, setTaskDependencies } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
 import { applyDerivedActualDates, ActualDateField, ActualDateOverride } from '../../lib/actualDates'
 import { appendProgressEntry, deriveCalculatedEntries, withGenesisEntries, isoDay } from '../../lib/progressHistory'
@@ -34,6 +34,14 @@ const mapTaskInList = (list: GanttTask[], id: string, fn: (t: GanttTask) => Gant
     if (t.children?.length) return { ...t, children: mapTaskInList(t.children, id, fn) }
     return t
   })
+
+const findTaskInList = (list: GanttTask[], id: string): GanttTask | undefined => {
+  for (const t of list) {
+    if (t.id === id) return t
+    if (t.children?.length) { const found = findTaskInList(t.children, id); if (found) return found }
+  }
+  return undefined
+}
 
 function makeParent(id: string, title: string, children: GanttTask[]): GanttTask {
   const min = (f: (c: GanttTask) => number) => new Date(Math.min(...children.map(f)))
@@ -307,7 +315,22 @@ export function Gantt() {
           onActualStart={(id, date) => recordActualOverride(id, 'actual_start', date)}
           onActualEnd={(id, date) => recordActualOverride(id, 'actual_end', date)}
           onDependencyAdd={(id, depId) =>
-            setGanttTasks(prev => mapTaskInList(prev, id, t => ({ ...t, dependencies: [...t.dependencies.filter(d => d !== depId), depId] })))
+            setGanttTasks(prev => {
+              const current = findTaskInList(prev, id)
+              if (!current) return prev
+              const deps = [...current.dependencies.filter(d => d !== depId), depId]
+              // setTaskDependencies refuse toute relation qui fermerait un
+              // cycle (voir planning.ts:wouldCreateCycle) — le moteur CPM ne
+              // supporte pas les graphes cycliques.
+              const res = setTaskDependencies(prev, id, deps)
+              if (!res.ok) {
+                window.alert(res.error === 'cycle_detected'
+                  ? 'Impossible : cette relation créerait une boucle de dépendances (A → … → A).'
+                  : 'Impossible d\'ajouter cette dépendance.')
+                return prev
+              }
+              return res.tasks
+            })
           }
           onDependencyRemove={(id, depId) =>
             setGanttTasks(prev => mapTaskInList(prev, id, t => ({ ...t, dependencies: t.dependencies.filter(d => d !== depId) })))

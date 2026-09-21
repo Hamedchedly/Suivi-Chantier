@@ -545,10 +545,23 @@ export function generalNotes(v: Visit): VisitNote[] {
 
 // ── Applying the session back onto the planning ──────────────────────────────
 
-function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatus {
+/**
+ * DÉFECTUOSITÉ CORRIGÉE (gate de stabilisation, commit 815807e) : quand cette
+ * visite ne signale plus de blocage (check.state !== 'blocked', ex. le dernier
+ * bloqueur vient d'être retiré), il ne faut pas transmettre tel quel le statut
+ * potentiellement encore 'blocked' du GanttTask à deriveTaskStatus() — son
+ * propre garde-fou de collant ("blocked" ne se lève jamais tout seul)
+ * réappliquerait alors un blocage que CETTE visite vient explicitement de
+ * lever, empêchant à jamais la tâche d'atteindre 'completed' même à 100 %.
+ * Le garde-fou reste volontairement inchangé pour tout appelant qui n'a pas
+ * ce signal (ex. le curseur manuel de pages/Gantt.tsx) — seule la remontée
+ * d'une visite peut légitimement décider qu'un blocage est levé.
+ */
+export function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatus {
   if (check.state === 'blocked') return 'blocked'
   if (check.progress === undefined) return current
-  return deriveTaskStatus(check.progress, current)
+  const base = current === 'blocked' ? 'in-progress' : current
+  return deriveTaskStatus(check.progress, base)
 }
 
 /**

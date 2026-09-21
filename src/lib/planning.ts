@@ -16,13 +16,14 @@ import { GanttTask } from '../types/gantt'
 import { deriveTaskStatus } from './planningEngine'
 import { weightedProgress } from './rollup'
 
-export type PlanningError = 'title_required' | 'lot_not_found' | 'code_taken' | 'not_found'
+export type PlanningError = 'title_required' | 'lot_not_found' | 'code_taken' | 'not_found' | 'cycle_detected'
 
 export const PLANNING_ERROR_LABEL: Record<PlanningError, string> = {
   title_required: 'Le libellé est obligatoire.',
   lot_not_found: 'Lot introuvable.',
   code_taken: 'Un lot porte déjà ce code.',
   not_found: 'Tâche introuvable.',
+  cycle_detected: 'Cette relation créerait une boucle de dépendances (A bloque B bloque … bloque A) — le moteur de planification ne peut pas la traiter.',
 }
 
 export interface PlanningResult {
@@ -267,8 +268,39 @@ export function removeTask(tasks: GanttTask[], id: string): PlanningResult {
   return { ok: true, tasks: recomputeAll(next) }
 }
 
-/** Assigne la liste de prédécesseurs d'une tâche (ID quelconque dans l'arbre). */
+/**
+ * Le moteur CPM (cpm.ts) ne supporte pas les graphes cycliques : il s'en
+ * protège déjà en se dégradant proprement (hasCycle=true, chemin critique
+ * vide, aucun crash) — mais jusqu'ici rien n'empêchait un cycle d'être ÉCRIT
+ * dans dependencies en premier lieu, ce qui désactivait silencieusement le
+ * chemin critique et l'auto-replanification pour TOUT le projet, pas
+ * seulement les tâches concernées. Détecté par le gate de stabilisation
+ * (scénario 4) : refuser la création plutôt que de la tolérer et dégrader
+ * silencieusement plus tard.
+ */
+function wouldCreateCycle(tasks: GanttTask[], taskId: string, newDeps: string[]): boolean {
+  const byId = new Map<string, GanttTask>()
+  const index = (list: GanttTask[]) => {
+    for (const t of list) { byId.set(t.id, t); if (t.children?.length) index(t.children) }
+  }
+  index(tasks)
+
+  const visited = new Set<string>()
+  const stack = [...newDeps]
+  while (stack.length) {
+    const cur = stack.pop()!
+    if (cur === taskId) return true
+    if (visited.has(cur)) continue
+    visited.add(cur)
+    stack.push(...(byId.get(cur)?.dependencies ?? []))
+  }
+  return false
+}
+
+/** Assigne la liste de prédécesseurs d'une tâche (ID quelconque dans l'arbre).
+ * Refuse toute écriture qui fermerait un cycle (voir wouldCreateCycle). */
 export function setTaskDependencies(tasks: GanttTask[], id: string, deps: string[]): PlanningResult {
+  if (wouldCreateCycle(tasks, id, deps)) return { ok: false, tasks, error: 'cycle_detected' }
   const { tasks: next, found } = mapTask(tasks, id, t => ({ ...t, dependencies: deps }))
   if (!found) return { ok: false, tasks, error: 'not_found' }
   return { ok: true, tasks: next }
