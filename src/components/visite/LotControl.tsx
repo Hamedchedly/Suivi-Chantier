@@ -7,7 +7,7 @@ import {
   VisitZone, VisitTaskCheck, PreviousObservation,
   tasksState, tasksWorksProgress, progressGap, stateAfterEdit,
 } from '../../lib/visits'
-import { DateCommitment, latestCommitment, isBroken } from '../../lib/commitments'
+import { DateCommitment, CommitmentType, latestCommitment, isBroken } from '../../lib/commitments'
 import { Reserve, reserveKind } from '../../lib/reserves'
 import { VisitPhoto } from '../../lib/photoStore'
 import { weekToFriday, weekLabel, dateToWeek } from '../../lib/weeks'
@@ -218,7 +218,7 @@ export function LotControl(props: Props) {
 
 // ── One task ─────────────────────────────────────────────────────────────────
 
-type Panel = null | 'menu' | 'photo' | 'observation' | 'action' | 'engagement' | 'blockers' | 'overflow-menu'
+type Panel = null | 'photo' | 'engagement' | 'blockers' | 'overflow-menu'
 
 function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark, onAddSubTask }: {
   task: VisitTaskCheck
@@ -245,7 +245,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
   const [subAdded, setSubAdded] = useState<string | null>(null)
-  const [noteForm, setNoteForm] = useState<{ text: string; delayDays: number; important: boolean } | null>(null)
+  const [noteForm, setNoteForm] = useState<{ text: string; delayDays: number; important: boolean; engagementDate: string; engagementType: CommitmentType } | null>(null)
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
@@ -273,6 +273,18 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       dueDate: noteForm.delayDays > 0 ? dueDate : undefined,
       priority: noteForm.important ? 'high' : 'low',
     })
+    // Une note avec une date devient un engagement — même mécanisme d'écriture
+    // que le menu « Engagement » (promisedWeek/promisedEnd), jamais un second
+    // chemin parallèle : la note reste conservée comme note dans tous les cas.
+    if (noteForm.engagementDate) {
+      const promisedWeek = dateToWeek(noteForm.engagementDate)
+      onPatch({
+        promisedLabel: noteForm.text.trim(),
+        promisedWeek,
+        promisedEnd: weekToFriday(promisedWeek) ?? undefined,
+        promisedType: noteForm.engagementType,
+      })
+    }
     setNoteForm(null)
   }
   const submitEdit = () => {
@@ -283,6 +295,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const delta = previous?.progress !== undefined && task.progress !== undefined ? task.progress - previous.progress : null
   const broken = commitment && task.plannedEnd ? isBroken(commitment, task.promisedEnd ?? task.plannedEnd) : false
   const blockers = task.blockedBy ?? []
+  const blocks = task.blocks ?? []
   const isNa = task.state === 'na'
 
   const checked = task.progress !== undefined
@@ -297,8 +310,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const patchProgress = (progress: number) =>
     onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
 
-  const patchBlockers = (blockedBy: string[]) =>
+  const patchBlockedBy = (blockedBy: string[]) =>
     onPatch({ blockedBy: blockedBy.length ? blockedBy : undefined, state: stateAfterEdit({ ...task, blockedBy }) })
+
+  const patchBlocks = (blocks: string[]) =>
+    onPatch({ blocks: blocks.length ? blocks : undefined })
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -326,6 +342,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
     )
   }
 
+  const blockCount = blockers.length + blocks.length
+
   return (
     <div style={{ border: '1px solid var(--line)', borderRadius: '12px', background: '#fff', padding: '14px', marginBottom: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px' }}>
@@ -338,40 +356,33 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             <Check size={14} />
           </button>
         )}
+        {/* Un seul bouton d'actions : photo / note / sous-tâche / blocages, et
+            en second groupe les actions plus rares déjà existantes (titre,
+            engagement, N/A) — jamais une rangée de gros boutons permanents. */}
         {!readOnly && (
-          <button onClick={() => setEditForm({ title: task.title, start: '', end: '' })} title="Éditer le titre" style={miniBtn('#0284c7', !!editForm)}>
-            <Pencil size={14} />
-          </button>
-        )}
-        {!readOnly && (
-          <>
-            {onAddSubTask && (
-              <button
-                onClick={() => setSubForm(f => f ? null : { title: '', start: todayStr, duration: '5' })}
-                title="Ajouter une sous-tâche"
-                style={{ ...miniBtn('#0284c7', !!subForm), fontSize: '10px', gap: '2px' }}
-              >
-                <Plus size={11} />↳
-              </button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setPanel(p => p === 'overflow-menu' ? null : 'overflow-menu')}
+              title="Actions" style={miniBtn(blockCount > 0 ? '#b91c1c' : '#64748b', panel === 'overflow-menu')}>
+              <MoreVertical size={16} />
+            </button>
+            {panel === 'overflow-menu' && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '210px' }}>
+                <MenuItem icon={<Camera size={14} />} label="Ajouter une photo" onClick={() => setPanel('photo')} />
+                <MenuItem icon={<Plus size={14} />} label="Ajouter une note"
+                  onClick={() => { setPanel(null); setNoteForm({ text: '', delayDays: 7, important: false, engagementDate: '', engagementType: 'fin' }) }} />
+                {onAddSubTask && (
+                  <MenuItem icon={<Plus size={14} />} label="Ajouter une sous-tâche"
+                    onClick={() => { setPanel(null); setSubForm({ title: '', start: todayStr, duration: '5' }) }} />
+                )}
+                <MenuItem icon={<Ban size={14} />} label={`Gérer les blocages${blockCount ? ` (${blockCount})` : ''}`} onClick={() => setPanel('blockers')} />
+                <div style={{ borderTop: '1px solid var(--line)' }} />
+                <MenuItem icon={<Pencil size={14} />} label="Éditer le titre" onClick={() => { setPanel(null); setEditForm({ title: task.title, start: '', end: '' }) }} />
+                <MenuItem icon={<Handshake size={14} />} label={`Engagement${task.promisedWeek ? ' ✓' : ''}`} onClick={() => setPanel('engagement')} tint={task.promisedWeek ? '#6d28d9' : undefined} />
+                <MenuItem icon={<CircleSlash size={14} />} label={isNa ? 'Rendre applicable' : 'Marquer N/A'} last
+                  onClick={() => { if (window.confirm(isNa ? 'Rendre la tâche applicable ?' : 'Marquer cette tâche comme non applicable ?')) { onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' }); setPanel(null) } }} />
+              </div>
             )}
-            {/* Menu overflow: Engagement + Marquer NA */}
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setPanel(p => p === 'overflow-menu' ? null : 'overflow-menu')}
-                title="Plus d'options" style={miniBtn('#64748b', panel === 'overflow-menu')}>
-                <MoreVertical size={15} />
-              </button>
-              {panel === 'overflow-menu' && (
-                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, minWidth: '200px' }}>
-                  <button onClick={() => { setPanel(p => p === 'engagement' ? null : 'engagement') }} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: task.promisedWeek ? '#6d28d9' : '#5b7183', textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
-                    <Handshake size={14} /> Engagement{task.promisedWeek ? ' ✓' : ''}
-                  </button>
-                  <button onClick={() => { if (window.confirm(isNa ? 'Rendre la tâche applicable ?' : 'Marquer cette tâche comme non applicable ?')) { onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' }); setPanel(null); } }} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: isNa ? '#64748b' : '#5b7183', textAlign: 'left' }}>
-                    <CircleSlash size={14} /> {isNa ? 'Rendre applicable' : 'Marquer N/A'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
         {!isNa && (
           <strong style={{ fontSize: '19px', color: checked ? 'var(--navy)' : 'var(--muted)' }} title={checked ? undefined : 'Valeur de départ (dernière réunion) — bougez le curseur pour constater'}>
@@ -456,26 +467,19 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       )}
 
       {blockers.length > 0 && (
-        <div style={{ borderRadius: '8px', background: '#fff7f7', border: '1px solid #fca5a5', padding: '8px 10px', marginBottom: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#b91c1c', marginBottom: '4px' }}>
-            <Ban size={12} /> Bloquée par {blockers.length} tâche{blockers.length > 1 ? 's' : ''}
-          </div>
-          {blockers.map(id => {
-            const o = blockerOptions.find(x => x.id === id)
-            const who = o ? lotCompany(lots, o.lotId) ?? o.company : undefined
-            return (
-              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#7f1d1d' }}>
-                <span style={{ flex: 1 }}>{o ? `${o.lotId} — ${o.title}${who ? ` (${who})` : ''}` : id}</span>
-                {!readOnly && (
-                  <button onClick={() => patchBlockers(blockers.filter(x => x !== id))} title="Retirer"
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', padding: '2px' }}>
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <BlockList
+          title={`Bloquée par ${blockers.length} tâche${blockers.length > 1 ? 's' : ''}`}
+          ids={blockers} options={blockerOptions} lots={lots} readOnly={readOnly}
+          onRemove={id => patchBlockedBy(blockers.filter(x => x !== id))}
+        />
+      )}
+
+      {blocks.length > 0 && (
+        <BlockList
+          title={`Bloque ${blocks.length} tâche${blocks.length > 1 ? 's' : ''}`}
+          ids={blocks} options={blockerOptions} lots={lots} readOnly={readOnly}
+          onRemove={id => patchBlocks(blocks.filter(x => x !== id))}
+        />
       )}
 
       {/* Remarks raised on this task — editable and removable */}
@@ -582,6 +586,24 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               <option value={28}>4 semaines</option>
             </select>
           </div>
+          {/* Une date d'engagement (facultative) transforme cette note en
+              engagement — même log que le menu « Engagement ». */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px', paddingTop: '8px', borderTop: '1px dashed #fde68a' }}>
+            <label style={{ fontSize: '10px', color: '#92400e', fontWeight: 700, textTransform: 'uppercase' }}>Engagement (facultatif)</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input type="date" value={noteForm.engagementDate}
+                onChange={e => setNoteForm({ ...noteForm, engagementDate: e.target.value })}
+                style={{ ...input, fontSize: '11px', flex: 1 }} />
+              {noteForm.engagementDate && (
+                <select value={noteForm.engagementType}
+                  onChange={e => setNoteForm({ ...noteForm, engagementType: e.target.value as CommitmentType })}
+                  style={{ ...input, fontSize: '11px' }}>
+                  <option value="fin">Fin</option>
+                  <option value="debut">Début</option>
+                </select>
+              )}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={submitNote} disabled={!noteForm.text.trim()} style={{ ...ghostBtn, background: noteForm.text.trim() ? '#b45309' : '#e5e7eb', color: noteForm.text.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, fontSize: '12px' }}>
               Ajouter
@@ -596,25 +618,6 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           {/* P1 — Deux inputs distincts : appareil photo vs galerie */}
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFile} />
           <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
-
-          {/* Three things to declare, reachable in one tap each */}
-          {panel === null && (
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={() => setPanel('photo')} style={actBtn('#02457A')}>
-                <Camera size={16} /> Photo
-              </button>
-              <button onClick={() => setNoteForm({ text: '', delayDays: 7, important: false })} style={actBtn('#92400e')}>
-                <Plus size={16} /> Note
-              </button>
-              <button onClick={() => setPanel('action')} style={actBtn('#b45309')}>
-                <Flag size={16} /> Alerte
-              </button>
-              <button onClick={() => setPanel('blockers')}
-                style={actBtn(blockers.length ? '#b91c1c' : '#94a3b8', blockers.length > 0)}>
-                <Ban size={16} /> Blocage
-              </button>
-            </div>
-          )}
 
           {/* Sélecteur photo : appareil photo ou galerie */}
           {panel === 'photo' && (
@@ -640,15 +643,6 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             </div>
           )}
 
-          {panel === 'action' && (
-            <RemarkForm
-              kind="action"
-              company={lotCompany(lots, task.lotId)}
-              onSubmit={(description, dueDate, priority) => { onAddRemark({ kind: 'action', description, lotId: task.lotId, taskId: task.taskId, dueDate, priority: priority ?? 'medium' }); setPanel(null) }}
-              onCancel={() => setPanel(null)}
-            />
-          )}
-
           {panel === 'engagement' && (
             <EngagementForm
               company={lotCompany(lots, task.lotId)}
@@ -662,9 +656,9 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 })
                 setPanel(null)
               }}
-              onClear={() => { onPatch({ promisedLabel: undefined, promisedWeek: undefined, promisedEnd: undefined }); setPanel(null) }}
+              onClear={() => { onPatch({ promisedLabel: undefined, promisedWeek: undefined, promisedEnd: undefined, promisedType: undefined }); setPanel(null) }}
               hasOne={!!task.promisedWeek}
-              onCancel={() => setPanel('menu')}
+              onCancel={() => setPanel(null)}
             />
           )}
 
@@ -672,8 +666,10 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             <BlockerPicker
               options={blockerOptions}
               lots={lots}
-              selected={blockers}
-              onChange={patchBlockers}
+              blockedBy={blockers}
+              blocks={blocks}
+              onChangeBlockedBy={patchBlockedBy}
+              onChangeBlocks={patchBlocks}
               onClose={() => setPanel(null)}
             />
           )}
@@ -741,25 +737,49 @@ function RemarkRow({ remark, readOnly, onUpdate, onRemove }: {
 
 // ── Blocking tasks: pick the lot, then its tasks ─────────────────────────────
 
-function BlockerPicker({ options, lots, selected, onChange, onClose }: {
+function BlockerPicker({ options, lots, blockedBy, blocks, onChangeBlockedBy, onChangeBlocks, onClose }: {
   options: BlockerOption[]
   lots: LotContact[]
-  selected: string[]
-  onChange: (ids: string[]) => void
+  blockedBy: string[]
+  blocks: string[]
+  onChangeBlockedBy: (ids: string[]) => void
+  onChangeBlocks: (ids: string[]) => void
   onClose: () => void
 }) {
+  const [direction, setDirection] = useState<'blockedBy' | 'blocks'>('blockedBy')
   const [lot, setLot] = useState<string | null>(null)
   const lotIds = [...new Set(options.map(o => o.lotId))].sort()
+  const selected = direction === 'blockedBy' ? blockedBy : blocks
+  const onChange = direction === 'blockedBy' ? onChangeBlockedBy : onChangeBlocks
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
 
   return (
     <div style={{ ...panelBox, borderColor: '#fca5a5', background: '#fff7f7' }}>
+      {/* Les deux sens sont enregistrés séparément et, à la clôture de la
+          visite, fusionnés (jamais remplacés) dans les dépendances CPM réelles
+          du planning — voir visits.applyVisitBlockages. */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+        {(['blockedBy', 'blocks'] as const).map(dir => (
+          <button key={dir} onClick={() => { setDirection(dir); setLot(null) }}
+            style={{
+              flex: 1, padding: '9px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+              border: direction === dir ? '2px solid #b91c1c' : '1px solid var(--line)',
+              background: direction === dir ? '#fee2e2' : '#fff', color: direction === dir ? '#b91c1c' : 'var(--muted)',
+            }}>
+            {dir === 'blockedBy' ? 'Bloquée par' : 'Bloque'}
+            {(dir === 'blockedBy' ? blockedBy.length : blocks.length) > 0 && ` (${dir === 'blockedBy' ? blockedBy.length : blocks.length})`}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
         <Ban size={14} color="#b91c1c" />
         <span style={{ flex: 1, fontSize: '12px', fontWeight: 700, color: '#b91c1c' }}>
-          {lot ? `${lot} — choisissez les tâches` : "Quel lot bloque cette tâche ?"}
+          {lot
+            ? `${lot} — choisissez les tâches`
+            : direction === 'blockedBy' ? 'Quel lot bloque cette tâche ?' : 'Quel lot cette tâche bloque-t-elle ?'}
         </span>
         {selected.length > 0 && <span style={{ ...badge, background: '#fee2e2', color: '#b91c1c' }}>{selected.length}</span>}
       </div>
@@ -883,13 +903,51 @@ function SliderMark({ pct, color, title }: { pct: number; color: string; title: 
 
 const panelBox: React.CSSProperties = { marginTop: '4px', padding: '11px', borderRadius: '10px', background: '#f8fafc', border: '1px solid var(--line)' }
 
-const actBtn = (fg: string, on = false): React.CSSProperties => ({
-  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-  padding: '13px 8px', borderRadius: '10px',
-  border: on ? `2px solid ${fg}` : `1px solid ${fg}33`,
-  background: on ? `${fg}1a` : `${fg}0f`, color: fg,
-  fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-})
+/** Une entrée du menu ⋮ unique — photo/note/sous-tâche/blocages, puis
+ * titre/engagement/N-A. Remplace les anciens gros boutons permanents. */
+function MenuItem({ icon, label, onClick, tint, last }: { icon: React.ReactNode; label: string; onClick: () => void; tint?: string; last?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '10px 14px',
+        border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+        color: tint ?? '#5b7183', textAlign: 'left',
+        borderBottom: last ? 'none' : '1px solid var(--line)',
+      }}
+    >
+      {icon} {label}
+    </button>
+  )
+}
+
+/** Liste de tâches liées par blocage — même rendu pour « bloquée par » et « bloque ». */
+function BlockList({ title, ids, options, lots, readOnly, onRemove }: {
+  title: string; ids: string[]; options: BlockerOption[]; lots: LotContact[]; readOnly: boolean; onRemove: (id: string) => void
+}) {
+  return (
+    <div style={{ borderRadius: '8px', background: '#fff7f7', border: '1px solid #fca5a5', padding: '8px 10px', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#b91c1c', marginBottom: '4px' }}>
+        <Ban size={12} /> {title}
+      </div>
+      {ids.map(id => {
+        const o = options.find(x => x.id === id)
+        const who = o ? lotCompany(lots, o.lotId) ?? o.company : undefined
+        return (
+          <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#7f1d1d' }}>
+            <span style={{ flex: 1 }}>{o ? `${o.lotId} — ${o.title}${who ? ` (${who})` : ''}` : id}</span>
+            {!readOnly && (
+              <button onClick={() => onRemove(id)} title="Retirer"
+                style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', padding: '2px' }}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 /** Secondary, rarer actions live beside the title rather than in the main row. */
 const miniBtn = (fg: string, on = false): React.CSSProperties => ({

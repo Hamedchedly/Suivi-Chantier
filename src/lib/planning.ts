@@ -14,6 +14,7 @@
 
 import { GanttTask } from '../types/gantt'
 import { deriveTaskStatus } from './planningEngine'
+import { weightedProgress } from './rollup'
 
 export type PlanningError = 'title_required' | 'lot_not_found' | 'code_taken' | 'not_found'
 
@@ -58,25 +59,27 @@ export function recomputeTask(task: GanttTask): GanttTask {
   if (subs.length === 0) return task
   const start = new Date(Math.min(...subs.map(s => s.planned_start.getTime())))
   const end = new Date(Math.max(...subs.map(s => s.planned_end.getTime())))
-  const work = subs.filter(s => !s.is_milestone)
-  const progress = work.length ? Math.round(work.reduce((acc, s) => acc + s.progress, 0) / work.length) : 0
+  const progress = weightedProgress(subs)
   return {
     ...task, planned_start: start, planned_end: end, planned_duration: durationBetween(start, end),
     progress, status: deriveTaskStatus(progress, task.status),
   }
 }
 
-/** Bornes et avancement d'un lot, recalculés depuis ses tâches (et leurs sous-tâches). */
+/**
+ * Bornes et avancement d'un lot, recalculés depuis ses tâches (et leurs
+ * sous-tâches). actual_start/actual_end ne sont PLUS recalculés ici par
+ * min/max des feuilles : un parent dérive désormais ses propres dates réelles
+ * de son propre historique d'avancement calculé, exactement comme une feuille
+ * (voir progressHistory.deriveCalculatedEntries + actualDates.applyDerivedActualDates).
+ */
 export function recomputeLot(lot: GanttTask): GanttTask {
   const kids = (lot.children ?? []).map(t => t.children?.length ? recomputeTask(t) : t)
   if (kids.length === 0) return lot
   const leaves = kids.flatMap(allLeaves)
   const start = new Date(Math.min(...leaves.map(k => k.planned_start.getTime())))
   const end = new Date(Math.max(...leaves.map(k => k.planned_end.getTime())))
-  const work = leaves.filter(k => !k.is_milestone)
-  const progress = work.length
-    ? Math.round(work.reduce((s, k) => s + k.progress, 0) / work.length)
-    : 0
+  const progress = weightedProgress(leaves)
   return {
     ...lot,
     children: kids,
@@ -85,12 +88,6 @@ export function recomputeLot(lot: GanttTask): GanttTask {
     planned_duration: durationBetween(start, end),
     progress,
     status: deriveTaskStatus(progress, lot.status),
-    actual_start: leaves.map(k => k.actual_start).filter(Boolean).length
-      ? new Date(Math.min(...leaves.filter(k => k.actual_start).map(k => k.actual_start!.getTime())))
-      : undefined,
-    actual_end: leaves.length > 0 && leaves.every(k => k.actual_end)
-      ? new Date(Math.max(...leaves.map(k => k.actual_end!.getTime())))
-      : undefined,
   }
 }
 
@@ -275,6 +272,45 @@ export function setTaskDependencies(tasks: GanttTask[], id: string, deps: string
   const { tasks: next, found } = mapTask(tasks, id, t => ({ ...t, dependencies: deps }))
   if (!found) return { ok: false, tasks, error: 'not_found' }
   return { ok: true, tasks: next }
+}
+
+/** Retrouve une tâche n'importe où dans l'arbre (lot, tâche ou sous-tâche). */
+function findTaskById(tasks: GanttTask[], id: string): GanttTask | undefined {
+  for (const t of tasks) {
+    if (t.id === id) return t
+    if (t.children?.length) {
+      const found = findTaskById(t.children, id)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+/** Marque/démarque une tâche N/A — exclue du rollup pondéré de son parent, de
+ * façon durable (contrairement à VisitTaskCheck.state==='na', éphémère). */
+export function setTaskNa(tasks: GanttTask[], id: string, isNa: boolean): PlanningResult {
+  const { tasks: next, found } = mapTask(tasks, id, t => ({ ...t, is_na: isNa }))
+  if (!found) return { ok: false, tasks, error: 'not_found' }
+  return { ok: true, tasks: recomputeAll(next) }
+}
+
+/**
+ * « Cette tâche bloque otherTaskId » : écrit l'id de cette tâche dans les
+ * dépendances (prédécesseurs CPM) de otherTaskId. « A est bloquée par B » est
+ * déjà exactement « B ∈ A.dependencies » en langage CPM — pas de champ séparé,
+ * juste la bonne direction d'écriture.
+ */
+export function addBlockedTask(tasks: GanttTask[], thisTaskId: string, otherTaskId: string): PlanningResult {
+  const other = findTaskById(tasks, otherTaskId)
+  if (!other) return { ok: false, tasks, error: 'not_found' }
+  return setTaskDependencies(tasks, otherTaskId, [...new Set([...other.dependencies, thisTaskId])])
+}
+
+/** Retire la relation « cette tâche bloque otherTaskId ». */
+export function removeBlockedTask(tasks: GanttTask[], thisTaskId: string, otherTaskId: string): PlanningResult {
+  const other = findTaskById(tasks, otherTaskId)
+  if (!other) return { ok: false, tasks, error: 'not_found' }
+  return setTaskDependencies(tasks, otherTaskId, other.dependencies.filter(d => d !== thisTaskId))
 }
 
 /** Identifiants de toutes les tâches feuilles — pour purger les liens orphelins. */

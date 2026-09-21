@@ -226,3 +226,26 @@ export function pruneLinks(links: TaskUnitLink[], unitIds: string[], taskIds: st
 export function visitableUnits(units: Unit[]): Unit[] {
   return units.filter(u => u.kind === 'dwelling' || u.kind === 'common' || u.kind === 'exterior')
 }
+
+// ── Exclusion tâche ↔ unité (N/A contextuel) ────────────────────────────────
+//
+// Distincte de TaskUnitLink : un lien peut être posé au niveau bâtiment et
+// hérité par tous ses logements (taskConcernsUnit remonte les ancêtres) — si
+// on marquait ce même lien "na", ça exclurait la tâche de TOUS les logements
+// du bâtiment, pas seulement celui visé par la visite. L'exclusion se pose
+// donc toujours sur l'unité feuille précise, jamais sur un ancêtre.
+
+export interface TaskUnitExclusion {
+  taskId: string
+  unitId: string // unité feuille précise, jamais un ancêtre
+}
+
+export function isExcludedForUnit(exclusions: TaskUnitExclusion[], taskId: string, unitId: string): boolean {
+  return exclusions.some(e => e.taskId === taskId && e.unitId === unitId)
+}
+
+export function toggleExclusion(exclusions: TaskUnitExclusion[], taskId: string, unitId: string): TaskUnitExclusion[] {
+  return isExcludedForUnit(exclusions, taskId, unitId)
+    ? exclusions.filter(e => !(e.taskId === taskId && e.unitId === unitId))
+    : [...exclusions, { taskId, unitId }]
+}

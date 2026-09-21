@@ -4,11 +4,14 @@ import { GanttTask } from '../../types/gantt'
 import {
   getGanttTasks, saveGanttTasks, getHolidays, getGanttPrefs, logActivity,
   getUnits, getTaskUnits, getZoneRefs, getCommitments, getCurrentProjectId,
+  getProgressHistory, saveProgressHistory, getActualDateOverrides, saveActualDateOverrides,
 } from '../../lib/repo'
 import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
 import { createTask, createSubTask, recomputeAll, durationBetween } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
-import { withActualDates } from '../../lib/actualDates'
+import { applyDerivedActualDates, ActualDateField, ActualDateOverride } from '../../lib/actualDates'
+import { appendProgressEntry, deriveCalculatedEntries, withGenesisEntries, isoDay } from '../../lib/progressHistory'
+import { weightedProgress } from '../../lib/rollup'
 import { taskConcernsUnit } from '../../lib/units'
 import { computeCpm, autoSchedule, applyCriticality } from '../../lib/cpm'
 import { makeCalendar } from '../../lib/calendar'
@@ -33,14 +36,18 @@ const mapTaskInList = (list: GanttTask[], id: string, fn: (t: GanttTask) => Gant
   })
 
 function makeParent(id: string, title: string, children: GanttTask[]): GanttTask {
-  const leaves = children.filter(c => !c.is_milestone)
   const min = (f: (c: GanttTask) => number) => new Date(Math.min(...children.map(f)))
   const max = (f: (c: GanttTask) => number) => new Date(Math.max(...children.map(f)))
+  const planned_start = min(c => c.planned_start.getTime())
+  const planned_end = max(c => c.planned_end.getTime())
   return {
     id, lot_id: children[0]?.lot_id ?? '', title,
-    planned_start: min(c => c.planned_start.getTime()), planned_end: max(c => c.planned_end.getTime()),
-    planned_duration: 0,
-    progress: leaves.length ? Math.round(leaves.reduce((s, c) => s + c.progress, 0) / leaves.length) : 0,
+    planned_start, planned_end,
+    // Une vraie durée (pas 0 codé en dur) : nécessaire pour que le rollup
+    // pondéré de ce nœud synthétique pèse correctement dans le niveau
+    // au-dessus (buildLogementTree l'appelle en cascade lot→logement→bâtiment).
+    planned_duration: durationBetween(planned_start, planned_end),
+    progress: weightedProgress(children),
     status: 'in-progress', priority: 'medium', dependencies: [],
     is_milestone: false, is_critical: children.some(c => c.is_critical), children,
   }
@@ -146,7 +153,10 @@ export function Gantt() {
   const drift = useMemo(() => maxDrift(ganttTasks), [ganttTasks])
   const lateCount = useMemo(() => lateTasks(ganttTasks, new Date()).length, [ganttTasks])
 
-  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date; actual_start?: Date; actual_end?: Date }) =>
+  /** Dates contractuelles (planned_start/planned_end) uniquement — les dates
+   * réelles ne s'écrivent plus jamais directement sur le champ, voir
+   * recordActualOverride ci-dessous. */
+  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date }) =>
     setGanttTasks(prev => {
       const moved = mapTaskInList(prev, id, t => {
         const next = { ...t, ...updates }
@@ -170,18 +180,50 @@ export function Gantt() {
     })
 
   /**
-   * Saisir un avancement recale aussitôt le statut, les dates réelles, la
-   * remontée sur le lot parent, et la prévision qui en découle — dans cet
-   * ordre : la prévision doit voir l'avancement du lot déjà à jour.
+   * Saisir un avancement historise l'observation (source 'manual', datée
+   * d'aujourd'hui), recale le statut, la remontée pondérée sur le lot parent
+   * (avec sa propre entrée d'historique 'calculated' si son avancement en
+   * découle), puis dérive les dates réelles depuis l'historique complet —
+   * jamais un simple écrasement du champ.
+   *
+   * Lit/écrit ganttTasks directement (pas via l'updater fonctionnel de
+   * setGanttTasks) pour garder les effets de bord (lecture/écriture de
+   * l'historique) hors de l'updater : StrictMode invoque un updater deux fois
+   * en développement, ce qui dupliquerait les entrées d'historique.
    */
   const handleProgress = (id: string, progress: number) => {
     const today = new Date()
-    setGanttTasks(prev => {
-      const bumped = mapTaskInList(prev, id, t => ({ ...t, progress, status: deriveTaskStatus(progress, t.status) }))
-      const withActual = mapTaskInList(bumped, id, t => withActualDates(t, today))
-      const rolledUp = recomputeAll(withActual)
-      return computeForecasts(rolledUp, today, calendar)
-    })
+    const before = ganttTasks
+    const bumped = mapTaskInList(before, id, t => ({ ...t, progress, status: deriveTaskStatus(progress, t.status) }))
+    const rolledUp = recomputeAll(bumped)
+
+    const effective_date = isoDay(today)
+    // Backfill "genèse" pour tout l'arbre AVANT d'ajouter la nouvelle observation :
+    // sans ça, appliquer applyDerivedActualDates à tout l'arbre effacerait les
+    // dates réelles déjà stockées des tâches non historisées et non touchées ici.
+    let history = withGenesisEntries(before, getProgressHistory())
+    history = appendProgressEntry(history, { taskId: id, effective_date, new_progress: progress, source: 'manual' })
+    history = [...history, ...deriveCalculatedEntries(before, rolledUp, { effective_date })]
+    saveProgressHistory(history)
+
+    const withActuals = applyDerivedActualDates(rolledUp, history, getActualDateOverrides())
+    setGanttTasks(computeForecasts(withActuals, today, calendar))
+  }
+
+  /**
+   * Correction manuelle explicite d'une date réelle (GanttDetails.tsx) : un
+   * événement horodaté et append-only (ActualDateOverride), jamais un
+   * écrasement direct du champ — coexiste avec la dérivation automatique par
+   * l'historique (la plus récemment SAISIE des deux l'emporte, voir
+   * actualDates.deriveActualDates). Aucune restriction de date future.
+   */
+  const recordActualOverride = (id: string, field: ActualDateField, date: Date | null) => {
+    const overrides: ActualDateOverride[] = [...getActualDateOverrides(), {
+      id: `ov-${Date.now()}-${id}-${field}`, taskId: id, field,
+      value: date ? isoDay(date) : null, at: new Date().toISOString(),
+    }]
+    saveActualDateOverrides(overrides)
+    setGanttTasks(prev => applyDerivedActualDates(prev, withGenesisEntries(prev, getProgressHistory()), overrides))
   }
 
   const addTaskFromForm = (lotId: string, title: string, start: string, duration: number) => {
@@ -262,8 +304,8 @@ export function Gantt() {
             ...(updates.start !== undefined ? { planned_start: updates.start } : {}),
             ...(updates.end !== undefined ? { planned_end: updates.end } : {}),
           })}
-          onActualStart={(id, date) => handleTaskUpdate(id, { actual_start: date ?? undefined })}
-          onActualEnd={(id, date) => handleTaskUpdate(id, { actual_end: date ?? undefined })}
+          onActualStart={(id, date) => recordActualOverride(id, 'actual_start', date)}
+          onActualEnd={(id, date) => recordActualOverride(id, 'actual_end', date)}
           onDependencyAdd={(id, depId) =>
             setGanttTasks(prev => mapTaskInList(prev, id, t => ({ ...t, dependencies: [...t.dependencies.filter(d => d !== depId), depId] })))
           }

@@ -20,8 +20,8 @@ describe('jeu d’exemple', () => {
     expect(flattenLeaves(gantt)).toHaveLength(9)
   })
 
-  it('donne un avancement d’ensemble réaliste (~48 %)', () => {
-    expect(overallProgress(gantt)).toBe(48)
+  it('donne un avancement d’ensemble réaliste (pondéré par durée, ~53 %)', () => {
+    expect(overallProgress(gantt)).toBe(53)
   })
 
   it('contient au moins un retard au 13/09/2026', () => {

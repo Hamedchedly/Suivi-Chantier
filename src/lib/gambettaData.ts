@@ -10,6 +10,7 @@ import type { Reserve } from './reserves'
 import type { LotContact, ProjectSeed } from './repo'
 import type { ProjectInput } from './projects'
 import type { Unit, TaskUnitLink } from './units'
+import { weightedProgress } from './rollup'
 
 export const GAMBETTA_PROJECT: ProjectInput = {
   name: '111 rue Gambetta',
@@ -31,7 +32,7 @@ function leaf(lotId: string, x: LeafSpec): GanttTask {
 function lot(lotId: string, title: string, leaves: GanttTask[]): GanttTask {
   const start = new Date(Math.min(...leaves.map(l => l.planned_start.getTime())))
   const end = new Date(Math.max(...leaves.map(l => l.planned_end.getTime())))
-  const progress = Math.round(leaves.reduce((s, l) => s + l.progress, 0) / leaves.length)
+  const progress = weightedProgress(leaves)
   return {
     id: `LOT-${lotId}`, lot_id: lotId, title, planned_start: start, planned_end: end,
     planned_duration: 0, progress, status: 'in-progress', priority: 'medium',

@@ -68,6 +68,9 @@ export interface GanttTask {
 
   is_milestone: boolean
   is_critical: boolean
+  /** Cette tâche ne s'applique pas ici (structurel, persiste après une visite) —
+   * exclue du rollup pondéré du parent. undefined/false = applicable. */
+  is_na?: boolean
 
   delay_cause?: DelayCause
 

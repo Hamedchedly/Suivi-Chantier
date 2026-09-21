@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   durationBetween, endFromDuration, recomputeLot, recomputeAll,
   createLot, createTask, createSubTask, renameTask, setTaskDates, removeTask, leafIds,
+  setTaskNa, addBlockedTask, removeBlockedTask, setTaskDependencies,
 } from './planning'
 import { GanttTask } from '../types/gantt'
 
@@ -230,5 +231,65 @@ describe('removeTask récursif', () => {
   it('supprime une tâche avec ses sous-tâches', () => {
     const r = removeTask(tasks, taskId)
     expect(r.tasks[0].children).toHaveLength(0)
+  })
+})
+
+describe('setTaskNa', () => {
+  const lot = { ...task('L1', { start: '2026-01-01', end: '2026-01-10' }), children: [
+    task('a', { start: '2026-01-01', end: '2026-01-05', progress: 100 }),
+    task('b', { start: '2026-01-05', end: '2026-01-10', progress: 0 }),
+  ] }
+
+  it('exclut une tâche du rollup pondéré du parent une fois marquée N/A', () => {
+    const withNa = setTaskNa([lot], 'b', true)
+    expect(withNa.ok).toBe(true)
+    expect(withNa.tasks[0].progress).toBe(100) // seule « a » compte désormais
+  })
+
+  it('la réintègre au rollup en la démarquant', () => {
+    const withNa = setTaskNa([lot], 'b', true).tasks
+    const back = setTaskNa(withNa, 'b', false)
+    expect(back.tasks[0].progress).toBeLessThan(100) // « b » à 0 % repèse à nouveau
+  })
+
+  it('échoue sur un id inconnu', () => {
+    expect(setTaskNa([lot], 'nope', true).error).toBe('not_found')
+  })
+})
+
+describe('addBlockedTask / removeBlockedTask — blocages fusionnés dans dependencies (CPM)', () => {
+  const lot = { ...task('L1', { start: '2026-01-01', end: '2026-01-10' }), children: [
+    task('a', { start: '2026-01-01', end: '2026-01-05' }),
+    task('b', { start: '2026-01-05', end: '2026-01-10' }),
+  ] }
+
+  it('« a bloque b » ajoute a aux dépendances de b (a ∈ b.dependencies)', () => {
+    const r = addBlockedTask([lot], 'a', 'b')
+    expect(r.ok).toBe(true)
+    expect(r.tasks[0].children![1].dependencies).toEqual(['a'])
+    expect(r.tasks[0].children![0].dependencies).toEqual([]) // a elle-même inchangée
+  })
+
+  it('fusionne sans jamais remplacer une dépendance déjà posée ailleurs (union, pas un écrasement)', () => {
+    const withExisting = setTaskDependencies([lot], 'b', ['x-existing']).tasks
+    const r = addBlockedTask(withExisting, 'a', 'b')
+    expect(r.tasks[0].children![1].dependencies).toEqual(['x-existing', 'a'])
+  })
+
+  it('n’ajoute jamais de doublon si la relation existe déjà', () => {
+    const once = addBlockedTask([lot], 'a', 'b').tasks
+    const twice = addBlockedTask(once, 'a', 'b')
+    expect(twice.tasks[0].children![1].dependencies).toEqual(['a'])
+  })
+
+  it('removeBlockedTask retire uniquement la relation visée', () => {
+    const withExisting = setTaskDependencies([lot], 'b', ['x-existing', 'a']).tasks
+    const r = removeBlockedTask(withExisting, 'a', 'b')
+    expect(r.tasks[0].children![1].dependencies).toEqual(['x-existing'])
+  })
+
+  it('échoue si la tâche visée n’existe pas', () => {
+    expect(addBlockedTask([lot], 'a', 'nope').error).toBe('not_found')
+    expect(removeBlockedTask([lot], 'a', 'nope').error).toBe('not_found')
   })
 })

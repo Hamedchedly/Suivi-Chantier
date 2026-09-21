@@ -126,7 +126,8 @@ describe('lotSummaries / maxDrift / overallProgress', () => {
   it('maxDrift returns worst slippage', () => {
     expect(maxDrift(tree, today)).toBe(4)
   })
-  it('overallProgress averages leaves', () => {
-    expect(overallProgress(tree)).toBe(50)   // « a » à 100 %, « b » à 0 %
+  it('overallProgress averages leaves, weighted by planned_duration', () => {
+    // « a » à 100 % (7 j), « b » à 0 % (8 j) → (100×7 + 0×8) / 15 = 46,67 → 47
+    expect(overallProgress(tree)).toBe(47)
   })
 })

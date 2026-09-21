@@ -15,6 +15,12 @@
 /** Verdict passed on a commitment by a later session. */
 export type CommitmentOutcome = 'pending' | 'kept' | 'broken'
 
+/** Which real date the commitment promises. Undefined on legacy rows (recorded
+ * before this field existed) means 'fin' — every commitment ever created before
+ * this field was only ever an end-date promise, so this is a faithful reading,
+ * not a guess, and needs no migration. */
+export type CommitmentType = 'debut' | 'fin'
+
 export interface DateCommitment {
   id: string
   taskId: string
@@ -22,6 +28,7 @@ export interface DateCommitment {
   company?: string
   label?: string        // what was promised, in plain words ("Livraison pompe")
   promisedEnd: string   // ISO yyyy-mm-dd — the date the company committed to
+  type?: CommitmentType // 'debut' | 'fin' — undefined = 'fin' (legacy default, see above)
   at: string            // ISO datetime — when the commitment was recorded
   visitId: string
   visitDate: string     // ISO yyyy-mm-dd — the session it was taken in

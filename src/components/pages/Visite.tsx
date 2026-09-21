@@ -10,12 +10,14 @@ import {
   visitCounts, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, type ChangeKind,
-  buildZonesFromPlanning, applyVisitToPlanning, commitmentsFromVisit,
+  buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
 import { computeForecasts } from '../../lib/forecast'
 import { DateCommitment, withoutVisit, commitmentsForTask } from '../../lib/commitments'
+import { appendProgressEntry, deriveCalculatedEntries, withGenesisEntries } from '../../lib/progressHistory'
+import { applyDerivedActualDates } from '../../lib/actualDates'
 import {
   Reserve, FollowUpStatus, carriedOverPoints, applyFollowUp, nextReserveNumber, reserveKind,
 } from '../../lib/reserves'
@@ -23,6 +25,7 @@ import type { RemarkInput } from '../visite/ZoneControl'
 import {
   getVisits, saveVisits, getReserves, saveReserves, getGanttTasks, saveGanttTasks,
   getCommitments, saveCommitments, getLotsConfig, getVisitKinds, saveVisitKinds,
+  getProgressHistory, saveProgressHistory, getActualDateOverrides,
   logActivity, getZoneRefs, getUnits, getTaskUnits, type LotContact,
   getProjectRules,
 } from '../../lib/repo'
@@ -208,9 +211,42 @@ export function Visite() {
    * Closing the session: what was observed is written onto the planning, the
    * date promises are appended to the log, and only THEN is the planning frozen
    * — so the CR shows the chantier as it stood at the end of the tour.
+   *
+   * Historisation (jamais un simple écrasement de champ) :
+   *  1. le % observé pour chaque tâche cochée devient une entrée d'historique
+   *     datée de v.date (effective_date), pas de la date technique de clôture ;
+   *  2. la progression + les blocages sont appliqués au planning (rollup pondéré
+   *     inclus, pipeline recomputeAll unique) ;
+   *  3. les tâches PARENTES dont l'avancement calculé a changé reçoivent aussi
+   *     leur propre entrée d'historique (source 'calculated'), pour que leurs
+   *     propres dates réelles se dérivent de la même façon que les feuilles ;
+   *  4. les dates réelles (actual_start/actual_end) sont enfin dérivées en
+   *     rejouant tout l'historique + les éventuelles corrections manuelles.
    */
   const terminate = (v: Visit) => {
-    const withActuals = applyVisitToPlanning(getGanttTasks(), v)
+    const before = getGanttTasks()
+    const userLabel = me?.displayName ?? me?.username
+
+    const afterProgress = applyVisitToPlanning(before, v)
+    const afterBlockages = applyVisitBlockages(afterProgress, v)
+
+    // Backfill "genèse" pour tout l'arbre : sans ça, dériver les dates réelles
+    // sur tout l'arbre effacerait celles déjà stockées des tâches jamais
+    // historisées et non touchées par cette visite.
+    let history = withGenesisEntries(before, getProgressHistory())
+    for (const obs of progressObservationsFromVisit(v)) {
+      history = appendProgressEntry(history, {
+        taskId: obs.taskId, effective_date: v.date, new_progress: obs.new_progress,
+        source: 'visit', visitId: v.id, visitDate: v.date, user: userLabel,
+      })
+    }
+    history = [
+      ...history,
+      ...deriveCalculatedEntries(before, afterBlockages, { visitId: v.id, visitDate: v.date, effective_date: v.date, user: userLabel }),
+    ]
+    saveProgressHistory(history)
+
+    const withActuals = applyDerivedActualDates(afterBlockages, history, getActualDateOverrides())
     // Le réel vient de bouger : la prévision doit être recalculée dessus, pas
     // sur l'ancien état — sinon le Gantt affiche une prévision périmée.
     const updated = computeForecasts(withActuals, new Date())

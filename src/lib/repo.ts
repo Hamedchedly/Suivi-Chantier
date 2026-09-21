@@ -34,8 +34,10 @@ import { DpgfLine } from './dpgf'
 import { ActivityEvent, ActivityType, pushEvent } from './activity'
 import { Meeting } from './meetings'
 import { Visit as VisitSession, type ZoneRef } from './visits'
-import { Unit, TaskUnitLink, visitableUnits, buildingOf, unitPath } from './units'
+import { Unit, TaskUnitLink, TaskUnitExclusion, visitableUnits, buildingOf, unitPath } from './units'
 import { DateCommitment } from './commitments'
+import { ProgressHistoryEntry } from './progressHistory'
+import { ActualDateOverride } from './actualDates'
 import { PlanningSnapshot, ChangeLogEntry } from './planningHistory'
 import type { User, Session } from './auth'
 import type { Project, TrashedProject } from './projects'
@@ -92,6 +94,9 @@ const SCOPED = {
   projectRules: 'sc-project-rules-v1',
   planningHistory: 'sc-planning-history-v1',
   changeLog: 'sc-change-log-v1',
+  progressHistory: 'sc-progress-history-v1',
+  actualDateOverrides: 'sc-actual-date-overrides-v1',
+  taskUnitNa: 'sc-task-unit-na-v1',
 } as const
 
 /** Projet sans identifiant : les lectures tombent sur les valeurs par défaut. */
@@ -423,6 +428,36 @@ export function getCommitments(): DateCommitment[] {
 
 export function saveCommitments(c: DateCommitment[]): void {
   saveState(k(SCOPED.commitments), c)
+}
+
+// ── Historique d'avancement (progressHistory.ts) ────────────────────────────
+
+export function getProgressHistory(): ProgressHistoryEntry[] {
+  return loadState<ProgressHistoryEntry[]>(k(SCOPED.progressHistory), [])
+}
+
+export function saveProgressHistory(h: ProgressHistoryEntry[]): void {
+  saveState(k(SCOPED.progressHistory), h)
+}
+
+// ── Corrections manuelles de dates réelles (actualDates.ts) ─────────────────
+
+export function getActualDateOverrides(): ActualDateOverride[] {
+  return loadState<ActualDateOverride[]>(k(SCOPED.actualDateOverrides), [])
+}
+
+export function saveActualDateOverrides(o: ActualDateOverride[]): void {
+  saveState(k(SCOPED.actualDateOverrides), o)
+}
+
+// ── N/A contextuel tâche ↔ logement (units.ts) ───────────────────────────────
+
+export function getTaskUnitNa(): TaskUnitExclusion[] {
+  return loadState<TaskUnitExclusion[]>(k(SCOPED.taskUnitNa), [])
+}
+
+export function saveTaskUnitNa(e: TaskUnitExclusion[]): void {
+  saveState(k(SCOPED.taskUnitNa), e)
 }
 
 // ── Lots configuration ───────────────────────────────────────────────────────

@@ -25,12 +25,11 @@
 
 import type { Reserve } from './reserves'
 import type { GanttTask, TaskStatus } from '../types/gantt'
-import type { DateCommitment } from './commitments'
+import type { DateCommitment, CommitmentType } from './commitments'
 import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
-import { withActualDates } from './actualDates'
 import { forecastDrift } from './forecast'
 import { analyzePlanning, deriveTaskStatus } from './planningEngine'
-import { recomputeAll } from './planning'
+import { recomputeAll, addBlockedTask } from './planning'
 
 // ── Session kind ─────────────────────────────────────────────────────────────
 
@@ -91,7 +90,9 @@ export interface VisitTaskCheck {
   promisedEnd?: string     // ISO yyyy-mm-dd — derived from promisedWeek (its Friday)
   promisedWeek?: string    // ISO week the company committed to ("2026-W38")
   promisedLabel?: string   // what exactly was promised ("Livraison pompe")
+  promisedType?: CommitmentType // 'debut' | 'fin' — undefined = 'fin' (legacy default)
   blockedBy?: string[]     // ids of the planning tasks holding this one up
+  blocks?: string[]        // ids of the planning tasks this one holds up (symmetric direction)
   company?: string
 }
 
@@ -555,8 +556,10 @@ function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatus {
  * end date was promised — planned_end (duration follows).
  *
  * Le prévisionnel EST le contractuel : il ne change que sur une date promise.
- * Les dates réelles, elles, suivent automatiquement l'avancement constaté à la
- * date de la session (voir lib/actualDates).
+ * Les dates réelles ne sont PLUS dérivées ici : elles se dérivent de
+ * l'historique complet (progressHistory.ts + actualDates.deriveActualDates),
+ * pas d'une seule observation — voir progressObservationsFromVisit ci-dessous,
+ * à combiner par l'appelant (pages/Visite.tsx) avec applyDerivedActualDates.
  * Parent lots are recomputed from their children. Pure: returns a new task tree.
  */
 export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] {
@@ -567,7 +570,6 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
   }
   if (byId.size === 0) return tasks
 
-  const observedAt = parseDay(v.date)
   const applyLeaf = (t: GanttTask): GanttTask => {
     const c = byId.get(t.id)
     if (!c) return t
@@ -581,8 +583,7 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
         next.planned_duration = Math.max(1, diffDays(next.planned_start, end) + 1)
       }
     }
-    // Le réel se cale sur l'avancement relevé ce jour-là.
-    return isNaN(observedAt.getTime()) ? next : withActualDates(next, observedAt)
+    return next
   }
 
   // N'applique la visite qu'aux feuilles : la remontée sur les parents et
@@ -593,6 +594,35 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
   )
 
   return recomputeAll(applyLeaves(tasks))
+}
+
+/**
+ * Les observations d'avancement prises pendant cette session, prêtes à être
+ * ajoutées à l'historique via progressHistory.appendProgressEntry — une par
+ * tâche cochée avec un % renseigné, datée de v.date (effective_date), jamais
+ * de la date technique de clôture.
+ */
+export function progressObservationsFromVisit(v: Visit): { taskId: string; new_progress: number }[] {
+  return allChecks(v)
+    .filter(c => c.state !== 'na' && c.state !== 'not_checked' && c.progress !== undefined)
+    .map(c => ({ taskId: c.taskId, new_progress: Math.max(0, Math.min(100, Math.round(c.progress!))) }))
+}
+
+/**
+ * Les blocages saisis pendant la session, fusionnés dans GanttTask.dependencies
+ * (décision validée avec l'utilisateur : réutilisables par le planning/Gantt,
+ * chemin critique compris). Fusion additive uniquement (jamais un remplacement) :
+ * une dépendance déjà posée hors visite (via le Gantt) n'est jamais perdue.
+ * "A bloquée par B" ⇒ B ajouté aux dépendances de A. "A bloque C" ⇒ A ajouté aux
+ * dépendances de C — dependencies[] EST déjà la liste "bloquée par" au sens CPM.
+ */
+export function applyVisitBlockages(tasks: GanttTask[], v: Visit): GanttTask[] {
+  let next = tasks
+  for (const c of allChecks(v)) {
+    for (const blockerId of c.blockedBy ?? []) next = addBlockedTask(next, blockerId, c.taskId).tasks
+    for (const blockedId of c.blocks ?? []) next = addBlockedTask(next, c.taskId, blockedId).tasks
+  }
+  return next
 }
 
 /** The date promises taken during this session, ready to append to the log. */
@@ -607,6 +637,7 @@ export function commitmentsFromVisit(v: Visit): DateCommitment[] {
       company: c.company,
       label: c.promisedLabel?.trim() || c.title,
       promisedEnd: c.promisedEnd,
+      type: c.promisedType,
       at: new Date().toISOString(),
       visitId: v.id,
       visitDate: v.date,

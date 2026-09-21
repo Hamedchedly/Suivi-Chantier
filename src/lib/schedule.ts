@@ -1,4 +1,5 @@
 import { GanttTask } from '../types/gantt'
+import { weightedProgress } from './rollup'
 
 const MS_PER_DAY = 86400000
 
@@ -97,10 +98,7 @@ export function lotSummaries(tasks: GanttTask[], today: Date): LotSummary[] {
   })
 }
 
-/** Weighted-average progress across leaf tasks (milestones excluded). */
+/** Progress across leaf tasks, weighted by planned_duration (milestones and N/A excluded). */
 export function overallProgress(tasks: GanttTask[]): number {
-  const leaves = flattenLeaves(tasks).filter(t => !t.is_milestone)
-  if (!leaves.length) return 0
-  const sum = leaves.reduce((s, t) => s + t.progress, 0)
-  return Math.round(sum / leaves.length)
+  return weightedProgress(flattenLeaves(tasks))
 }

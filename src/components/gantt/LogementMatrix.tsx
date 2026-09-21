@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { GanttTask } from '../../types/gantt'
 import { isLate } from '../../lib/schedule'
-import { getUnits, getTaskUnits, getZoneRefs } from '../../lib/repo'
-import { taskConcernsUnit } from '../../lib/units'
+import { getUnits, getTaskUnits, getZoneRefs, getTaskUnitNa } from '../../lib/repo'
+import { taskConcernsUnit, isExcludedForUnit } from '../../lib/units'
+import { weightedProgress } from '../../lib/rollup'
 
 interface LogementMatrixProps {
   tasks: GanttTask[]
@@ -35,6 +36,7 @@ export default function LogementMatrix({ tasks }: LogementMatrixProps) {
   const units = getUnits()
   const links = getTaskUnits()
   const zones = getZoneRefs()
+  const exclusions = getTaskUnitNa()
 
   if (zones.length === 0) {
     return (
@@ -61,10 +63,10 @@ export default function LogementMatrix({ tasks }: LogementMatrixProps) {
   // en retard si l'une des tâches concernées est en retard.
   const aggregate = (lot: GanttTask, unitIds: string[]) => {
     const concerned = (lot.children ?? []).filter(c =>
-      unitIds.some(u => taskConcernsUnit(units, links, c.id, u)),
+      unitIds.some(u => taskConcernsUnit(units, links, c.id, u) && !isExcludedForUnit(exclusions, c.id, u)),
     )
     if (concerned.length === 0) return null
-    const progress = Math.round(concerned.reduce((s, c) => s + c.progress, 0) / concerned.length)
+    const progress = weightedProgress(concerned)
     // 'delayed' n'est jamais produit par deriveTaskStatus (planningEngine.ts) : isLate() est déjà
     // le vrai test de retard, 'blocked' le seul statut opérationnel qui s'y ajoute.
     const late = concerned.some(c => isLate(c, today) || c.status === 'blocked')
