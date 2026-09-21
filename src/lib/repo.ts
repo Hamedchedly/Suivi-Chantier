@@ -252,8 +252,36 @@ export interface LotContact {
 
 // ── Planning (Gantt) ─────────────────────────────────────────────────────────
 
+const GANTT_DATE_FIELDS = [
+  'planned_start', 'planned_end', 'actual_start', 'actual_end',
+  'forecast_start', 'forecast_end', 'baseline_start', 'baseline_end',
+] as const
+
+/**
+ * Filet de lecture : tout le pipeline Planning (CPM, prévision, analyse —
+ * cpm.ts, forecast.ts, planningEngine.ts, planning.ts) appelle .getTime()
+ * sur ces champs en tenant pour acquis que ce sont de vraies instances Date,
+ * comme le exige le type GanttTask. loadState() les revive correctement
+ * quand la donnée a été écrite par l'application (storage.ts encode une
+ * Date en { __date: ISOString }) — mais une valeur arrivée par un autre
+ * chemin (correction directe en base, import) peut être une chaîne ISO
+ * brute que le reviver générique ignore (il ne reconnaît que { __date }).
+ * Sans ce filet, la première tâche concernée fait planter tout l'écran
+ * Planning avec une TypeError (« …getTime is not a function ») dès le
+ * montage — voir le rapport de diagnostic du bug Planning.
+ */
+function normalizeGanttTaskDates(t: GanttTask): GanttTask {
+  const next = { ...t }
+  for (const field of GANTT_DATE_FIELDS) {
+    const v = next[field]
+    if (v !== undefined && !(v instanceof Date)) next[field] = new Date(v as unknown as string)
+  }
+  if (next.children?.length) next.children = next.children.map(normalizeGanttTaskDates)
+  return next
+}
+
 export function getGanttTasks(): GanttTask[] {
-  return loadState<GanttTask[]>(k(SCOPED.gantt), [])
+  return loadState<GanttTask[]>(k(SCOPED.gantt), []).map(normalizeGanttTaskDates)
 }
 
 export function saveGanttTasks(tasks: GanttTask[]): void {
