@@ -39,7 +39,11 @@ import { DateCommitment } from './commitments'
 import { PlanningSnapshot, ChangeLogEntry } from './planningHistory'
 import type { User, Session } from './auth'
 import type { Project, TrashedProject } from './projects'
-import { resolveCurrent, findOrphanProjectIds } from './projects'
+import {
+  resolveCurrent, findOrphanProjectIds, restoreOrphanProject as restoreOrphanProjectPure,
+  diagnoseProjectsRegistry as diagnoseProjectsRegistryPure,
+} from './projects'
+import type { OrphanRestoreInput, ProjectsDiagnosis, Result } from './projects'
 import { loadState, saveState, removeState } from './storage'
 
 // ── Messages administrateur ──────────────────────────────────────────────────
@@ -121,6 +125,18 @@ export function setCurrentProjectId(id: string | null): void {
   saveState(GLOBAL.currentProject, id)
 }
 
+/** Toutes les clés du cache local, telles quelles (lecture seule). */
+function allLocalStorageKeys(): string[] {
+  const keys: string[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) keys.push(key)
+    }
+  } catch { /* localStorage indisponible */ }
+  return keys
+}
+
 /**
  * Audit (lecture seule) : identifiants de projet référencés par au moins une
  * clé cloisonnée du cache local mais absents du registre `sc-projects-v1`.
@@ -130,15 +146,30 @@ export function setCurrentProjectId(id: string | null): void {
  * fonction).
  */
 export function findOrphanProjects(): string[] {
-  const knownIds = getProjects().map(p => p.id)
-  const scopedKeys: string[] = []
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key) scopedKeys.push(key)
-    }
-  } catch { /* localStorage indisponible */ }
-  return findOrphanProjectIds(knownIds, scopedKeys)
+  return findOrphanProjectIds(getProjects().map(p => p.id), allLocalStorageKeys())
+}
+
+/**
+ * Diagnostic complet et READ-ONLY du registre face aux données réellement
+ * présentes en local (voir diagnoseProjectsRegistry, lib/projects.ts). N'écrit
+ * jamais rien — un simple constat à afficher ou à journaliser.
+ */
+export function diagnoseProjects(): ProjectsDiagnosis {
+  return diagnoseProjectsRegistryPure(getProjects(), allLocalStorageKeys())
+}
+
+/**
+ * Réinscrit un projet orphelin (données cloisonnées connues, entrée absente
+ * de sc-projects-v1) dans le registre local, avec son id EXACT et les
+ * métadonnées fournies — jamais de nouvel id, jamais de données métier
+ * créées ou modifiées. Passe par saveProjects (donc par le write-through
+ * habituel si la sync est active) : c'est le même chemin qu'une création
+ * normale, seule la provenance de l'id diffère.
+ */
+export function restoreOrphanProject(input: OrphanRestoreInput): Result<Project[]> {
+  const result = restoreOrphanProjectPure(getProjects(), input)
+  if (result.ok) saveProjects(result.projects)
+  return result
 }
 
 // ── Corbeille des opérations (suppression réversible) ────────────────────────

@@ -275,5 +275,140 @@ dans ce sprint.** En particulier, restent NON TESTÉS :
 
 ---
 
+## Annexe — Merge dans main + restauration contrôlée (même jour, sprint suivant)
+
+Ce qui suit s'est passé **après** la rédaction du corps de ce rapport, sur
+demande explicite : merge du correctif dans `main`, puis restauration
+contrôlée des projets orphelins dont l'identité était certaine. Section 5
+ci-dessus reste inchangée comme trace de l'état constaté au moment du
+sprint ; c'est ici que son épilogue est documenté.
+
+### A.1 — Merge
+
+`4fc9753` (le sprint décrit ci-dessus) a été vérifié conforme à ce rapport
+(mêmes 7 fichiers, même message de commit) puis fusionné dans `main` par
+fast-forward — aucun commit de fusion, aucun conflit (les deux seuls
+commits que `main` avait en plus, `7c35556`/`7571974`, ne touchaient que des
+fichiers `docs/`). **`main` est maintenant à `4fc9753`.** Suite de tests
+rejouée sur `main` après merge : 478/478 tests unitaires, tsc/eslint/build
+propres (résultats identiques à la section 4 — voir §A.4 pour le lot de
+tests supplémentaire ajouté ensuite).
+
+### A.2 — Diagnostic (avant toute écriture)
+
+Relecture complète de `app_state` pour les 6 ids orphelins déjà identifiés
+en section 5, avec confirmation par comparaison octet-à-octet des données
+métier (`sc-lots-config-v1::<id>`) contre les fixtures du dépôt :
+
+| Id | Nom identifié | Référence | Adresse | Éléments d'identification | Clés cloisonnées | Certitude |
+|---|---|---|---|---|---|---|
+| `p1789340565817701` | 111 rue Gambetta | ER.T2286 | 111 Rue Gambetta, 51100 Reims | 8 lots (LERICHE, BUCZEK, PFC ISOLATION, LA SERRURERIE REMOISE, SMP AMENAGEMENT, SOVECLIM SERVICES, SORETHERM) — identiques champ par champ à `src/lib/gambettaData.ts` | 5 clés, activité limitée (dernière écriture 17/09) | **Certaine** |
+| `p1789341672812846` | 111 rue Gambetta | ER.T2286 | 111 Rue Gambetta, 51100 Reims | même fixture exacte que ci-dessus | 16 clés, activité la plus riche (gantt 40 Ko, réserves 13,6 Ko, réunions, docs, RFI, VISA — jusqu'au 19/09) | **Certaine** |
+| `p1789295288813528` | Résidence Les Tilleuls | RT-2026 | 8 Allée des Tilleuls, 51200 Épernay | 3 entreprises (Bâti-Construct/m.petit@…, Menuiserie du Vignoble/j.renard@…, ÉlecPro Champagne/k.baz@…) — identiques à `src/lib/demoData.ts` | 12 clés (13/09) | **Certaine** |
+| `p1789325281482814` | Résidence Les Tilleuls | RT-2026 | 8 Allée des Tilleuls, 51200 Épernay | même fixture exacte | 16 clés (17/09) | **Certaine** |
+| `p1789483121506563` | Résidence Les Tilleuls | RT-2026 | 8 Allée des Tilleuls, 51200 Épernay | même fixture exacte, activité la plus récente (20/09) | 14 clés | **Certaine** |
+| `p-test-planning-20260919` | Opération de test : lots « Test Bâtiment / Test Façade / Test Élec / Test Finitions », contacts « Marc/Julie/Karim/Nora Test », emails `@test.local` | — | — | Vocabulaire manifestement synthétique, mais **ne correspond à aucun fixture du dépôt** — ni `testOperationData.ts` (`TEST_PROJECT`, structure Bâtiment A/B différente), ni `gambettaData.ts`, ni `demoData.ts` | 14 clés (19/09) | **Probable seulement, non prouvée** |
+
+`sc-trash-v1` vérifié vide au moment du diagnostic : aucun des 6 n'a été
+explicitement supprimé, cohérent avec une disparition par écrasement (bug
+P0) et non par action volontaire.
+
+### A.3 — Restauration (5 ids à identité certaine)
+
+Écriture unique, ciblée, sur `sc-projects-v1` uniquement (vérifié après
+coup : aucune autre clé n'a été modifiée à cet instant) : les 5 entrées
+ci-dessus ajoutées à l'entrée Acacias déjà présente, **avec leur id exact**,
+sans création d'aucune donnée métier. `createdAt` de chaque entrée
+restaurée est dérivé de la **plus ancienne écriture connue** parmi les clés
+cloisonnées de cet id dans `app_state` — c'est une date d'activité
+observée, pas la vraie date de création (perdue) ; elle sert seulement à
+satisfaire le champ obligatoire `Project.createdAt` sans en inventer une.
+
+Registre final (`sc-projects-v1`, 6 entrées) :
+1. `p-demo-residence-20260920` — Résidence des Acacias — Opération Démo (inchangé)
+2. `p1789340565817701` — 111 rue Gambetta
+3. `p1789341672812846` — 111 rue Gambetta
+4. `p1789295288813528` — Résidence Les Tilleuls
+5. `p1789325281482814` — Résidence Les Tilleuls
+6. `p1789483121506563` — Résidence Les Tilleuls
+
+**Effet de bord assumé et non corrigé** : deux entrées portent le nom
+« 111 rue Gambetta » et trois portent « Résidence Les Tilleuls » — ce sont
+deux copies indépendantes réelles de chaque opération (créées par deux
+appareils différents avant le correctif P0), pas un doublon fabriqué. La
+consigne était de conserver les métadonnées existantes sans en inventer
+de nouvelles pour les distinguer (pas de renommage automatique) ; les
+distinguer côté utilisateur (fusionner, archiver une copie, ou les
+renommer manuellement) reste une décision humaine, volontairement non
+prise ici.
+
+**Non restauré** : `p-test-planning-20260919`. Aucune écriture ne l'a
+concerné ; ses données cloisonnées restent intactes sous leurs clés
+`sc-*::p-test-planning-20260919`. Raison : contrairement aux 5 autres,
+aucune correspondance certaine (fixture du dépôt) n'a pu être établie —
+seule la ressemblance du vocabulaire (« Test … ») suggère une opération de
+recette, ce qui n'atteint pas le niveau de certitude exigé pour une
+restauration automatique.
+
+### A.4 — Nouvelles fonctions et tests de robustesse
+
+Ajouts (aucun changement de comportement pour le code existant) :
+- `src/lib/projects.ts` — `restoreOrphanProject()` (réinscrit un id exact
+  avec des métadonnées fournies, sans contrainte de nom unique — deux
+  copies orphelines réelles peuvent légitimement partager un nom ; aucun
+  effet si l'id est déjà présent) et `diagnoseProjectsRegistry()` (READ-ONLY :
+  classe chaque id en `healthy` / `registeredWithoutData` / `orphaned`).
+- `src/lib/repo.ts` — `restoreOrphanProject()` (écrit via `saveProjects`,
+  donc suit le même chemin de write-through que toute autre modification du
+  registre) et `diagnoseProjects()` (wrapper READ-ONLY sur le vrai
+  `localStorage`).
+
+Tests ajoutés (10, tous verts) :
+- `projects.test.ts` — 4 tests `restoreOrphanProject` (id exact conservé ;
+  aucun effet si déjà présent ; deux copies homonymes autorisées ; aucune
+  métadonnée inventée pour un champ facultatif absent) + 4 tests
+  `diagnoseProjectsRegistry` (sain / enregistré-sans-donnée / orphelin, et
+  un test qui reproduit exactement le diagnostic réel post-restauration :
+  les 6 entrées du registre saines, `p-test-planning-20260919` toujours
+  orphelin).
+- `sync.test.ts` — TEST E (restaurer rend le projet visible avec le même
+  id, sans toucher à ses données métier) et TEST F (un flush ultérieur du
+  registre ne fait disparaître aucun projet restauré — régression). Les
+  scénarios A/B/C/D demandés correspondent aux TEST 1/2/4/3 déjà présents
+  dans ce fichier (ajout, modification, absence-sans-corbeille-préservée,
+  suppression explicite) — non dupliqués ici.
+
+### A.5 — Résultats après cette étape
+
+```
+tsc -b   : exit 0
+vitest   : 35 fichiers, 488/488 tests passés (10 nouveaux : 8 projects.test.ts + 2 sync.test.ts)
+eslint   : 0 erreur, 15 avertissements préexistants (inchangés)
+build    : succès
+e2e      : voir résultat rapporté séparément (même 6 scripts qu'en section 4)
+```
+
+### A.6 — Ce qui reste hors périmètre (rappel, inchangé)
+
+GED, RFI, VISA, vidéos, portail entreprise, infrastructure complète des
+plans PDF : rien de tout cela n'a été développé à cette étape, conformément
+à l'exclusion explicite. Les deux copies homonymes Gambetta et les trois
+copies homonymes Les Tilleuls restent en l'état — leur éventuelle
+consolidation (fusion, archivage) n'a pas été traitée, n'étant pas demandée
+et impliquant un choix humain sur laquelle des copies garder comme
+référence.
+
+### A.7 — Ce qui reste NON TESTÉ
+
+Comme en section 10 : aucune session de navigateur connectée au compte
+`admin` réel n'a été utilisée pour vérifier visuellement que les 6
+opérations restaurées apparaissent bien dans « Mes opérations » ni que
+leurs pages (Planning, Visite…) s'ouvrent correctement. La restauration a
+été vérifiée par relecture SQL directe de `sc-projects-v1` (contenu exact,
+6 entrées, ids inchangés) et par le fait qu'aucune autre ligne
+`app_state` n'a été modifiée au même instant — pas par un rendu UI réel.
+
+---
+
 *Rapport rédigé à l'issue du sprint. Voir aussi `docs/AUDIT_ACACIAS_E2E_2026-09-21.md`
 (audit initial) et `docs/SUPABASE.md` (architecture de synchronisation).*

@@ -33,7 +33,7 @@ export interface TrashedProject extends Project {
 /** Champs texte facultatifs : une valeur vide efface le champ. */
 const OPTIONAL_FIELDS = ['reference', 'address', 'moa', 'moe', 'amo'] as const
 
-export type ProjectError = 'name_required' | 'name_taken' | 'not_found'
+export type ProjectError = 'name_required' | 'name_taken' | 'not_found' | 'already_present'
 
 export interface Result<T> {
   ok: boolean
@@ -47,6 +47,7 @@ export const PROJECT_ERROR_LABEL: Record<ProjectError, string> = {
   name_required: "Le nom de l'opération est obligatoire.",
   name_taken: 'Une opération porte déjà ce nom.',
   not_found: 'Opération introuvable.',
+  already_present: 'Cette opération figure déjà dans le registre.',
 }
 
 export function findProject(projects: Project[], id: string | null | undefined): Project | undefined {
@@ -145,14 +146,78 @@ export function projectSubtitle(p: Project): string | undefined {
  * Restaurer un projet orphelin sans en connaître l'origine reste une
  * décision humaine (voir la limite documentée dans le rapport d'audit).
  */
-export function findOrphanProjectIds(knownProjectIds: string[], scopedStorageKeys: string[]): string[] {
-  const known = new Set(knownProjectIds)
-  const orphans = new Set<string>()
+/** Ids de projet référencés par des clés cloisonnées (`<base>::<projectId>`). */
+function scopedProjectIds(scopedStorageKeys: string[]): Set<string> {
+  const ids = new Set<string>()
   for (const key of scopedStorageKeys) {
     const sep = key.lastIndexOf('::')
     if (sep === -1) continue
     const projectId = key.slice(sep + 2)
-    if (projectId && !known.has(projectId)) orphans.add(projectId)
+    if (projectId) ids.add(projectId)
   }
-  return [...orphans].sort()
+  return ids
+}
+
+export function findOrphanProjectIds(knownProjectIds: string[], scopedStorageKeys: string[]): string[] {
+  const known = new Set(knownProjectIds)
+  const withData = scopedProjectIds(scopedStorageKeys)
+  return [...withData].filter(id => !known.has(id)).sort()
+}
+
+/**
+ * Réinscrit dans le registre un projet dont les données métier cloisonnées
+ * existent encore (sc-*::<id>) mais qui a disparu de sc-projects-v1 — le cas
+ * documenté dans docs/AUDIT_ACACIAS_E2E_2026-09-21.md §A et
+ * docs/SPRINT_FIABILISATION_2026-09-21.md §5.
+ *
+ * Contrairement à createProject, n'applique PAS la contrainte de nom unique :
+ * plusieurs copies orphelines réelles et distinctes peuvent légitimement
+ * porter le même nom (ex. deux copies indépendantes de « Gambetta » créées
+ * par deux appareils avant ce correctif) — ce n'est pas à cette fonction de
+ * les fusionner ou d'en choisir une. L'id fourni est réinscrit tel quel,
+ * jamais régénéré. Aucun effet si l'id est déjà présent dans le registre
+ * (jamais deux fois le même projet).
+ */
+export interface OrphanRestoreInput {
+  id: string
+  name: string
+  reference?: string
+  address?: string
+  createdAt: string
+}
+
+export function restoreOrphanProject(projects: Project[], input: OrphanRestoreInput): Result<Project[]> {
+  if (findProject(projects, input.id)) return { ok: false, projects, error: 'already_present' }
+  const project: Project = { id: input.id, name: input.name, createdAt: input.createdAt }
+  if (input.reference) project.reference = input.reference
+  if (input.address) project.address = input.address
+  return { ok: true, projects: [...projects, project], project }
+}
+
+/**
+ * Diagnostic complet (lecture seule, aucun effet de bord) du registre face
+ * aux données métier réellement présentes localement :
+ *   • healthy — projet référencé ET avec au moins une donnée métier trouvée ;
+ *   • registeredWithoutData — projet référencé mais sans aucune donnée
+ *     métier retrouvée (projet neuf pas encore utilisé, ou données déjà
+ *     purgées) ;
+ *   • orphaned — données métier trouvées mais projet absent du registre
+ *     (voir findOrphanProjectIds).
+ * Ne transforme jamais ce constat en suppression ou en restauration
+ * automatique : ce sont des fonctions séparées, appelées explicitement.
+ */
+export interface ProjectsDiagnosis {
+  healthy: string[]
+  registeredWithoutData: string[]
+  orphaned: string[]
+}
+
+export function diagnoseProjectsRegistry(projects: Project[], scopedStorageKeys: string[]): ProjectsDiagnosis {
+  const withData = scopedProjectIds(scopedStorageKeys)
+  const registeredIds = new Set(projects.map(p => p.id))
+  const healthy: string[] = []
+  const registeredWithoutData: string[] = []
+  for (const id of registeredIds) (withData.has(id) ? healthy : registeredWithoutData).push(id)
+  const orphaned = [...withData].filter(id => !registeredIds.has(id)).sort()
+  return { healthy: healthy.sort(), registeredWithoutData: registeredWithoutData.sort(), orphaned }
 }

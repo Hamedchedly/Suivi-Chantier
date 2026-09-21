@@ -57,6 +57,7 @@ import {
   hydrateFromRemote, enableSync, disableSync, clearLocalAppState, initRemoteSession,
 } from './sync'
 import { saveState, loadState, removeState } from './storage'
+import { getProjects, findOrphanProjects, restoreOrphanProject } from './repo'
 
 /** Écrit une valeur "serveur" avec un horodatage donné. */
 function srvSet(k: string, v: unknown, updated_at: string) {
@@ -388,6 +389,49 @@ describe('sync : registre des projets (sc-projects-v1) — fusion par id', () =>
     expect(server.get('sc-units-v1::B')?.v).toEqual([{ id: 'u1' }])
     expect(server.get('sc-gantt-v2::B')?.v).toEqual([{ id: 't1' }])
     expect(server.get('sc-visits-v3::B')?.v).toEqual([{ id: 'v1' }])
+  })
+
+  it('TEST E — restaurer un projet orphelin le rend visible dans le registre, avec le même id, sans créer de donnée métier', async () => {
+    vi.useFakeTimers()
+    // Le serveur ne connaît plus que Acacias dans le registre, mais les
+    // données métier de Gambetta existent toujours sous leurs clés cloisonnées
+    // (incident réel — voir docs/SPRINT_FIABILISATION_2026-09-21.md §5).
+    srvSet('sc-projects-v1', [P('acacias', 'Acacias')], '2026-09-01T09:00:00.000Z')
+    srvSet('sc-lots-config-v1::gambetta', [{ id: 'LOT01', company: 'LERICHE' }], '2026-09-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+
+    expect(findOrphanProjects()).toEqual(['gambetta']) // détecté avant toute écriture
+
+    const r = restoreOrphanProject({
+      id: 'gambetta', name: '111 rue Gambetta', reference: 'ER.T2286',
+      address: '111 Rue Gambetta, 51100 Reims', createdAt: '2026-09-17T21:31:17.590Z',
+    })
+    expect(r.ok).toBe(true)
+    await vi.advanceTimersByTimeAsync(900)
+
+    const v = server.get('sc-projects-v1')?.v as { id: string; name: string }[]
+    expect(v.map(p => p.id).sort()).toEqual(['acacias', 'gambetta']) // même id, aucun nouvel id
+    expect(v.find(p => p.id === 'gambetta')?.name).toBe('111 rue Gambetta')
+    expect(getProjects().find(p => p.id === 'gambetta')?.id).toBe('gambetta') // visible localement
+    // Les données métier cloisonnées n'ont pas bougé — cette fonction ne les touche jamais.
+    expect(server.get('sc-lots-config-v1::gambetta')?.v).toEqual([{ id: 'LOT01', company: 'LERICHE' }])
+  })
+
+  it('TEST F — après restauration, un flush ultérieur du registre ne fait disparaître aucun projet restauré (régression)', async () => {
+    vi.useFakeTimers()
+    srvSet('sc-projects-v1', [P('acacias', 'Acacias')], '2026-09-01T09:00:00.000Z')
+    srvSet('sc-lots-config-v1::gambetta', [{ id: 'LOT01' }], '2026-09-01T09:00:00.000Z')
+    await initRemoteSession('u1')
+    restoreOrphanProject({ id: 'gambetta', name: '111 rue Gambetta', createdAt: '2026-09-17T21:31:17.590Z' })
+    await vi.advanceTimersByTimeAsync(900)
+    expect((server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()).toEqual(['acacias', 'gambetta'])
+
+    // Un flush ultérieur et sans rapport avec la restauration (création d'une
+    // nouvelle opération C, à partir du cache local qui connaît déjà gambetta).
+    saveState('sc-projects-v1', [...getProjects(), { id: 'C', name: 'Nouvelle opération', createdAt: '2026-09-21T00:00:00.000Z' }])
+    await vi.advanceTimersByTimeAsync(900)
+    const ids = (server.get('sc-projects-v1')?.v as { id: string }[]).map(p => p.id).sort()
+    expect(ids).toEqual(['C', 'acacias', 'gambetta']) // gambetta toujours là
   })
 
   it('reproduit l’incident réel : un profil navigateur neuf qui ne crée qu’Acacias ne doit plus écraser Gambetta/Tilleuls/TEST', async () => {

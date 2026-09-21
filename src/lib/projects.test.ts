@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   Project, createProject, updateProject, deleteProject, findProject,
   resolveCurrent, projectLabel, projectSubtitle, findOrphanProjectIds,
+  restoreOrphanProject, diagnoseProjectsRegistry,
 } from './projects'
 
 const base = (over: Partial<Project> = {}): Project => ({
@@ -158,5 +159,83 @@ describe('findOrphanProjectIds', () => {
     expect(findOrphanProjectIds(['p-demo-residence-20260920'], keys)).toEqual([
       'p-test-planning-20260919', 'p1789295288813528', 'p1789340565817701', 'p1789341672812846',
     ])
+  })
+})
+
+describe('restoreOrphanProject', () => {
+  const input = (over: Partial<Parameters<typeof restoreOrphanProject>[1]> = {}) => ({
+    id: 'p-orphan', name: '111 rue Gambetta', reference: 'ER.T2286',
+    address: '111 Rue Gambetta, 51100 Reims', createdAt: '2026-09-17T21:31:17.590Z', ...over,
+  })
+
+  it('réinscrit le projet avec son id exact, sans toucher aux autres', () => {
+    const r = restoreOrphanProject([base()], input())
+    expect(r.ok).toBe(true)
+    expect(r.projects.map(p => p.id)).toEqual(['p1', 'p-orphan'])
+    expect(r.project).toEqual({
+      id: 'p-orphan', name: '111 rue Gambetta', reference: 'ER.T2286',
+      address: '111 Rue Gambetta, 51100 Reims', createdAt: '2026-09-17T21:31:17.590Z',
+    })
+  })
+
+  it('n’effectue aucun effet si l’id est déjà présent dans le registre', () => {
+    const already = [base({ id: 'p-orphan', name: 'Déjà là' })]
+    const r = restoreOrphanProject(already, input())
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('already_present')
+    expect(r.projects).toBe(already) // inchangé, même référence
+  })
+
+  it('autorise deux copies orphelines distinctes portant le même nom (cas réel Gambetta ×2)', () => {
+    const afterFirst = restoreOrphanProject([], input({ id: 'gambetta-1' }))
+    const afterSecond = restoreOrphanProject(afterFirst.projects, input({ id: 'gambetta-2' }))
+    expect(afterSecond.ok).toBe(true)
+    expect(afterSecond.projects.map(p => p.id).sort()).toEqual(['gambetta-1', 'gambetta-2'])
+    expect(afterSecond.projects.every(p => p.name === '111 rue Gambetta')).toBe(true)
+  })
+
+  it('laisse les champs facultatifs absents plutôt que d’inventer une valeur', () => {
+    const r = restoreOrphanProject([], input({ reference: undefined, address: undefined }))
+    expect(r.project?.reference).toBeUndefined()
+    expect(r.project?.address).toBeUndefined()
+  })
+})
+
+describe('diagnoseProjectsRegistry', () => {
+  it('classe un projet référencé avec données comme sain', () => {
+    const d = diagnoseProjectsRegistry([base({ id: 'pA' })], ['sc-gantt-v2::pA'])
+    expect(d).toEqual({ healthy: ['pA'], registeredWithoutData: [], orphaned: [] })
+  })
+
+  it('classe un projet référencé sans aucune donnée métier trouvée', () => {
+    const d = diagnoseProjectsRegistry([base({ id: 'pNeuf' })], [])
+    expect(d).toEqual({ healthy: [], registeredWithoutData: ['pNeuf'], orphaned: [] })
+  })
+
+  it('classe des données métier sans entrée de registre comme orphelines', () => {
+    const d = diagnoseProjectsRegistry([], ['sc-units-v1::pOrphan'])
+    expect(d).toEqual({ healthy: [], registeredWithoutData: [], orphaned: ['pOrphan'] })
+  })
+
+  it('reproduit le diagnostic réel post-restauration : Acacias + 5 restaurés sains, TEST-planning encore orphelin', () => {
+    const projects = [
+      base({ id: 'p-demo-residence-20260920', name: 'Acacias' }),
+      base({ id: 'p1789340565817701', name: '111 rue Gambetta' }),
+      base({ id: 'p1789341672812846', name: '111 rue Gambetta' }),
+      base({ id: 'p1789295288813528', name: 'Résidence Les Tilleuls' }),
+      base({ id: 'p1789325281482814', name: 'Résidence Les Tilleuls' }),
+      base({ id: 'p1789483121506563', name: 'Résidence Les Tilleuls' }),
+    ]
+    const keys = [
+      'sc-lots-config-v1::p-demo-residence-20260920',
+      'sc-lots-config-v1::p1789340565817701', 'sc-lots-config-v1::p1789341672812846',
+      'sc-lots-config-v1::p1789295288813528', 'sc-lots-config-v1::p1789325281482814',
+      'sc-lots-config-v1::p1789483121506563',
+      'sc-lots-config-v1::p-test-planning-20260919', // pas (encore) restauré
+    ]
+    const d = diagnoseProjectsRegistry(projects, keys)
+    expect(d.healthy.sort()).toEqual(projects.map(p => p.id).sort())
+    expect(d.registeredWithoutData).toEqual([])
+    expect(d.orphaned).toEqual(['p-test-planning-20260919'])
   })
 })
