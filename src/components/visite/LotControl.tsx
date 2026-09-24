@@ -248,7 +248,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const [collapsed, setCollapsed] = useState(
-    () => task.state === 'ok',
+    () => task.state === 'ok' && (task.progress ?? 0) === 100,
   )
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -359,8 +359,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
-        {/* Replier si la tâche était terminée */}
-        {task.state === 'ok' && (
+        {/* Replier si la tâche était terminée (ok + 100%) */}
+        {task.state === 'ok' && (task.progress ?? 0) === 100 && (
           <button onClick={() => setCollapsed(true)} title="Replier" style={miniBtn('#15803d', false)}>
             <Check size={14} />
           </button>

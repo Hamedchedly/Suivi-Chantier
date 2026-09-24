@@ -170,19 +170,31 @@ describe('progress helpers', () => {
   })
 })
 
-describe('task completion rules', () => {
-  it('only state === ok marks a task as completed, never progress alone', () => {
-    // A task with plannedProgress = 100 but state = not_checked is NOT completed
+describe('task completion & collapse rules', () => {
+  it('plannedProgress=100 + state=not_checked is NOT complete', () => {
     const uncheckedTask = check({ taskId: 'a', lotId: 'L05', plannedProgress: 100, state: 'not_checked' })
-    expect(tasksState([uncheckedTask])).toBe('not_started') // not 'done'
+    expect(tasksState([uncheckedTask])).toBe('not_started')
   })
-  it('state ok with progress 100 is completed', () => {
+  it('state=ok + progress=100 is complete and collapsible', () => {
     const completedTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'ok' })
     expect(tasksState([completedTask])).toBe('done')
   })
-  it('state ok with progress 50 is still completed (control marks completion, not progress)', () => {
+  it('state=ok + progress=50 is complete for state tracking but NOT collapsible visually', () => {
+    // tasksState says 'done' (controlled), but UI collapse requires progress === 100
     const checkedPartialTask = check({ taskId: 'a', lotId: 'L05', progress: 50, state: 'ok' })
     expect(tasksState([checkedPartialTask])).toBe('done')
+  })
+  it('state=ok + progress=80 is complete for state tracking but NOT collapsible visually', () => {
+    const checkedPartialTask = check({ taskId: 'a', lotId: 'L05', progress: 80, state: 'ok' })
+    expect(tasksState([checkedPartialTask])).toBe('done')
+  })
+  it('state=blocked + progress=100 is NOT collapsible (blocked takes precedence)', () => {
+    const blockedTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'blocked' })
+    expect(tasksState([blockedTask])).toBe('blocked')
+  })
+  it('state=to_review + progress=100 is NOT collapsible (needs review)', () => {
+    const reviewTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'to_review' })
+    expect(tasksState([reviewTask])).toBe('to_review')
   })
 })
 
