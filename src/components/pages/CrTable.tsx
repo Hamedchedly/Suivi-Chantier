@@ -807,7 +807,7 @@ export function CrTable() {
         </div>
       ))}
 
-      {showExport && <CrExport reserves={reserves} lots={lots} crNumbers={crNumbers} onClose={() => setShowExport(false)} />}
+      {showExport && <CrExport reserves={reserves} lots={lots} zoneRefs={zoneRefs} crNumbers={crNumbers} onClose={() => setShowExport(false)} />}
     </div>
   )
 }

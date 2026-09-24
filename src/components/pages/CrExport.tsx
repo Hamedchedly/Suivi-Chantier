@@ -11,16 +11,18 @@ import { X, Printer, ChevronUp, ChevronDown } from 'lucide-react'
 import { Reserve, getReserveCompanies, getReserveLocations, getReserveLots, isArchivedAt, isNewOrModifiedAt } from '../../lib/reserves'
 import {
   getCrExportConfig, saveCrExportConfig, CrExportConfig, CrExportSectionKey, CR_EXPORT_SECTION_LABEL,
-  getGanttTasks, getMeetings, getProjects, getCurrentProjectId,
+  getGanttTasks, getMeetings, getProjects, getCurrentProjectId, getZoneRefs,
 } from '../../lib/repo'
 import { flattenLeaves } from '../../lib/schedule'
 import { computeTimelineRange, xForDate, widthForRange } from '../../lib/planningViewModel'
 import { GanttTask } from '../../types/gantt'
+import type { ZoneRef } from '../../lib/visits'
 
 interface Props {
   reserves: Reserve[]
   lots: { id: string; name: string; company?: string }[]
   crNumbers: number[]
+  zoneRefs?: ZoneRef[]
   onClose: () => void
 }
 
@@ -38,13 +40,14 @@ export function filenameFor(opName: string, crNo: number, date = new Date()): st
 const mondayOf = (d: Date): Date => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0, 0, 0, 0); return x }
 const addDays = (d: Date, n: number): Date => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 
-export function CrExport({ reserves, lots, crNumbers, onClose }: Props) {
+export function CrExport({ reserves, lots, crNumbers, zoneRefs, onClose }: Props) {
   const [crNo, setCrNo] = useState<number>(crNumbers.length ? Math.max(...crNumbers) : 1)
   const [config, setConfig] = useState<CrExportConfig>(getCrExportConfig)
 
   const project = useMemo(() => getProjects().find(p => p.id === getCurrentProjectId()), [])
   const ganttTasks = useMemo(() => getGanttTasks(), [])
   const meetings = useMemo(() => getMeetings(), [])
+  const zoneRefsLocal = useMemo(() => zoneRefs ?? getZoneRefs(), [zoneRefs])
 
   const toggleSection = (key: CrExportSectionKey) => {
     const next = { ...config, sections: { ...config.sections, [key]: !config.sections[key] } }
@@ -98,6 +101,10 @@ export function CrExport({ reserves, lots, crNumbers, onClose }: Props) {
   }, [filename])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
+  const zoneLabel = (id: string) => {
+    const z = zoneRefsLocal.find(z => z.refId === id)
+    return z ? `${z.buildingLabel} — ${z.label}` : id
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 200, display: 'flex' }} className="cr-export-overlay">
@@ -163,11 +170,11 @@ export function CrExport({ reserves, lots, crNumbers, onClose }: Props) {
                   meeting?.attendees.length ? <p style={pText}>{meeting.attendees.join(', ')}</p> : <p style={pText}>Non renseigné.</p>
                 )}
                 {key === 'avancement' && <AvancementParLot ganttTasks={ganttTasks} />}
-                {key === 'remarquesOuvertes' && <RemarquesList rows={nonTerminees} crNo={crNo} lotLabel={lotLabel} />}
+                {key === 'remarquesOuvertes' && <RemarquesList rows={nonTerminees} crNo={crNo} lotLabel={lotLabel} zoneLabel={zoneLabel} />}
                 {key === 'remarquesNouvelles' && (
-                  nouvelles.length ? <RemarquesList rows={nouvelles} crNo={crNo} lotLabel={lotLabel} /> : <p style={pText}>Aucune nouvelle remarque à ce CR.</p>
+                  nouvelles.length ? <RemarquesList rows={nouvelles} crNo={crNo} lotLabel={lotLabel} zoneLabel={zoneLabel} /> : <p style={pText}>Aucune nouvelle remarque à ce CR.</p>
                 )}
-                {key === 'actions' && <ActionsTable rows={actions} lotLabel={lotLabel} />}
+                {key === 'actions' && <ActionsTable rows={actions} lotLabel={lotLabel} zoneLabel={zoneLabel} />}
                 {key === 'photos' && <PhotosGrid rows={photos} />}
                 {key === 'prochaineReunion' && (
                   nextMeeting ? <p style={pText}><b>{nextMeeting.title}</b> — {frDate(nextMeeting.date)}</p> : <p style={pText}>Non planifiée.</p>
@@ -249,14 +256,14 @@ function AvancementParLot({ ganttTasks }: { ganttTasks: GanttTask[] }) {
   )
 }
 
-function RemarquesList({ rows, crNo, lotLabel }: { rows: Reserve[]; crNo: number; lotLabel: (id: string) => string }) {
+function RemarquesList({ rows, crNo, lotLabel, zoneLabel }: { rows: Reserve[]; crNo: number; lotLabel: (id: string) => string; zoneLabel: (id: string) => string }) {
   if (rows.length === 0) return <p style={pText}>Aucune remarque.</p>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {rows.map(r => {
         const isNewOrMod = isNewOrModifiedAt(r, crNo)
         const lotChips = getReserveLots(r).map(lotLabel)
-        const locChips = getReserveLocations(r)
+        const locChips = getReserveLocations(r).map(zoneLabel)
         const companyText = r.allCompanies ? 'Toutes les entreprises' : getReserveCompanies(r).join(', ')
         return (
           <div key={r.id} style={{ fontSize: 12, borderBottom: '1px solid #f1f5f9', paddingBottom: 5 }}>
@@ -274,13 +281,13 @@ function RemarquesList({ rows, crNo, lotLabel }: { rows: Reserve[]; crNo: number
   )
 }
 
-function ActionsTable({ rows, lotLabel }: { rows: Reserve[]; lotLabel: (id: string) => string }) {
+function ActionsTable({ rows, lotLabel, zoneLabel }: { rows: Reserve[]; lotLabel: (id: string) => string; zoneLabel: (id: string) => string }) {
   if (rows.length === 0) return <p style={pText}>Aucune action en cours.</p>
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
       <thead>
         <tr>
-          {['Point', 'Lot', 'Entreprise', 'Échéance'].map(h => (
+          {['Point', 'Lot', 'Logement', 'Entreprise', 'Échéance'].map(h => (
             <th key={h} style={{ textAlign: 'left', padding: '4px 6px', background: '#f8fafc', color: '#02457A', fontSize: 10 }}>{h}</th>
           ))}
         </tr>
@@ -290,6 +297,7 @@ function ActionsTable({ rows, lotLabel }: { rows: Reserve[]; lotLabel: (id: stri
           <tr key={r.id}>
             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>{r.description}</td>
             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>{getReserveLots(r).map(lotLabel).join(', ') || '—'}</td>
+            <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>{getReserveLocations(r).map(zoneLabel).join(', ') || '—'}</td>
             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>{r.allCompanies ? 'Toutes' : getReserveCompanies(r).join(', ') || '—'}</td>
             <td style={{ padding: '4px 6px', borderBottom: '1px solid #f1f5f9' }}>{frDate(r.dueDate)}</td>
           </tr>
