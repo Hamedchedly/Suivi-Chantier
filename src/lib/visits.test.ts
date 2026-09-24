@@ -170,6 +170,22 @@ describe('progress helpers', () => {
   })
 })
 
+describe('task completion rules', () => {
+  it('only state === ok marks a task as completed, never progress alone', () => {
+    // A task with plannedProgress = 100 but state = not_checked is NOT completed
+    const uncheckedTask = check({ taskId: 'a', lotId: 'L05', plannedProgress: 100, state: 'not_checked' })
+    expect(tasksState([uncheckedTask])).toBe('not_started') // not 'done'
+  })
+  it('state ok with progress 100 is completed', () => {
+    const completedTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'ok' })
+    expect(tasksState([completedTask])).toBe('done')
+  })
+  it('state ok with progress 50 is still completed (control marks completion, not progress)', () => {
+    const checkedPartialTask = check({ taskId: 'a', lotId: 'L05', progress: 50, state: 'ok' })
+    expect(tasksState([checkedPartialTask])).toBe('done')
+  })
+})
+
 describe('zoneState', () => {
   it('honours an explicit close ("logement terminé")', () => {
     const z = zone({ refId: 'A', closedAt: '2026-09-11T10:00:00.000Z', tasks: [check({ taskId: 't', lotId: 'L05' })] })
