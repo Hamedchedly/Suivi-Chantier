@@ -2,7 +2,7 @@
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut, LayoutList, GanttChartSquare } from 'lucide-react'
+import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut, LayoutList, GanttChartSquare, Cog } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
 import { PlanningTask } from '../../../types/planning'
 import { DateCommitment } from '../../../lib/commitments'
@@ -60,11 +60,13 @@ interface Props {
   /** Sous-tâche : uniquement pour une tâche de profondeur 1 (fille directe d'un
    * lot) sans enfant — createSubTask (lib/planning.ts) ne va pas plus loin. */
   onSubTaskAdd?: (parentTaskId: string, title: string, start: string, duration: number) => void
+  /** Navigation vers la configuration du planning (section 6 du brief). */
+  onEditPlanningConfig?: () => void
 }
 
 export function PlanningGantt({
   tasks, commitments, operationId, cpm: precomputedCpm, onDelayCauseChange,
-  onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove, onSubTaskAdd,
+  onProgress, onPlannedDates, onActualStart, onActualEnd, onDependencyAdd, onDependencyRemove, onSubTaskAdd, onEditPlanningConfig,
 }: Props) {
   const today = useMemo(() => new Date(), [])
   const [zoom, setZoom] = useState<ZoomLevel>('week')
@@ -244,6 +246,15 @@ export function PlanningGantt({
           )}
           {!showListView && (
             <ZoomControl multiplier={zoomMultiplier} onChange={setZoomMultiplier} />
+          )}
+          {onEditPlanningConfig && (
+            <button
+              onClick={onEditPlanningConfig}
+              title="Modifier le planning et les congés"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--navy)', background: '#eef2f6', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', flexShrink: 0 }}
+            >
+              <Cog size={14} /> Config
+            </button>
           )}
           <button
             onClick={() => setShowAnalysis(true)}

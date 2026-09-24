@@ -6,6 +6,7 @@ import {
   getUnits, getTaskUnits, getZoneRefs, getCommitments, getCurrentProjectId,
   getProgressHistory, saveProgressHistory, getActualDateOverrides, saveActualDateOverrides,
 } from '../../lib/repo'
+import type { Page } from '../layout/navConfig'
 import { Breadcrumbs, buildGanttBreadcrumbs } from '../layout/Breadcrumbs'
 import { createTask, createSubTask, recomputeAll, durationBetween, setTaskDependencies } from '../../lib/planning'
 import { maxDrift, lateTasks, flattenLeaves } from '../../lib/schedule'
@@ -103,7 +104,12 @@ function buildLogementTree(
   return buildings
 }
 
-export function Gantt() {
+interface GanttProps {
+  /** Navigation callback — permet de naviguer vers d'autres pages. */
+  onNavigate?: (page: Page) => void
+}
+
+export function Gantt({ onNavigate }: GanttProps) {
   const prefs0 = useMemo(() => getGanttPrefs(), [])
   const [mode, setMode] = useState<'gantt' | 'matrix'>('gantt')
   const [group, setGroup] = useState<'lot' | 'logement'>('lot')
@@ -285,6 +291,13 @@ export function Gantt() {
     if (res.ok) { setGanttTasks(res.tasks); saveGanttTasks(res.tasks); logActivity('planning', `Sous-tâche ajoutée : ${title}`) }
   }
 
+  const handleEditPlanningConfig = () => {
+    if (onNavigate) {
+      try { sessionStorage.setItem('sc_config_active_tab', 'planning') } catch { /* noop */ }
+      onNavigate('config')
+    }
+  }
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       <Breadcrumbs crumbs={buildGanttBreadcrumbs(mode, group)} />
@@ -374,6 +387,7 @@ export function Gantt() {
             setGanttTasks(prev => mapTaskInList(prev, id, t => ({ ...t, dependencies: t.dependencies.filter(d => d !== depId) })))
           }
           onSubTaskAdd={addSubTaskFromForm}
+          onEditPlanningConfig={handleEditPlanningConfig}
         />
       )}
     </div>

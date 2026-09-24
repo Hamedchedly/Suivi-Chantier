@@ -467,7 +467,7 @@ export default function App() {
               Ce module n'est pas activé pour votre compte. Demandez à un super-administrateur.
             </div>
           )}
-          {allowed('gantt') && page === 'gantt'    && <Gantt />}
+          {allowed('gantt') && page === 'gantt'    && <Gantt onNavigate={go} />}
           {allowed('visite') && page === 'visite'   && <Visite />}
           {allowed('cr') && page === 'cr'       && <CR />}
           {allowed('entreprises') && page === 'entreprises' && <Entreprises />}

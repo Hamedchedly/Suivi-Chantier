@@ -9,10 +9,12 @@ const sameTime = (a?: Date, b?: Date): boolean => (a?.getTime() ?? null) === (b?
 export function sameRenderTask(a: PlanningTask, b: PlanningTask): boolean {
   return (
     a.id === b.id &&
+    a.title === b.title &&
     a.progress === b.progress &&
     a.status === b.status &&
     a.isCritical === b.isCritical &&
     a.isNa === b.isNa &&
+    a.isMilestone === b.isMilestone &&
     sameTime(a.contract.start, b.contract.start) &&
     sameTime(a.contract.end, b.contract.end) &&
     sameTime(a.actual.start, b.actual.start) &&

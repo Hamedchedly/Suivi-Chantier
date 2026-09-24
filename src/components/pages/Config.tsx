@@ -15,7 +15,16 @@ interface ConfigProps {
 }
 
 export function Config({ project, projects, onProjectChange }: ConfigProps) {
-  const [activeTab, setActiveTab] = useState<ConfigTab>('project')
+  const [activeTab, setActiveTab] = useState<ConfigTab>(() => {
+    try {
+      const saved = sessionStorage.getItem('sc_config_active_tab') as ConfigTab | null
+      if (saved && ['project', 'planning', 'lots', 'email', 'export', 'backup'].includes(saved)) {
+        sessionStorage.removeItem('sc_config_active_tab') // Consommer une fois
+        return saved
+      }
+    } catch { /* noop */ }
+    return 'project'
+  })
   const [lots, setLots] = useState<LotContact[]>(getLotsConfig)
   const [rules, setRules] = useState<string[]>(getProjectRules)
   const [newRule, setNewRule] = useState('')
