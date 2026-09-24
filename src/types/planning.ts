@@ -54,6 +54,8 @@ export interface PlanningTask {
   isCritical: boolean
   status: TaskStatus
   progress: number
+  /** Cette tâche ne s'applique pas ici (N/A) — exclue du rollup pondéré. */
+  isNa?: boolean
 
   contract: { start: Date; end: Date; workingDays?: number }
   actual: { start?: Date; end?: Date; progress: number }

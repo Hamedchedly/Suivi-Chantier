@@ -113,6 +113,7 @@ export function toPlanningTask(task: GanttTask, ctx: PlanningTaskContext): Plann
     isCritical: task.is_critical,
     status: task.status,
     progress: task.progress,
+    isNa: task.is_na,
     contract: {
       start: task.baseline_start ?? task.planned_start,
       end: task.baseline_end ?? task.planned_end,

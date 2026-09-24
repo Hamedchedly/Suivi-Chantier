@@ -12,6 +12,7 @@ export function sameRenderTask(a: PlanningTask, b: PlanningTask): boolean {
     a.progress === b.progress &&
     a.status === b.status &&
     a.isCritical === b.isCritical &&
+    a.isNa === b.isNa &&
     sameTime(a.contract.start, b.contract.start) &&
     sameTime(a.contract.end, b.contract.end) &&
     sameTime(a.actual.start, b.actual.start) &&

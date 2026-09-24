@@ -55,7 +55,7 @@ export function GanttDetails({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 8 }}>
             <div>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--sky)', fontWeight: 700 }}>
-                {task.lotId}{task.isMilestone ? ' · jalon' : ''}{task.isCritical ? ' · critique' : ''}
+                {task.lotId}{task.isMilestone ? ' · jalon' : ''}{task.isCritical ? ' · critique' : ''}{task.isNa ? ' · N/A' : ''}
               </div>
               <h2 style={{ color: '#fff', margin: '4px 0 0', fontSize: 17, lineHeight: 1.25 }}>{task.title}</h2>
             </div>

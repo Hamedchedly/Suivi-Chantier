@@ -45,7 +45,7 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
         <span style={{ width: 14, flexShrink: 0 }} />
       )}
       <span style={{
-        fontSize: 12, fontWeight: (isLot || (task.progress > 0 && task.progress < 100)) ? 700 : 500, color: isLot ? 'var(--navy)' : 'var(--ink)',
+        fontSize: 12, fontWeight: (isLot || (task.progress > 0 && task.progress < 100)) ? 700 : 500, color: isLot ? 'var(--navy)' : task.isNa ? 'var(--muted)' : 'var(--ink)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
       }}>
         {task.title}
@@ -59,7 +59,15 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
           Terminé
         </span>
       )}
-      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{task.progress}%</span>
+      {task.isNa && (
+        <span style={{
+          fontSize: 9, fontWeight: 700, color: 'var(--muted)', background: 'rgba(107,114,128,.1)',
+          borderRadius: 999, padding: '2px 7px', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.03em',
+        }}>
+          N/A
+        </span>
+      )}
+      <span style={{ fontSize: 10, fontWeight: 700, color: task.isNa ? 'var(--muted)' : 'var(--muted)', flexShrink: 0 }}>{task.isNa ? '—' : `${task.progress}%`}</span>
     </div>
   )
 }, (prev, next) =>
