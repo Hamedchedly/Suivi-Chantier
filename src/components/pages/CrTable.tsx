@@ -45,6 +45,7 @@ type ColumnVisibility = {
   crNo: boolean
   description: boolean
   lotCompany: boolean
+  logements: boolean
   kind: boolean
   dueDate: boolean
   status: boolean
@@ -95,7 +96,7 @@ export function CrTable() {
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [view, setView] = useState<View>('par-lot')
+  const [view, setView] = useState<View>('par-reunion')
   const [displayFilter, setDisplayFilter] = useState<DisplayFilter>('tous')
   const [locked, setLocked] = useState(true)
   const [selectedCr, setSelectedCr] = useState<number | null>(null)
@@ -124,9 +125,9 @@ export function CrTable() {
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
-      return saved ? JSON.parse(saved) : { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+      return saved ? JSON.parse(saved) : { crNo: true, description: true, lotCompany: true, logements: true, kind: true, dueDate: true, status: true }
     } catch {
-      return { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+      return { crNo: true, description: true, lotCompany: true, logements: true, kind: true, dueDate: true, status: true }
     }
   })
   const fileRef = useRef<HTMLInputElement>(null)
@@ -155,7 +156,7 @@ export function CrTable() {
   // ── URL state sync: update URL when state changes ───────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (view !== 'par-lot') params.set('view', view)
+    if (view !== 'par-reunion') params.set('view', view)
     else params.delete('view')
     if (searchTerm) params.set('search', encodeURIComponent(searchTerm))
     else params.delete('search')
@@ -484,6 +485,7 @@ export function CrTable() {
                   { key: 'crNo', label: 'N° CR' },
                   { key: 'description', label: 'Remarque' },
                   { key: 'lotCompany', label: 'Lot / Entreprise' },
+                  { key: 'logements', label: 'Logements Concernés' },
                   { key: 'kind', label: 'Type' },
                   { key: 'dueDate', label: 'Échéance' },
                   { key: 'status', label: 'Statut' },
@@ -761,6 +763,7 @@ export function CrTable() {
                 {columnVis.crNo && <span>CR</span>}
                 {columnVis.description && <span>Point</span>}
                 {columnVis.lotCompany && <span>Lot / Entreprise</span>}
+                {columnVis.logements && <span>Logements Concernés</span>}
                 {columnVis.kind && <span>Type</span>}
                 {columnVis.dueDate && <span>Échéance</span>}
                 {columnVis.status && <span>Statut</span>}
@@ -814,6 +817,7 @@ const buildGridCols = (vis: ColumnVisibility): string => {
   if (vis.crNo) cols.push('52px')
   if (vis.description) cols.push('1fr')
   if (vis.lotCompany) cols.push('150px')
+  if (vis.logements) cols.push('150px')
   if (vis.kind) cols.push('60px')
   if (vis.dueDate) cols.push('90px')
   if (vis.status) cols.push('84px')
@@ -886,6 +890,9 @@ function RowLine({
                 <MultiSelectChips options={companies.map(c => ({ id: c, label: c }))} selected={r.allCompanies ? [] : getReserveCompanies(r)} onChange={ids => onCell({ companyIds: ids, company: ids[0] })} placeholder="Entreprise(s)" disabled={r.allCompanies} />
               </div>
             )}
+            {columnVis.logements && (
+              <MultiSelectChips options={zoneRefs.map(z => ({ id: z.refId, label: `${z.buildingLabel} — ${z.label}` }))} selected={getReserveLocations(r)} onChange={ids => onCell({ logementIds: ids, logementId: ids[0] ?? '' })} placeholder="Logement(s)" />
+            )}
             {columnVis.kind && (
               <select value={reserveKind(r)} onChange={e => onCell({ kind: e.target.value as ReserveKind })} style={{ ...input, padding: '4px 6px', fontSize: 11 }}>
                 <option value="action">Action</option>
@@ -923,6 +930,11 @@ function RowLine({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {lotChips.length > 0 && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{lotChips.join(', ')}</span>}
                 {companyText && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{companyText}</span>}
+              </div>
+            )}
+            {columnVis.logements && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {locationChips.length > 0 ? locationChips.map(l => <span key={l} style={{ color: 'var(--muted)', fontSize: 11 }}>{l}</span>) : <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>}
               </div>
             )}
             {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
