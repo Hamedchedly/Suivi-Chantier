@@ -335,11 +335,16 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
   return controlled.length === applicable.length ? 'done' : 'in_progress'
 }
 
-/** Observed works progress (%) — mean of the observed percentages, na excluded. */
+/** Observed works progress (%) — mean of the observed percentages, na excluded.
+ * If a task hasn't been observed yet (progress undefined), use plannedProgress instead. */
 export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
   const applicable = tasks.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
-  const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
+  const sum = applicable.reduce((s, t) => {
+    // Use observed progress if available, otherwise use planned progress (no change assumed)
+    const progress = t.progress !== undefined ? t.progress : (t.plannedProgress ?? 0)
+    return s + progress
+  }, 0)
   return Math.round(sum / applicable.length)
 }
 

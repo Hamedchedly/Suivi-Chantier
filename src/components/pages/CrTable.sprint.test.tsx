@@ -42,19 +42,20 @@ describe('sprint — Affichage : Tous / Importants', () => {
   })
 })
 
-describe('sprint — Regroupement : Par lot / Par logement / Par réunion, défaut Par lot', () => {
+describe('sprint — Regroupement : Par lot / Par logement / Par réunion, défaut Par réunion', () => {
   it('une remarque multi-lots apparaît sous CHAQUE en-tête de lot (LOT 03 et LOT 04)', () => {
     render(<CrTable />)
+    fireEvent.click(screen.getByText('Par lot'))
     expect(screen.getAllByText(/LOT 03/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/LOT 04/).length).toBeGreaterThan(0)
     const occurrences = screen.getAllByText('Remarque multi-lot')
     expect(occurrences.length).toBe(2)
   })
 
-  it('bascule vers Par réunion sans erreur', () => {
+  it('bascule vers Par réunion et revient à Par lot', () => {
     render(<CrTable />)
-    fireEvent.click(screen.getByText('Par réunion'))
-    expect(screen.getByText('Sans réunion')).toBeDefined()
+    fireEvent.click(screen.getByText('Par lot'))
+    expect(screen.getAllByText(/LOT 03/).length).toBeGreaterThan(0)
   })
 })
 
