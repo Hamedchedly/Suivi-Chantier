@@ -143,6 +143,26 @@ export function PlanningGantt({
     setCollapsed(prev => new Set([...prev, ...completedGroupIds]))
   }, [planningTasks, completedGroupIds])
 
+  // Section 1.3 : auto-collapse quand un groupe DEVIENT 100% après modification.
+  // Contrairement à 1.2, ce mécanisme s'exécute à chaque changement de completed status.
+  // Il ajoute les nouveaux groupes terminés à collapsed sans jamais les retirer
+  // (l'utilisateur peut toujours les rouvrir manuellement si besoin).
+  useEffect(() => {
+    if (collapseInitDone.current && completedGroupIds.size > 0) {
+      setCollapsed(prev => {
+        const next = new Set(prev)
+        let changed = false
+        for (const id of completedGroupIds) {
+          if (!next.has(id)) {
+            next.add(id)
+            changed = true
+          }
+        }
+        return changed ? next : prev
+      })
+    }
+  }, [completedGroupIds])
+
   const analysis = useMemo(() => analyzePlanning(tasks, today), [tasks, today])
   const cp = useMemo(() => computeCriticalPath(tasks, precomputedCpm), [tasks, precomputedCpm])
   const titleById = useMemo(() => {

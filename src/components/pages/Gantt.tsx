@@ -163,8 +163,17 @@ export function Gantt() {
 
   /** Dates contractuelles (planned_start/planned_end) uniquement — les dates
    * réelles ne s'écrivent plus jamais directement sur le champ, voir
-   * recordActualOverride ci-dessous. */
-  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date }) =>
+   * recordActualOverride ci-dessous.
+   *
+   * GUARD: Validate task ID exists before updating to prevent synthetic parent
+   * IDs from being processed. */
+  const handleTaskUpdate = (id: string, updates: { planned_start?: Date; planned_end?: Date }) => {
+    const task = findTaskInList(ganttTasks, id)
+    if (!task) {
+      console.warn(`[handleTaskUpdate] Task ID not found: ${id}. Aborting date update.`)
+      return
+    }
+
     setGanttTasks(prev => {
       const moved = mapTaskInList(prev, id, t => {
         const next = { ...t, ...updates }
@@ -186,6 +195,7 @@ export function Gantt() {
       const rolledUp = recomputeAll(replanned)
       return computeForecasts(rolledUp, new Date(), calendar)
     })
+  }
 
   /**
    * Saisir un avancement historise l'observation (source 'manual', datée
@@ -238,8 +248,16 @@ export function Gantt() {
    * écrasement direct du champ — coexiste avec la dérivation automatique par
    * l'historique (la plus récemment SAISIE des deux l'emporte, voir
    * actualDates.deriveActualDates). Aucune restriction de date future.
+   *
+   * GUARD: Validate task ID exists before recording override.
    */
   const recordActualOverride = (id: string, field: ActualDateField, date: Date | null) => {
+    const task = findTaskInList(ganttTasks, id)
+    if (!task) {
+      console.warn(`[recordActualOverride] Task ID not found: ${id}. Aborting actual date override.`)
+      return
+    }
+
     const overrides: ActualDateOverride[] = [...getActualDateOverrides(), {
       id: `ov-${Date.now()}-${id}-${field}`, taskId: id, field,
       value: date ? isoDay(date) : null, at: new Date().toISOString(),
@@ -256,6 +274,12 @@ export function Gantt() {
   }
 
   const addSubTaskFromForm = (parentTaskId: string, title: string, start: string, duration: number) => {
+    const task = findTaskInList(ganttTasks, parentTaskId)
+    if (!task) {
+      console.warn(`[addSubTaskFromForm] Parent task ID not found: ${parentTaskId}. Aborting subtask creation.`)
+      return
+    }
+
     const [y, m, d] = start.split('-').map(Number)
     const res = createSubTask(ganttTasks, parentTaskId, { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) })
     if (res.ok) { setGanttTasks(res.tasks); saveGanttTasks(res.tasks); logActivity('planning', `Sous-tâche ajoutée : ${title}`) }

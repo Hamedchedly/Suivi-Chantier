@@ -197,5 +197,19 @@ Un comparateur "optimisé" peut devenir dangereux s'il oublie des dépendances.
 
 ---
 
-**Statut:** À débuter
-**Prochaine étape:** Tests de régression + diagnostic slider bug
+**Statut:** En cours (Phase 2/7)
+**Avancement:**
+- [x] Phase 1: Tests de régression setup
+- [x] Phase 2: Fix bug slider + guards
+- [x] Phase 3: Auto-collapse 100%
+- [ ] Phase 4: Hiérarchie & N/A visibility
+- [ ] Phase 5: Dépendances & bonds
+- [ ] Phase 6: Nettoyage code mort
+- [ ] Phase 7: Validation finale
+
+**Changements effectués:**
+1. ✓ Ajout guard dans handleProgress pour vérifier task ID existe en ganttTasks
+2. ✓ Désactivation édition progress pour tâches avec children (parents synthétiques)
+3. ✓ Auto-collapse implémenté pour tâches atteignant 100%
+
+**Prochaine étape:** Vérifications hiérarchie et N/A visibility
