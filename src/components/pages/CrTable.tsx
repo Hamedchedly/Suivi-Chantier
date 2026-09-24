@@ -451,6 +451,16 @@ export function CrTable() {
         >
           {locked ? <><Lock size={14} /> Déverrouiller</> : <><Unlock size={14} /> Verrouiller</>}
         </button>
+        {!locked && (
+          <>
+            <button onClick={() => { setReserves(getReserves()); setLocked(true) }} style={{ ...ghostBtn, color: '#dc2626', padding: '6px 12px', fontSize: '12px' }}>
+              <Ban size={14} /> Annuler
+            </button>
+            <button onClick={() => { saveReserves(reserves); setLocked(true) }} style={{ ...ghostBtn, background: '#dcfce7', color: '#15803d', padding: '6px 12px', fontSize: '12px', fontWeight: 600 }}>
+              <Check size={14} /> Enregistrer
+            </button>
+          </>
+        )}
         <div style={{ flex: 1 }} />
         {selectedRows.size > 0 && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid var(--line)' }}>

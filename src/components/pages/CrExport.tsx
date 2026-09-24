@@ -85,7 +85,7 @@ export function CrExport({ reserves, lots, crNumbers, zoneRefs, onClose }: Props
   const weekStart = useMemo(() => mondayOf(meetingDate ? new Date(meetingDate) : new Date()), [meetingDate])
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
 
-  const filename = filenameFor(project?.name ?? 'OPERATION', crNo)
+  const filename = filenameFor(project?.name ?? 'OPERATION', crNo, meetingDate ? new Date(meetingDate) : undefined)
 
   useEffect(() => {
     const prevTitle = document.title
