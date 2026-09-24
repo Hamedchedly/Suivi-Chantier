@@ -1,16 +1,20 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  Plus, Upload, ChevronDown, ChevronRight, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
-  LayoutList, Layers, Search, Eye, EyeOff, Printer, Download,
+  Plus, Upload, Check, Ban, Clock, MessageSquarePlus, Flag, X, Pencil,
+  Layers, Building2, CalendarClock, Search, Eye, EyeOff, Printer, Download, Lock, Unlock, FileOutput,
 } from 'lucide-react'
 import {
   Reserve, ReserveKind, ReservePriority, reserveKind, nextReserveNumber, applyFollowUp, crState,
+  getReserveCompanies, getReserveLots, getReserveLocations, isArchivedAt, isNewOrModifiedAt,
   type FollowUpStatus,
 } from '../../lib/reserves'
 import { getReserves, saveReserves, getLotsConfig, getZoneRefs, logActivity } from '../../lib/repo'
+import type { ZoneRef } from '../../lib/visits'
 import { sectionLabel, input, ghostBtn } from '../visite/visiteStyles'
 import { Empty } from '../visite/visiteBits'
+import { MultiSelectChips } from '../cr/MultiSelectChips'
+import { CrExport } from './CrExport'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const addWeeks = (weeks: number) => {
@@ -34,13 +38,57 @@ const FOLLOW_LABEL: Record<FollowUpStatus, string> = {
   rescheduled: 'Reporté', obsolete: 'Rendu obsolète', comment: 'Commentaire',
 }
 
+export type View = 'par-lot' | 'par-logement' | 'par-reunion'
+type DisplayFilter = 'tous' | 'importants'
+
 type ColumnVisibility = {
   crNo: boolean
   description: boolean
   lotCompany: boolean
+  logements: boolean
   kind: boolean
   dueDate: boolean
   status: boolean
+}
+
+interface Group { key: string; label: string; rows: Reserve[] }
+
+/** Regroupement par lot / logement / réunion (sections 9-10) : une remarque
+ * multi-lots ou multi-logements apparaît dans CHAQUE groupe concerné — jamais
+ * dupliquée en base, seulement à l'affichage (fan-out sur les clés). */
+export function buildGroups(rows: Reserve[], view: View, lots: { id: string; name: string }[], zoneRefs: ZoneRef[]): Group[] {
+  const groups = new Map<string, Reserve[]>()
+  const push = (key: string, r: Reserve) => {
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(r)
+  }
+  if (view === 'par-lot') {
+    for (const r of rows) {
+      const ids = getReserveLots(r)
+      if (ids.length === 0) push('__none__', r)
+      else for (const id of ids) push(id, r)
+    }
+    const ordered: Group[] = lots.filter(l => groups.has(l.id)).map(l => ({ key: l.id, label: l.name, rows: groups.get(l.id)! }))
+    if (groups.has('__none__')) ordered.push({ key: '__none__', label: 'Sans lot', rows: groups.get('__none__')! })
+    return ordered
+  }
+  if (view === 'par-logement') {
+    for (const r of rows) {
+      const ids = getReserveLocations(r)
+      if (ids.length === 0) push('__none__', r)
+      else for (const id of ids) push(id, r)
+    }
+    const ordered: Group[] = zoneRefs.filter(z => groups.has(z.refId))
+      .map(z => ({ key: z.refId, label: `${z.buildingLabel} — ${z.label}`, rows: groups.get(z.refId)! }))
+    if (groups.has('__none__')) ordered.push({ key: '__none__', label: 'Partie commune / non localisé', rows: groups.get('__none__')! })
+    return ordered
+  }
+  // par-reunion : une remarque n'a qu'un seul crNo — pas de fan-out nécessaire.
+  for (const r of rows) push(r.crNo != null ? String(r.crNo) : '__none__', r)
+  const nums = [...groups.keys()].filter(k => k !== '__none__').map(Number).sort((a, b) => b - a)
+  const ordered: Group[] = nums.map(n => ({ key: String(n), label: `CR ${n}`, rows: groups.get(String(n))! }))
+  if (groups.has('__none__')) ordered.push({ key: '__none__', label: 'Sans réunion', rows: groups.get('__none__')! })
+  return ordered
 }
 
 export function CrTable() {
@@ -48,11 +96,14 @@ export function CrTable() {
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [view, setView] = useState<'liste' | 'par-lot'>('liste')
+  const [view, setView] = useState<View>('par-reunion')
+  const [displayFilter, setDisplayFilter] = useState<DisplayFilter>('tous')
+  const [locked, setLocked] = useState(true)
   const [selectedCr, setSelectedCr] = useState<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showVisibility, setShowVisibility] = useState(false)
+  const [showExport, setShowExport] = useState(false)
   const [sortBy, setSortBy] = useState<'status' | 'crNo' | 'date' | 'lot'>('status')
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
   const [lotFilter, setLotFilter] = useState<string | null>(null)
@@ -74,16 +125,16 @@ export function CrTable() {
   const [columnVis, setColumnVis] = useState<ColumnVisibility>(() => {
     try {
       const saved = localStorage.getItem('sc_cr_columns')
-      return saved ? JSON.parse(saved) : { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+      return saved ? JSON.parse(saved) : { crNo: true, description: true, lotCompany: true, logements: true, kind: true, dueDate: true, status: true }
     } catch {
-      return { crNo: true, description: true, lotCompany: true, kind: true, dueDate: true, status: true }
+      return { crNo: true, description: true, lotCompany: true, logements: true, kind: true, dueDate: true, status: true }
     }
   })
   const fileRef = useRef<HTMLInputElement>(null)
   const lots = useMemo(() => getLotsConfig(), [])
   const zoneRefs = useMemo(() => getZoneRefs(), [])
   const companies = useMemo(
-    () => [...new Set(reserves.map(r => r.company).filter((c): c is string => !!c))].sort(),
+    () => [...new Set(reserves.flatMap(getReserveCompanies))].sort(),
     [reserves],
   )
   const today = todayISO()
@@ -91,8 +142,8 @@ export function CrTable() {
   // ── URL state sync: read from URL on mount ──────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const savedView = params.get('view') as 'liste' | 'par-lot' | null
-    if (savedView === 'liste' || savedView === 'par-lot') setView(savedView)
+    const savedView = params.get('view') as View | null
+    if (savedView === 'par-lot' || savedView === 'par-logement' || savedView === 'par-reunion') setView(savedView)
     const searchParam = params.get('search')
     if (searchParam) setSearchTerm(decodeURIComponent(searchParam))
     const crParam = params.get('crNo')
@@ -105,7 +156,7 @@ export function CrTable() {
   // ── URL state sync: update URL when state changes ───────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (view !== 'liste') params.set('view', view)
+    if (view !== 'par-reunion') params.set('view', view)
     else params.delete('view')
     if (searchTerm) params.set('search', encodeURIComponent(searchTerm))
     else params.delete('search')
@@ -154,7 +205,8 @@ export function CrTable() {
     return nums.sort((a, b) => a - b)
   }, [reserves])
 
-  // Current "active" CR number — used when closing a reserve without a meeting
+  // Current "active" CR number — used when closing a reserve without a meeting,
+  // pour l'archivage automatique (section 11) et le bleu+gras "nouveau/modifié" (12).
   const currentCrNo = useMemo(() => crNumbers.length ? Math.max(...crNumbers) : 1, [crNumbers])
 
   const rows = useMemo(() => {
@@ -172,15 +224,19 @@ export function CrTable() {
     let result = selectedCr !== null ? rows.filter(r => r.crNo === selectedCr) : rows
 
     if (!showArchived) {
-      result = result.filter(r => !r.archived)
+      result = result.filter(r => !isArchivedAt(r, currentCrNo))
+    }
+
+    if (displayFilter === 'importants') {
+      result = result.filter(r => r.reminder)
     }
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
       result = result.filter(r =>
         r.description.toLowerCase().includes(term) ||
-        r.lotId.toLowerCase().includes(term) ||
-        (r.company || '').toLowerCase().includes(term) ||
+        getReserveLots(r).some(id => id.toLowerCase().includes(term)) ||
+        getReserveCompanies(r).some(c => c.toLowerCase().includes(term)) ||
         r.number.toLowerCase().includes(term)
       )
     }
@@ -192,9 +248,9 @@ export function CrTable() {
       })
     }
 
-    if (lotFilter) result = result.filter(r => r.lotId === lotFilter)
-    if (companyFilter) result = result.filter(r => r.company === companyFilter)
-    if (logementFilter) result = result.filter(r => r.logementId === logementFilter)
+    if (lotFilter) result = result.filter(r => getReserveLots(r).includes(lotFilter))
+    if (companyFilter) result = result.filter(r => getReserveCompanies(r).includes(companyFilter) || r.allCompanies)
+    if (logementFilter) result = result.filter(r => getReserveLocations(r).includes(logementFilter))
     if (priorityFilter) result = result.filter(r => r.priority === priorityFilter)
 
     // Apply sorting based on sortBy
@@ -203,14 +259,17 @@ export function CrTable() {
     } else if (sortBy === 'date') {
       result.sort((a, b) => (b.meetingDate ?? '').localeCompare(a.meetingDate ?? ''))
     } else if (sortBy === 'lot') {
-      result.sort((a, b) => a.lotId.localeCompare(b.lotId))
+      result.sort((a, b) => (getReserveLots(a)[0] ?? '').localeCompare(getReserveLots(b)[0] ?? ''))
     }
     // 'status' is already the default sort in rows
 
     return result
-  }, [rows, selectedCr, searchTerm, statusFilter, lotFilter, companyFilter, logementFilter, priorityFilter, sortBy, showArchived, today, latestMeetingDate])
+  }, [rows, selectedCr, searchTerm, statusFilter, lotFilter, companyFilter, logementFilter, priorityFilter, sortBy, showArchived, displayFilter, currentCrNo, today, latestMeetingDate])
+
+  const groups = useMemo(() => buildGroups(filteredRows, view, lots, zoneRefs), [filteredRows, view, lots, zoneRefs])
 
   const lotLabel = (id: string) => lots.find(l => l.id === id)?.name ?? id
+  const zoneLabel = (id: string) => { const z = zoneRefs.find(z => z.refId === id); return z ? z.label : id }
 
   const toggle = (id: string) => setOpen(prev => {
     const n = new Set(prev)
@@ -221,9 +280,13 @@ export function CrTable() {
   const follow = (r: Reserve, status: FollowUpStatus, opts: { dueDate?: string; note?: string } = {}) => {
     const f = { at: new Date().toISOString(), visitId: 'cr-table', visitDate: today, status, ...opts }
     let updated = applyFollowUp(r, f)
-    // Attribute current CR number when closing a reserve without one
-    if ((status === 'done' || status === 'obsolete') && r.crNo == null) {
-      updated = { ...updated, crNo: currentCrNo }
+    updated = { ...updated, lastModifiedCrNo: currentCrNo }
+    if (updated.status === 'resolved' || updated.status === 'obsolete') {
+      // Clôture (section 11) : reste visible au CR de clôture + les 2 suivants,
+      // archivée automatiquement à partir de N+3 (isArchivedAt, reserves.ts).
+      updated = { ...updated, closedCrNo: currentCrNo, crNo: updated.crNo ?? currentCrNo }
+    } else if (updated.status === 'open') {
+      updated = { ...updated, closedCrNo: undefined }
     }
     persist(reserves.map(x => (x.id === r.id ? updated : x)))
     logActivity('doc', `CR ${r.number} — ${FOLLOW_LABEL[status]}`)
@@ -238,20 +301,32 @@ export function CrTable() {
   }
 
   const updateReserve = (id: string, patch: Partial<Reserve>) => {
-    persist(reserves.map(x => x.id === id ? { ...x, ...patch } : x))
+    persist(reserves.map(x => x.id === id ? { ...x, ...patch, lastModifiedCrNo: currentCrNo } : x))
     setEditing(null)
+  }
+
+  /** Édition « tableur » directe (section 6) : une cellule modifiée persiste et
+   * s'historise immédiatement, sans passer par la fiche/modal. */
+  const editCell = (id: string, patch: Partial<Reserve>) => {
+    persist(reserves.map(x => x.id === id ? { ...x, ...patch, lastModifiedCrNo: currentCrNo } : x))
   }
 
   const addRow = (draft: Draft) => {
     const rv: Reserve = {
       id: `cr${Date.now()}${Math.floor(Math.random() * 1000)}`,
       number: nextReserveNumber(reserves),
-      lotId: draft.lotId, logementId: '', description: draft.description.trim(),
+      lotId: draft.lotIds[0] ?? '', lotIds: draft.lotIds,
+      logementId: draft.logementIds[0] ?? '', logementIds: draft.logementIds,
+      description: draft.description.trim(),
       priority: draft.reminder ? 'high' : 'medium', status: 'open',
-      createdAt: new Date().toISOString(), company: draft.company.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      company: draft.allCompanies ? undefined : draft.companyIds[0],
+      companyIds: draft.allCompanies ? undefined : draft.companyIds,
+      allCompanies: draft.allCompanies || undefined,
       kind: draft.kind, dueDate: draft.dueDate || undefined,
       crNo: draft.crNo ? Number(draft.crNo) : undefined,
       meetingDate: draft.meetingDate || undefined, reminder: draft.reminder || undefined,
+      createdCrNo: draft.crNo ? Number(draft.crNo) : currentCrNo,
     }
     persist([rv, ...reserves]); setAdding(false)
   }
@@ -275,7 +350,7 @@ export function CrTable() {
 
   const bulkMarkAsDone = () => {
     const updated = reserves.map(r =>
-      selectedRows.has(r.id) ? { ...r, status: 'resolved' as const } : r
+      selectedRows.has(r.id) ? { ...r, status: 'resolved' as const, closedCrNo: currentCrNo, lastModifiedCrNo: currentCrNo } : r
     )
     persist(updated)
     logActivity('doc', `${selectedRows.size} point(s) marqué(s) comme terminé(s)`)
@@ -321,14 +396,14 @@ export function CrTable() {
 
   const exportFilteredAsCsv = () => {
     if (filteredRows.length === 0) return
-    const rows = filteredRows.map(r => {
+    const csvRows = filteredRows.map(r => {
       const { tone } = crState(r, today, latestMeetingDate)
       const ts = TONE_STYLE[tone]
       return {
         Numéro: r.number,
         'N°CR': r.crNo ?? '—',
-        Lot: lotLabel(r.lotId),
-        Entreprise: r.company || '—',
+        Lot: getReserveLots(r).map(lotLabel).join(' / ') || '—',
+        Entreprise: r.allCompanies ? 'Toutes' : getReserveCompanies(r).join(' / ') || '—',
         Remarque: r.description,
         Type: reserveKind(r) === 'action' ? 'Action' : 'Observation',
         Statut: ts.label || '—',
@@ -340,7 +415,7 @@ export function CrTable() {
     const headers = ['Numéro', 'N°CR', 'Lot', 'Entreprise', 'Remarque', 'Type', 'Statut', 'Échéance', 'Date réunion', 'Rappel']
     const csvContent = [
       headers.join('\t'),
-      ...rows.map(r => headers.map(h => r[h as keyof typeof r] ?? '').join('\t'))
+      ...csvRows.map(r => headers.map(h => r[h as keyof typeof r] ?? '').join('\t'))
     ].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
@@ -356,21 +431,37 @@ export function CrTable() {
 
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      {/* Toolbar */}
+      {/* Toolbar principale (section 5) : Ajouter / Importer Excel / Exporter PDF / (Dé)verrouiller */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={() => setAdding(a => !a)} style={{ ...ghostBtn, borderColor: 'var(--navy)', color: 'var(--navy)' }}>
-          <Plus size={14} /> Ajouter un point
+          <Plus size={14} /> Ajouter
         </button>
         <button onClick={() => fileRef.current?.click()} style={ghostBtn}>
-          <Upload size={14} /> Importer un Excel
+          <Upload size={14} /> Importer Excel
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
-        {filteredRows.length > 0 && (
-          <button onClick={exportFilteredAsCsv} title="Exporter les points actuels" style={{ ...ghostBtn, color: 'var(--navy)' }}>
-            <Download size={14} /> Exporter ({filteredRows.length})
-          </button>
+        <button onClick={() => setShowExport(true)} style={{ ...ghostBtn, color: 'var(--navy)' }}>
+          <FileOutput size={14} /> Exporter PDF
+        </button>
+        <button
+          onClick={() => setLocked(l => !l)}
+          title={locked ? 'Déverrouiller pour éditer directement le tableau' : 'Verrouiller le tableau'}
+          style={{ ...ghostBtn, background: locked ? '#fff' : '#eef4fb', borderColor: locked ? 'var(--line)' : 'var(--navy)', color: 'var(--navy)' }}
+        >
+          {locked ? <><Lock size={14} /> Déverrouiller</> : <><Unlock size={14} /> Verrouiller</>}
+        </button>
+        {!locked && (
+          <>
+            <button onClick={() => { setReserves(getReserves()); setLocked(true) }} style={{ ...ghostBtn, color: '#dc2626', padding: '6px 12px', fontSize: '12px' }}>
+              <Ban size={14} /> Annuler
+            </button>
+            <button onClick={() => { saveReserves(reserves); setLocked(true) }} style={{ ...ghostBtn, background: '#dcfce7', color: '#15803d', padding: '6px 12px', fontSize: '12px', fontWeight: 600 }}>
+              <Check size={14} /> Enregistrer
+            </button>
+          </>
         )}
+        <div style={{ flex: 1 }} />
         {selectedRows.size > 0 && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '8px', borderLeft: '1px solid var(--line)' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)' }}>{selectedRows.size} sélectionné(s)</span>
@@ -382,27 +473,21 @@ export function CrTable() {
             </button>
           </div>
         )}
-        <div style={{ flex: 1 }} />
-        {/* View toggle */}
-        <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px' }}>
-          <button onClick={() => setView('liste')} title="Vue liste" style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: view === 'liste' ? '#fff' : 'transparent', color: view === 'liste' ? '#02457A' : '#5b7183' }}>
-            <LayoutList size={13} /> Liste
-          </button>
-          <button onClick={() => setView('par-lot')} title="Vue par lot" style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: view === 'par-lot' ? '#fff' : 'transparent', color: view === 'par-lot' ? '#02457A' : '#5b7183' }}>
-            <Layers size={13} /> Par lot
-          </button>
-        </div>
-        {/* Print + column visibility + archive */}
         <div style={{ display: 'flex', gap: '4px' }}>
-          <button onClick={() => window.print()} title="Imprimer" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px' }}>
-            <Printer size={13} /> Imprimer
+          {filteredRows.length > 0 && (
+            <button onClick={exportFilteredAsCsv} title="Exporter en CSV" style={{ ...ghostBtn, padding: '6px 10px', fontSize: '11px' }}>
+              <Download size={13} /> CSV
+            </button>
+          )}
+          <button onClick={() => window.print()} title="Imprimer" style={{ ...ghostBtn, padding: '6px 10px', fontSize: '11px' }}>
+            <Printer size={13} />
           </button>
-          <button onClick={() => setShowArchived(v => !v)} title={showArchived ? 'Masquer les archivés' : 'Afficher les archivés'} style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showArchived ? '#fff' : 'transparent', color: showArchived ? 'var(--navy)' : 'var(--muted)' }}>
+          <button onClick={() => setShowArchived(v => !v)} title={showArchived ? 'Masquer les archivés' : 'Afficher les archivés'} style={{ ...ghostBtn, padding: '6px 10px', fontSize: '11px', background: showArchived ? '#fff' : 'transparent', color: showArchived ? 'var(--navy)' : 'var(--muted)' }}>
             {showArchived ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
           <div style={{ position: 'relative' }}>
-            <button onClick={() => setShowVisibility(v => !v)} title="Colonnes à afficher" style={{ ...ghostBtn, display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', fontSize: '11px', background: showVisibility ? '#fff' : 'transparent' }}>
-              <Eye size={13} /> Colonnes
+            <button onClick={() => setShowVisibility(v => !v)} title="Colonnes à afficher" style={{ ...ghostBtn, padding: '6px 10px', fontSize: '11px', background: showVisibility ? '#fff' : 'transparent' }}>
+              <Eye size={13} />
             </button>
             {showVisibility && (
               <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: '#fff', border: '1px solid var(--line)', borderRadius: '8px', padding: '10px', minWidth: '180px', boxShadow: '0 4px 12px rgba(0,0,0,.12)', zIndex: 50 }}>
@@ -410,6 +495,7 @@ export function CrTable() {
                   { key: 'crNo', label: 'N° CR' },
                   { key: 'description', label: 'Remarque' },
                   { key: 'lotCompany', label: 'Lot / Entreprise' },
+                  { key: 'logements', label: 'Logements Concernés' },
                   { key: 'kind', label: 'Type' },
                   { key: 'dueDate', label: 'Échéance' },
                   { key: 'status', label: 'Statut' },
@@ -437,7 +523,7 @@ export function CrTable() {
             onClick={() => setSelectedCr(null)}
             style={{ padding: '4px 10px', borderRadius: '999px', border: '1px solid var(--line)', background: selectedCr === null ? '#02457A' : '#fff', color: selectedCr === null ? '#fff' : 'var(--navy)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
           >
-            Tous
+            Tous les CR
           </button>
           {crNumbers.map(n => (
             <button
@@ -453,7 +539,7 @@ export function CrTable() {
 
       <div style={{ fontSize: '10.5px', color: 'var(--muted)', marginBottom: '10px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <span><b style={{ color: '#dc2626' }}>Rouge</b> : rappel / en retard</span>
-        <span><b style={{ color: '#018ABE' }}>Bleu gras</b> : évoqué à la dernière réunion</span>
+        <span><b style={{ color: '#018ABE' }}>Bleu gras</b> : évoqué à la dernière réunion, ou nouveau/modifié au CR {currentCrNo}</span>
         <span><b style={{ color: '#b45309' }}>Orange</b> : reporté</span>
       </div>
 
@@ -479,7 +565,7 @@ export function CrTable() {
         </div>
       )}
 
-      {adding && <AddForm lots={lots} onCancel={() => setAdding(false)} onAdd={addRow} />}
+      {adding && <AddForm lots={lots} zoneRefs={zoneRefs} companies={companies} onCancel={() => setAdding(false)} onAdd={addRow} />}
 
       {/* Search bar with history */}
       <div style={{ position: 'relative', marginBottom: '12px' }}>
@@ -528,91 +614,126 @@ export function CrTable() {
         )}
       </div>
 
-      {/* Sort buttons */}
-      <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px', marginBottom: '12px', width: 'fit-content' }}>
-        {[
-          { value: 'status' as const, label: 'Par statut' },
-          { value: 'crNo' as const, label: 'Par N°CR' },
-          { value: 'date' as const, label: 'Par date' },
-          { value: 'lot' as const, label: 'Par lot' },
-        ].map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => setSortBy(opt.value)}
-            title={opt.label}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: sortBy === opt.value ? '#fff' : 'transparent', color: sortBy === opt.value ? '#02457A' : '#5b7183' }}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Status filter buttons */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        {[
-          { tone: 'overdue', label: 'En retard' },
-          { tone: 'reminder', label: 'Rappel' },
-          { tone: 'reported', label: 'Reporté' },
-          { tone: 'done', label: 'Terminé' },
-          { tone: 'obsolete', label: 'Obsolète' },
-        ].map(({ tone, label }) => {
-          const ts = TONE_STYLE[tone]
-          const isActive = statusFilter.has(tone)
-          return (
+      {/* AFFICHAGE (section 5) : Tous / Importants — jamais de filtre de statut caché par défaut */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Affichage</span>
+        <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px' }}>
+          {([['tous', 'Tous'], ['importants', 'Importants']] as const).map(([v, label]) => (
             <button
-              key={tone}
-              onClick={() => {
-                const next = new Set(statusFilter)
-                if (isActive) next.delete(tone)
-                else next.add(tone)
-                setStatusFilter(next)
-              }}
-              title={label}
-              style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: `1px solid ${ts.color}`, background: isActive ? ts.bg : '#fff', color: ts.color, cursor: 'pointer' }}
+              key={v}
+              onClick={() => setDisplayFilter(v)}
+              style={{ padding: '6px 12px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: displayFilter === v ? '#fff' : 'transparent', color: displayFilter === v ? '#02457A' : '#5b7183' }}
             >
               {label}
             </button>
-          )
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Filtres par dimension (section 32 du brief : lot, entreprise, bâtiment/logement, priorité) */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <select value={lotFilter ?? ''} onChange={e => setLotFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
-          <option value="">Tous lots</option>
-          {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <select value={companyFilter ?? ''} onChange={e => setCompanyFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
-          <option value="">Toutes entreprises</option>
-          {companies.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={logementFilter ?? ''} onChange={e => setLogementFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
-          <option value="">Tous bâtiments / logements</option>
-          {zoneRefs.map(z => <option key={z.refId} value={z.refId}>{z.buildingLabel} — {z.label}</option>)}
-        </select>
-        {(Object.keys(PRIORITY_LABEL) as ReservePriority[]).map(p => (
-          <button
-            key={p}
-            onClick={() => setPriorityFilter(f => f === p ? null : p)}
-            title={`Priorité ${PRIORITY_LABEL[p]}`}
-            style={{
-              fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px',
-              border: '1px solid var(--navy)', background: priorityFilter === p ? 'var(--sky-soft)' : '#fff',
-              color: 'var(--navy)', cursor: 'pointer',
-            }}
-          >
-            {PRIORITY_LABEL[p]}
+      {/* REGROUPEMENT (section 5) : Par lot / Par logement / Par réunion — défaut Par lot */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Regroupement</span>
+        <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px' }}>
+          <button onClick={() => setView('par-lot')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: view === 'par-lot' ? '#fff' : 'transparent', color: view === 'par-lot' ? '#02457A' : '#5b7183' }}>
+            <Layers size={13} /> Par lot
           </button>
-        ))}
-        {(lotFilter || companyFilter || logementFilter || priorityFilter) && (
-          <button
-            onClick={() => { setLotFilter(null); setCompanyFilter(null); setLogementFilter(null); setPriorityFilter(null) }}
-            style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
-          >
-            Réinitialiser
+          <button onClick={() => setView('par-logement')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: view === 'par-logement' ? '#fff' : 'transparent', color: view === 'par-logement' ? '#02457A' : '#5b7183' }}>
+            <Building2 size={13} /> Par logement
           </button>
-        )}
+          <button onClick={() => setView('par-reunion')} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: view === 'par-reunion' ? '#fff' : 'transparent', color: view === 'par-reunion' ? '#02457A' : '#5b7183' }}>
+            <CalendarClock size={13} /> Par réunion
+          </button>
+        </div>
       </div>
+
+      {/* Filtres avancés (conservés, repliables par défaut hors du flux principal) */}
+      <details style={{ marginBottom: '12px' }}>
+        <summary style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', cursor: 'pointer' }}>Filtres avancés (statut, lot, entreprise, logement, priorité, tri)</summary>
+        <div style={{ marginTop: '8px' }}>
+          <div style={{ display: 'flex', gap: '2px', background: '#eef2f6', padding: '2px', borderRadius: '7px', marginBottom: '8px', width: 'fit-content' }}>
+            {[
+              { value: 'status' as const, label: 'Par statut' },
+              { value: 'crNo' as const, label: 'Par N°CR' },
+              { value: 'date' as const, label: 'Par date' },
+              { value: 'lot' as const, label: 'Tri lot' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setSortBy(opt.value)}
+                title={opt.label}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '5px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600, background: sortBy === opt.value ? '#fff' : 'transparent', color: sortBy === opt.value ? '#02457A' : '#5b7183' }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            {[
+              { tone: 'overdue', label: 'En retard' },
+              { tone: 'reminder', label: 'Rappel' },
+              { tone: 'reported', label: 'Reporté' },
+              { tone: 'done', label: 'Terminé' },
+              { tone: 'obsolete', label: 'Obsolète' },
+            ].map(({ tone, label }) => {
+              const ts = TONE_STYLE[tone]
+              const isActive = statusFilter.has(tone)
+              return (
+                <button
+                  key={tone}
+                  onClick={() => {
+                    const next = new Set(statusFilter)
+                    if (isActive) next.delete(tone)
+                    else next.add(tone)
+                    setStatusFilter(next)
+                  }}
+                  title={label}
+                  style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: `1px solid ${ts.color}`, background: isActive ? ts.bg : '#fff', color: ts.color, cursor: 'pointer' }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <select value={lotFilter ?? ''} onChange={e => setLotFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+              <option value="">Tous lots</option>
+              {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <select value={companyFilter ?? ''} onChange={e => setCompanyFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+              <option value="">Toutes entreprises</option>
+              {companies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={logementFilter ?? ''} onChange={e => setLogementFilter(e.target.value || null)} style={{ ...input, width: 'auto', fontSize: '11px', padding: '5px 8px' }}>
+              <option value="">Tous bâtiments / logements</option>
+              {zoneRefs.map(z => <option key={z.refId} value={z.refId}>{z.buildingLabel} — {z.label}</option>)}
+            </select>
+            {(Object.keys(PRIORITY_LABEL) as ReservePriority[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPriorityFilter(f => f === p ? null : p)}
+                title={`Priorité ${PRIORITY_LABEL[p]}`}
+                style={{
+                  fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px',
+                  border: '1px solid var(--navy)', background: priorityFilter === p ? 'var(--sky-soft)' : '#fff',
+                  color: 'var(--navy)', cursor: 'pointer',
+                }}
+              >
+                {PRIORITY_LABEL[p]}
+              </button>
+            ))}
+            {(lotFilter || companyFilter || logementFilter || priorityFilter) && (
+              <button
+                onClick={() => { setLotFilter(null); setCompanyFilter(null); setLogementFilter(null); setPriorityFilter(null) }}
+                style={{ fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '999px', border: 'none', background: 'none', color: 'var(--muted)', cursor: 'pointer' }}
+              >
+                Réinitialiser
+              </button>
+            )}
+          </div>
+        </div>
+      </details>
 
       {/* Quick stats */}
       {filteredRows.length > 0 && (
@@ -632,212 +753,71 @@ export function CrTable() {
         </div>
       )}
 
-      <div style={sectionLabel}>Points de CR ({filteredRows.length})</div>
+      <div style={sectionLabel}>Journal ({filteredRows.length})</div>
       {filteredRows.length === 0 && <Empty>Aucun point. Ajoutez-en un ou importez un CR Excel.</Empty>}
 
-      {/* ── Vue liste (default) ────────────────────────────────────────────── */}
-      {view === 'liste' && filteredRows.length > 0 && (
-        <div className="cr-list-table" style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '10px' }}>
-          <div style={{ minWidth: '640px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.id))}
-                onChange={() => bulkToggleSelection(filteredRows.map(r => r.id))}
-                style={{ accentColor: '#02457A', cursor: 'pointer' }}
-              />
-              {columnVis.crNo && <span>CR</span>}
-              {columnVis.description && <span>Point</span>}
-              {columnVis.lotCompany && <span>Lot / Entreprise</span>}
-              {columnVis.kind && <span>Type</span>}
-              {columnVis.dueDate && <span>Échéance</span>}
-              {columnVis.status && <span>Statut</span>}
+      {groups.map(g => (
+        <div key={g.key} style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#02457A', padding: '8px 10px', background: '#f0f4f8', borderRadius: '8px 8px 0 0', border: '1px solid var(--line)', borderBottom: 'none' }}>
+            {g.label} <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '11px' }}>({g.rows.length})</span>
+          </div>
+          <div className="cr-list-table" style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: '0 0 10px 10px' }}>
+            <div style={{ minWidth: '640px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid var(--line)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)', alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={g.rows.length > 0 && g.rows.every(r => selectedRows.has(r.id))}
+                  onChange={() => bulkToggleSelection(g.rows.map(r => r.id))}
+                  style={{ accentColor: '#02457A', cursor: 'pointer' }}
+                />
+                {columnVis.crNo && <span>CR</span>}
+                {columnVis.description && <span>Point</span>}
+                {columnVis.lotCompany && <span>Lot / Entreprise</span>}
+                {columnVis.logements && <span>Logements Concernés</span>}
+                {columnVis.kind && <span>Type</span>}
+                {columnVis.dueDate && <span>Échéance</span>}
+                {columnVis.status && <span>Statut</span>}
+              </div>
+              {g.rows.map(r => (
+                <RowLine
+                  key={`${g.key}-${r.id}`}
+                  r={r}
+                  columnVis={columnVis}
+                  locked={locked}
+                  lots={lots}
+                  zoneRefs={zoneRefs}
+                  companies={companies}
+                  currentCrNo={currentCrNo}
+                  today={today}
+                  latestMeetingDate={latestMeetingDate}
+                  expanded={open.has(r.id)}
+                  isEditing={editing === r.id}
+                  isSelected={selectedRows.has(r.id)}
+                  lotLabel={lotLabel}
+                  zoneLabel={zoneLabel}
+                  onToggleExpand={() => toggle(r.id)}
+                  onToggleSelect={() => {
+                    const next = new Set(selectedRows)
+                    if (next.has(r.id)) next.delete(r.id); else next.add(r.id)
+                    setSelectedRows(next)
+                  }}
+                  onEdit={() => setEditing(r.id)}
+                  onCancelEdit={() => setEditing(null)}
+                  onSave={patch => updateReserve(r.id, patch)}
+                  onCell={patch => editCell(r.id, patch)}
+                  onFollow={(status, opts) => follow(r, status, opts)}
+                  onReport={weeks => report(r, weeks)}
+                  onComment={() => comment(r)}
+                  onArchive={() => archiveReserve(r.id)}
+                  onUnarchive={() => unarchiveReserve(r.id)}
+                />
+              ))}
             </div>
-            {filteredRows.map(r => {
-              const { tone, lastMeeting } = crState(r, today, latestMeetingDate)
-              const ts = TONE_STYLE[tone]
-              const expanded = open.has(r.id)
-              const emphasize = lastMeeting && tone === 'normal'
-              const isEditing = editing === r.id
-              return (
-                <div key={r.id} style={{ borderBottom: '1px solid #eef2f6', background: ts.bg }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', cursor: 'pointer', alignItems: 'center', fontSize: '12px' }} className="cr-row">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.has(r.id)}
-                      onChange={() => {
-                        const next = new Set(selectedRows)
-                        if (next.has(r.id)) next.delete(r.id)
-                        else next.add(r.id)
-                        setSelectedRows(next)
-                      }}
-                      onClick={e => e.stopPropagation()}
-                      style={{ accentColor: '#02457A', cursor: 'pointer' }}
-                    />
-                    <div onClick={() => { if (!isEditing) toggle(r.id) }} style={{ display: 'contents', cursor: 'pointer' }}>
-                      {columnVis.crNo && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
-                        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                        {r.crNo != null ? `#${r.crNo}` : '—'}
-                      </span>
-                    )}
-                    {columnVis.description && (
-                      <span style={{ color: emphasize ? '#018ABE' : (tone === 'normal' ? 'var(--ink, #1f2937)' : ts.color), fontWeight: emphasize || tone === 'reminder' ? 700 : 400 }}>
-                        {r.reminder && <Flag size={11} color="#dc2626" style={{ verticalAlign: '-1px', marginRight: '4px' }} />}
-                        {r.description}
-                      </span>
-                    )}
-                    {columnVis.lotCompany && <span style={{ color: 'var(--muted)' }}>{r.company || lotLabel(r.lotId)}</span>}
-                    {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
-                    {columnVis.dueDate && <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>}
-                    {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
-                    </div>
-                  </div>
-
-                  {expanded && (
-                    isEditing ? (
-                      <div style={{ padding: '8px 12px 14px 30px', background: '#f8fafc' }}>
-                        <EditForm
-                          reserve={r}
-                          lots={lots}
-                          onSave={patch => updateReserve(r.id, patch)}
-                          onCancel={() => setEditing(null)}
-                        />
-                      </div>
-                    ) : (
-                      <div style={{ padding: '4px 12px 14px 30px', background: '#fff' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1 }}>
-                            {r.number}{r.meetingDate ? ` · réunion du ${frDate(r.meetingDate)}` : ''}{r.reminder ? ' · rappel' : ''}
-                          </div>
-                          <button onClick={() => setEditing(r.id)} title="Modifier ce point" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px' }}>
-                            <Pencil size={12} /> Modifier
-                          </button>
-                        </div>
-                        {(r.follow?.length ?? 0) > 0 ? (
-                          <div style={{ borderLeft: '2px solid var(--line)', paddingLeft: '10px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {r.follow!.map((f, i) => (
-                              <div key={i} style={{ fontSize: '11.5px', color: '#42607d' }}>
-                                <b>{frDate(f.visitDate)}</b> — {FOLLOW_LABEL[f.status]}{f.dueDate ? ` (→ ${frDate(f.dueDate)})` : ''}{f.note ? ` : ${f.note}` : ''}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>Aucun suivi pour l'instant.</div>
-                        )}
-                        {r.status === 'open' && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            <button onClick={() => follow(r, 'done')} style={{ ...ghostBtn, borderColor: '#a7f3d0', color: '#047857' }}><Check size={13} /> Terminé</button>
-                            <button onClick={() => report(r, 1)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +1 sem</button>
-                            <button onClick={() => report(r, 2)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +2 sem</button>
-                            <button onClick={() => report(r, 4)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +4 sem</button>
-                            <button onClick={() => comment(r)} style={ghostBtn}><MessageSquarePlus size={13} /> Commenter</button>
-                            <button onClick={() => follow(r, 'obsolete')} style={{ ...ghostBtn, borderColor: '#e2e8f0', color: '#64748b' }}><Ban size={13} /> Obsolète</button>
-                          </div>
-                        )}
-                        {r.status !== 'open' && (
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <button onClick={() => follow(r, 'in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
-                            <button onClick={() => archiveReserve(r.id)} style={{ ...ghostBtn, borderColor: '#d1d5db', color: '#6b7280' }}>Archiver</button>
-                          </div>
-                        )}
-                        {r.archived && (
-                          <button onClick={() => unarchiveReserve(r.id)} style={ghostBtn}>Restaurer</button>
-                        )}
-                      </div>
-                    )
-                  )}
-                </div>
-              )
-            })}
           </div>
         </div>
-      )}
+      ))}
 
-      {/* ── Vue par lot ────────────────────────────────────────────────────── */}
-      {view === 'par-lot' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {lots.filter(l => filteredRows.some(r => r.lotId === l.id)).map(lot => {
-            const lotRows = filteredRows.filter(r => r.lotId === lot.id)
-            const obs = lotRows.filter(r => reserveKind(r) === 'observation')
-            const actions = lotRows.filter(r => reserveKind(r) === 'action')
-            return (
-              <div key={lot.id} style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
-                <div style={{ padding: '10px 14px', background: '#f0f4f8', borderBottom: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#02457A' }}>{lot.name}</div>
-                  {lot.company && <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '1px' }}>{lot.company}</div>}
-                </div>
-                <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {lotRows.length === 0 && <div style={{ fontSize: '12px', color: 'var(--muted)' }}>—</div>}
-                  {actions.map(r => {
-                    const { tone } = crState(r, today, latestMeetingDate)
-                    const ts = TONE_STYLE[tone]
-                    const isEditing = editing === r.id
-                    return (
-                      <div key={r.id} style={{ borderRadius: '8px', border: `1px solid ${tone === 'overdue' || tone === 'reminder' ? '#fca5a5' : '#fde68a'}`, background: tone === 'overdue' || tone === 'reminder' ? '#fff5f5' : '#fffbeb', padding: '8px 10px' }}>
-                        {isEditing ? (
-                          <EditForm reserve={r} lots={lots} onSave={patch => updateReserve(r.id, patch)} onCancel={() => setEditing(null)} />
-                        ) : (
-                          <>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                              <Flag size={12} color="#b45309" style={{ flexShrink: 0, marginTop: '1px' }} />
-                              <span style={{ flex: 1, fontSize: '12px', fontWeight: tone === 'reminder' || tone === 'overdue' ? 700 : 600, color: ts.color !== 'transparent' ? ts.color : '#1f2937' }}>
-                                {r.description}
-                              </span>
-                              <button onClick={() => setEditing(r.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 2px', fontSize: 12 }}><Pencil size={12} /></button>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', marginTop: '4px', fontSize: '10px', color: 'var(--muted)' }}>
-                              {r.crNo && <span>CR {r.crNo}</span>}
-                              {r.dueDate && <span>Échéance : {frDate(r.dueDate)}</span>}
-                              {ts.label && <span style={{ color: ts.color, fontWeight: 700 }}>{ts.label}</span>}
-                            </div>
-                            {r.status === 'open' && (
-                              <div style={{ display: 'flex', gap: '5px', marginTop: '6px' }}>
-                                <button onClick={() => follow(r, 'done')} style={{ ...ghostBtn, padding: '3px 8px', fontSize: '10px', borderColor: '#a7f3d0', color: '#047857' }}><Check size={10} /> Terminé</button>
-                                <button onClick={() => follow(r, 'obsolete')} style={{ ...ghostBtn, padding: '3px 8px', fontSize: '10px', color: '#64748b' }}><Ban size={10} /> Obsolète</button>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {obs.map(r => {
-                    const { tone } = crState(r, today, latestMeetingDate)
-                    const ts = TONE_STYLE[tone]
-                    const isEditing = editing === r.id
-                    return (
-                      <div key={r.id} style={{ borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', padding: '8px 10px' }}>
-                        {isEditing ? (
-                          <EditForm reserve={r} lots={lots} onSave={patch => updateReserve(r.id, patch)} onCancel={() => setEditing(null)} />
-                        ) : (
-                          <>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                              <span style={{ flex: 1, fontSize: '12px', color: ts.color !== 'transparent' ? ts.color : '#42607d' }}>{r.description}</span>
-                              <button onClick={() => setEditing(r.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 2px' }}><Pencil size={12} /></button>
-                            </div>
-                            {r.crNo && <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '3px' }}>CR {r.crNo}</div>}
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-          {filteredRows.filter(r => !r.lotId || !lots.some(l => l.id === r.lotId)).length > 0 && (
-            <div style={{ border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
-              <div style={{ padding: '10px 14px', background: '#f0f4f8', borderBottom: '1px solid var(--line)', fontSize: '13px', fontWeight: 700, color: '#02457A' }}>Sans lot</div>
-              <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {filteredRows.filter(r => !r.lotId || !lots.some(l => l.id === r.lotId)).map(r => (
-                  <div key={r.id} style={{ fontSize: '12px', color: 'var(--ink)' }}>— {r.description}</div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {showExport && <CrExport reserves={reserves} lots={lots} zoneRefs={zoneRefs} crNumbers={crNumbers} onClose={() => setShowExport(false)} />}
     </div>
   )
 }
@@ -846,17 +826,203 @@ const buildGridCols = (vis: ColumnVisibility): string => {
   const cols: string[] = ['30px'] // checkbox column
   if (vis.crNo) cols.push('52px')
   if (vis.description) cols.push('1fr')
-  if (vis.lotCompany) cols.push('130px')
+  if (vis.lotCompany) cols.push('150px')
+  if (vis.logements) cols.push('150px')
   if (vis.kind) cols.push('60px')
   if (vis.dueDate) cols.push('90px')
   if (vis.status) cols.push('84px')
   return cols.join(' ')
 }
 
-interface Draft { crNo: string; meetingDate: string; description: string; lotId: string; company: string; kind: ReserveKind; dueDate: string; reminder: boolean }
+// ── Une ligne du journal — lecture, expansion, et édition « tableur » quand déverrouillé ──
 
-function AddForm({ lots, onAdd, onCancel }: { lots: { id: string; name: string }[]; onAdd: (d: Draft) => void; onCancel: () => void }) {
-  const [d, setD] = useState<Draft>({ crNo: '', meetingDate: todayISO(), description: '', lotId: lots[0]?.id ?? '', company: '', kind: 'action', dueDate: '', reminder: false })
+interface RowLineProps {
+  r: Reserve
+  columnVis: ColumnVisibility
+  locked: boolean
+  lots: { id: string; name: string }[]
+  zoneRefs: ZoneRef[]
+  companies: string[]
+  currentCrNo: number
+  today: string
+  latestMeetingDate?: string
+  expanded: boolean
+  isEditing: boolean
+  isSelected: boolean
+  lotLabel: (id: string) => string
+  zoneLabel: (id: string) => string
+  onToggleExpand: () => void
+  onToggleSelect: () => void
+  onEdit: () => void
+  onCancelEdit: () => void
+  onSave: (patch: Partial<Reserve>) => void
+  onCell: (patch: Partial<Reserve>) => void
+  onFollow: (status: FollowUpStatus, opts?: { dueDate?: string; note?: string }) => void
+  onReport: (weeks: number) => void
+  onComment: () => void
+  onArchive: () => void
+  onUnarchive: () => void
+}
+
+function RowLine({
+  r, columnVis, locked, lots, zoneRefs, companies, currentCrNo, today, latestMeetingDate,
+  expanded, isEditing, isSelected, lotLabel, zoneLabel,
+  onToggleExpand, onToggleSelect, onEdit, onCancelEdit, onSave, onCell, onFollow, onReport, onComment, onArchive, onUnarchive,
+}: RowLineProps) {
+  const { tone, lastMeeting } = crState(r, today, latestMeetingDate)
+  const ts = TONE_STYLE[tone]
+  const isNewOrMod = isNewOrModifiedAt(r, currentCrNo)
+  const emphasize = (lastMeeting || isNewOrMod) && tone === 'normal'
+  const lotChips = getReserveLots(r).map(lotLabel)
+  const locationChips = getReserveLocations(r).map(zoneLabel)
+  const companyText = r.allCompanies ? 'Toutes les entreprises' : getReserveCompanies(r).join(', ')
+
+  return (
+    <div style={{ borderBottom: '1px solid #eef2f6', background: ts.bg }}>
+      <div style={{ display: 'grid', gridTemplateColumns: buildGridCols(columnVis), gap: '8px', padding: '9px 12px', alignItems: 'start', fontSize: '12px' }} className="cr-row">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          style={{ accentColor: '#02457A', cursor: 'pointer', marginTop: 2 }}
+        />
+        {!locked ? (
+          <>
+            {columnVis.crNo && (
+              <input value={r.crNo ?? ''} onChange={e => onCell({ crNo: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : undefined })} style={{ ...input, padding: '4px 6px', fontSize: 11, width: '100%' }} />
+            )}
+            {columnVis.description && (
+              <textarea value={r.description} onChange={e => onCell({ description: e.target.value })} rows={1} style={{ ...input, padding: '4px 6px', fontSize: 12, width: '100%', resize: 'vertical' }} />
+            )}
+            {columnVis.lotCompany && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <MultiSelectChips options={lots.map(l => ({ id: l.id, label: l.name }))} selected={getReserveLots(r)} onChange={ids => onCell({ lotIds: ids, lotId: ids[0] ?? '' })} placeholder="Lot(s)" />
+                <MultiSelectChips options={companies.map(c => ({ id: c, label: c }))} selected={r.allCompanies ? [] : getReserveCompanies(r)} onChange={ids => onCell({ companyIds: ids, company: ids[0] })} placeholder="Entreprise(s)" disabled={r.allCompanies} />
+              </div>
+            )}
+            {columnVis.logements && (
+              <MultiSelectChips options={zoneRefs.map(z => ({ id: z.refId, label: `${z.buildingLabel} — ${z.label}` }))} selected={getReserveLocations(r)} onChange={ids => onCell({ logementIds: ids, logementId: ids[0] ?? '' })} placeholder="Logement(s)" />
+            )}
+            {columnVis.kind && (
+              <select value={reserveKind(r)} onChange={e => onCell({ kind: e.target.value as ReserveKind })} style={{ ...input, padding: '4px 6px', fontSize: 11 }}>
+                <option value="action">Action</option>
+                <option value="observation">Info</option>
+              </select>
+            )}
+            {columnVis.dueDate && (
+              <input type="date" value={r.dueDate ?? ''} onChange={e => onCell({ dueDate: e.target.value || undefined })} style={{ ...input, padding: '4px 6px', fontSize: 11 }} />
+            )}
+            {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
+          </>
+        ) : (
+          <div onClick={() => { if (!isEditing) onToggleExpand() }} style={{ display: 'contents', cursor: 'pointer' }}>
+            {columnVis.crNo && (
+              <span style={{ fontWeight: 600, color: emphasize ? '#018ABE' : 'var(--navy)' }}>
+                {r.crNo != null ? `#${r.crNo}` : '—'}
+              </span>
+            )}
+            {columnVis.description && (
+              <div>
+                <span style={{ color: emphasize ? '#018ABE' : (tone === 'normal' ? 'var(--ink, #1f2937)' : ts.color), fontWeight: emphasize || tone === 'reminder' ? 700 : 400 }}>
+                  {r.reminder && <Flag size={11} color="#dc2626" style={{ verticalAlign: '-1px', marginRight: '4px' }} />}
+                  {r.description}
+                </span>
+                {locationChips.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                    {locationChips.map(l => (
+                      <span key={l} style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', background: '#eef2f6', borderRadius: 4, padding: '1px 5px' }}>{l}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {columnVis.lotCompany && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {lotChips.length > 0 && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{lotChips.join(', ')}</span>}
+                {companyText && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{companyText}</span>}
+              </div>
+            )}
+            {columnVis.logements && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {locationChips.length > 0 ? locationChips.map(l => <span key={l} style={{ color: 'var(--muted)', fontSize: 11 }}>{l}</span>) : <span style={{ color: 'var(--muted)', fontSize: 11 }}>—</span>}
+              </div>
+            )}
+            {columnVis.kind && <span style={{ color: 'var(--muted)' }}>{reserveKind(r) === 'action' ? 'Action' : 'Info'}</span>}
+            {columnVis.dueDate && <span style={{ color: tone === 'overdue' ? '#dc2626' : 'var(--muted)', fontWeight: tone === 'overdue' ? 700 : 400 }}>{frDate(r.dueDate)}</span>}
+            {columnVis.status && <span>{ts.label && <span style={{ fontSize: '10px', fontWeight: 700, color: ts.color, background: '#fff', border: `1px solid ${ts.color}33`, borderRadius: '999px', padding: '2px 8px' }}>{ts.label}</span>}</span>}
+          </div>
+        )}
+      </div>
+
+      {expanded && (
+        isEditing ? (
+          <div style={{ padding: '8px 12px 14px 30px', background: '#f8fafc' }}>
+            <EditForm reserve={r} lots={lots} zoneRefs={zoneRefs} companies={companies} onSave={onSave} onCancel={onCancelEdit} />
+          </div>
+        ) : (
+          <div style={{ padding: '4px 12px 14px 30px', background: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', flex: 1 }}>
+                {r.number}{r.meetingDate ? ` · réunion du ${frDate(r.meetingDate)}` : ''}{r.reminder ? ' · rappel' : ''}{r.closedCrNo != null ? ` · clos au CR ${r.closedCrNo}` : ''}
+              </div>
+              {locked && (
+                <button onClick={onEdit} title="Modifier ce point" style={{ ...ghostBtn, padding: '4px 8px', fontSize: '11px' }}>
+                  <Pencil size={12} /> Modifier
+                </button>
+              )}
+            </div>
+            {(r.follow?.length ?? 0) > 0 ? (
+              <div style={{ borderLeft: '2px solid var(--line)', paddingLeft: '10px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {r.follow!.map((f, i) => (
+                  <div key={i} style={{ fontSize: '11.5px', color: '#42607d' }}>
+                    <b>{frDate(f.visitDate)}</b> — {FOLLOW_LABEL[f.status]}{f.dueDate ? ` (→ ${frDate(f.dueDate)})` : ''}{f.note ? ` : ${f.note}` : ''}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>Aucun suivi pour l'instant.</div>
+            )}
+            {r.status === 'open' && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <button onClick={() => onFollow('done')} style={{ ...ghostBtn, borderColor: '#a7f3d0', color: '#047857' }}><Check size={13} /> Terminé</button>
+                <button onClick={() => onReport(1)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +1 sem</button>
+                <button onClick={() => onReport(2)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +2 sem</button>
+                <button onClick={() => onReport(4)} style={{ ...ghostBtn, borderColor: '#fed7aa', color: '#b45309' }}><Clock size={13} /> +4 sem</button>
+                <button onClick={onComment} style={ghostBtn}><MessageSquarePlus size={13} /> Commenter</button>
+                <button onClick={() => onFollow('obsolete')} style={{ ...ghostBtn, borderColor: '#e2e8f0', color: '#64748b' }}><Ban size={13} /> Obsolète</button>
+              </div>
+            )}
+            {r.status !== 'open' && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button onClick={() => onFollow('in_progress', { note: 'Réouvert' })} style={ghostBtn}>Rouvrir</button>
+                <button onClick={onArchive} style={{ ...ghostBtn, borderColor: '#d1d5db', color: '#6b7280' }}>Archiver</button>
+              </div>
+            )}
+            {r.archived && (
+              <button onClick={onUnarchive} style={ghostBtn}>Restaurer</button>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+interface Draft {
+  crNo: string; meetingDate: string; description: string
+  lotIds: string[]; logementIds: string[]; companyIds: string[]; allCompanies: boolean
+  kind: ReserveKind; dueDate: string; reminder: boolean
+}
+
+function AddForm({ lots, zoneRefs, companies, onAdd, onCancel }: {
+  lots: { id: string; name: string }[]; zoneRefs: ZoneRef[]; companies: string[]
+  onAdd: (d: Draft) => void; onCancel: () => void
+}) {
+  const [d, setD] = useState<Draft>({
+    crNo: '', meetingDate: todayISO(), description: '',
+    lotIds: [], logementIds: [], companyIds: [], allCompanies: false,
+    kind: 'action', dueDate: '', reminder: false,
+  })
   const set = (patch: Partial<Draft>) => setD(prev => ({ ...prev, ...patch }))
   return (
     <div style={{ padding: '13px', borderRadius: '11px', border: '1px solid var(--line)', background: '#f8fafc', marginBottom: '14px' }}>
@@ -866,13 +1032,28 @@ function AddForm({ lots, onAdd, onCancel }: { lots: { id: string; name: string }
         <input type="date" value={d.meetingDate} onChange={e => set({ meetingDate: e.target.value })} style={input} />
       </div>
       <textarea value={d.description} onChange={e => set({ description: e.target.value })} placeholder="Remarque / note" rows={2} style={{ ...input, width: '100%', resize: 'vertical', marginBottom: '8px' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-        <select value={d.lotId} onChange={e => set({ lotId: e.target.value })} style={input}>
-          <option value="">— Lot —</option>
-          {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <input value={d.company} onChange={e => set({ company: e.target.value })} placeholder="Entreprise" style={input} />
+
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Lot(s)</div>
+      <div style={{ marginBottom: 8 }}>
+        <MultiSelectChips options={lots.map(l => ({ id: l.id, label: l.name }))} selected={d.lotIds} onChange={ids => set({ lotIds: ids })} placeholder="Un ou plusieurs lots…" />
       </div>
+
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Logement(s) / localisation</div>
+      <div style={{ marginBottom: 8 }}>
+        <MultiSelectChips options={zoneRefs.map(z => ({ id: z.refId, label: `${z.buildingLabel} — ${z.label}` }))} selected={d.logementIds} onChange={ids => set({ logementIds: ids })} placeholder="Aucun = partie commune…" />
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Entreprise(s)</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+        <div style={{ flex: 1 }}>
+          <MultiSelectChips options={companies.map(c => ({ id: c, label: c }))} selected={d.companyIds} onChange={ids => set({ companyIds: ids })} placeholder="Une ou plusieurs entreprises…" disabled={d.allCompanies} />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--navy)', whiteSpace: 'nowrap', paddingTop: 7 }}>
+          <input type="checkbox" checked={d.allCompanies} onChange={e => set({ allCompanies: e.target.checked })} />
+          Toutes
+        </label>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
         <select value={d.kind} onChange={e => set({ kind: e.target.value as ReserveKind })} style={input}>
           <option value="action">Pour action</option>
@@ -892,17 +1073,21 @@ function AddForm({ lots, onAdd, onCancel }: { lots: { id: string; name: string }
   )
 }
 
-// ── Inline edit form ─────────────────────────────────────────────────────────
+// ── Inline edit form (locked mode — modal-like, unlocked mode uses RowLine cells directly) ──
 
-function EditForm({ reserve, lots, onSave, onCancel }: {
+function EditForm({ reserve, lots, zoneRefs, companies, onSave, onCancel }: {
   reserve: Reserve
   lots: { id: string; name: string }[]
+  zoneRefs: ZoneRef[]
+  companies: string[]
   onSave: (patch: Partial<Reserve>) => void
   onCancel: () => void
 }) {
   const [desc, setDesc] = useState(reserve.description)
-  const [company, setCompany] = useState(reserve.company ?? '')
-  const [lotId, setLotId] = useState(reserve.lotId)
+  const [companyIds, setCompanyIds] = useState<string[]>(getReserveCompanies(reserve))
+  const [allCompanies, setAllCompanies] = useState(!!reserve.allCompanies)
+  const [lotIds, setLotIds] = useState<string[]>(getReserveLots(reserve))
+  const [logementIds, setLogementIds] = useState<string[]>(getReserveLocations(reserve))
   const [dueDate, setDueDate] = useState(reserve.dueDate ?? '')
   const [crNo, setCrNo] = useState(reserve.crNo != null ? String(reserve.crNo) : '')
   const [meetingDate, setMeetingDate] = useState(reserve.meetingDate ?? '')
@@ -918,12 +1103,23 @@ function EditForm({ reserve, lots, onSave, onCancel }: {
         rows={2}
         style={{ ...input, width: '100%', resize: 'vertical', fontSize: '12px' }}
       />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px' }}>
-        <select value={lotId} onChange={e => setLotId(e.target.value)} style={{ ...input, fontSize: '12px' }}>
-          <option value="">— Lot —</option>
-          {lots.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Entreprise" style={{ ...input, fontSize: '12px' }} />
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 3 }}>Lot(s)</div>
+        <MultiSelectChips options={lots.map(l => ({ id: l.id, label: l.name }))} selected={lotIds} onChange={setLotIds} placeholder="Lot(s)" />
+      </div>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 3 }}>Logement(s)</div>
+        <MultiSelectChips options={zoneRefs.map(z => ({ id: z.refId, label: `${z.buildingLabel} — ${z.label}` }))} selected={logementIds} onChange={setLogementIds} placeholder="Logement(s)" />
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 3 }}>Entreprise(s)</div>
+          <MultiSelectChips options={companies.map(c => ({ id: c, label: c }))} selected={companyIds} onChange={setCompanyIds} placeholder="Entreprise(s)" disabled={allCompanies} />
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--navy)', whiteSpace: 'nowrap', paddingTop: 18 }}>
+          <input type="checkbox" checked={allCompanies} onChange={e => setAllCompanies(e.target.checked)} />
+          Toutes
+        </label>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '7px' }}>
         <select value={kind} onChange={e => setKind(e.target.value as ReserveKind)} style={{ ...input, fontSize: '12px' }}>
@@ -944,7 +1140,10 @@ function EditForm({ reserve, lots, onSave, onCancel }: {
       <div style={{ display: 'flex', gap: '7px' }}>
         <button
           onClick={() => onSave({
-            description: desc.trim(), company: company.trim() || undefined, lotId,
+            description: desc.trim(),
+            lotIds, lotId: lotIds[0] ?? '',
+            logementIds, logementId: logementIds[0] ?? '',
+            companyIds: allCompanies ? undefined : companyIds, company: allCompanies ? undefined : companyIds[0], allCompanies: allCompanies || undefined,
             dueDate: dueDate || undefined, crNo: crNo ? Number(crNo) : undefined,
             meetingDate: meetingDate || undefined, kind, reminder: reminder || undefined,
             priority: reminder ? 'high' : 'medium',
@@ -982,10 +1181,12 @@ function rowToReserve(row: Record<string, unknown>, i: number, offset: number): 
   const statusRaw = norm(pick(row, ['statut', 'status', 'etat']))
   const kind: ReserveKind = /(action|afaire|pa|pouraction)/.test(typeRaw) ? 'action' : typeRaw ? 'observation' : 'action'
   const reminder = /(rappel|memo|important|pi)/.test(typeRaw) || /(rappel|memo)/.test(statusRaw)
+  const lotId = pick(row, ['lot', 'codelot'])
+  const crNo = crNoRaw ? Number(crNoRaw.replace(/\D/g, '')) || undefined : undefined
   return {
     id: `cr${Date.now()}${i}${Math.floor(Math.random() * 1000)}`,
     number: `R-${String(offset + i + 1).padStart(3, '0')}`,
-    lotId: pick(row, ['lot', 'codelot']),
+    lotId, lotIds: lotId ? [lotId] : undefined,
     logementId: '',
     description,
     priority: reminder ? 'high' : 'medium',
@@ -994,8 +1195,9 @@ function rowToReserve(row: Record<string, unknown>, i: number, offset: number): 
     company: pick(row, ['entreprise', 'societe', 'responsable', 'intervenant']) || undefined,
     kind,
     dueDate: pick(row, ['echeance', 'datelimite', 'delai', 'due', 'pourle']) || undefined,
-    crNo: crNoRaw ? Number(crNoRaw.replace(/\D/g, '')) || undefined : undefined,
+    crNo,
     meetingDate: pick(row, ['datereunion', 'datedereunion', 'date', 'datevisite', 'datecr']) || undefined,
     reminder: reminder || undefined,
+    createdCrNo: crNo,
   }
 }

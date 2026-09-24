@@ -16,7 +16,11 @@ export type ZoomLevel = 'week' | 'month' | 'quarter'
 export const ZOOM_LEVELS: ZoomLevel[] = ['week', 'month', 'quarter']
 export const ZOOM_LABEL: Record<ZoomLevel, string> = { week: 'Semaine', month: 'Mois', quarter: 'Trimestre' }
 
-export const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: 14, month: 5, quarter: 1.6 }
+// Une colonne = une semaine, large d'environ une ligne (ROW_HEIGHT, GanttRow.tsx)
+// à 100 % de zoom — plus la largeur fixe de 98px (14×7) d'origine, jugée trop
+// large par rapport à la hauteur d'une ligne (34px).
+const WEEK_COLUMN_WIDTH = 34
+export const BASE_DAY_WIDTH: Record<ZoomLevel, number> = { week: WEEK_COLUMN_WIDTH / 7, month: 5, quarter: 1.6 }
 const PADDING_DAYS: Record<ZoomLevel, number> = { week: 10, month: 20, quarter: 45 }
 
 const MS_DAY = 86400000

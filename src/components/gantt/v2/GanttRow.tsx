@@ -21,9 +21,13 @@ interface LabelProps {
   onToggleExpand?: () => void
   onSelect: (task: PlanningTask) => void
   highlighted?: boolean
+  /** Groupe (lot ou tâche à enfants) terminé au sens isTaskGroupCompleted —
+   * calculé une fois par l'orchestrateur (Gantt.tsx), jamais recalculé ici :
+   * dépend des feuilles du sous-arbre, que sameRenderTask ne compare pas. */
+  isCompleted?: boolean
 }
 
-export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, isExpanded, onToggleExpand, onSelect, highlighted }: LabelProps) {
+export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, isExpanded, onToggleExpand, onSelect, highlighted, isCompleted }: LabelProps) {
   return (
     <div
       style={{
@@ -41,12 +45,20 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
         <span style={{ width: 14, flexShrink: 0 }} />
       )}
       <span style={{
-        fontSize: 12, fontWeight: isLot ? 700 : 500, color: isLot ? 'var(--navy)' : 'var(--ink)',
+        fontSize: 12, fontWeight: (isLot || (task.progress > 0 && task.progress < 100)) ? 700 : 500, color: isLot ? 'var(--navy)' : 'var(--ink)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
       }}>
         {task.title}
       </span>
       {task.isCritical && <span title="Chemin critique" style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--bad)', flexShrink: 0 }} />}
+      {isLot && isCompleted && (
+        <span style={{
+          fontSize: 9, fontWeight: 700, color: 'var(--ok)', background: 'rgba(21,128,61,.1)',
+          borderRadius: 999, padding: '2px 7px', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.03em',
+        }}>
+          Terminé
+        </span>
+      )}
       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', flexShrink: 0 }}>{task.progress}%</span>
     </div>
   )
@@ -55,6 +67,7 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
   prev.isLot === next.isLot &&
   prev.isExpanded === next.isExpanded &&
   prev.highlighted === next.highlighted &&
+  prev.isCompleted === next.isCompleted &&
   sameRenderTask(prev.task, next.task))
 
 interface TimelineProps {

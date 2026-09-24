@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
   X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical,
@@ -59,6 +59,15 @@ export function LotControl(props: Props) {
     readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack,
     prevLot, nextLot, onGoToLot, onAddPlanTask } = props
 
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to top when changing lots
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [lotId])
+
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksWorksProgress(tasks)
   const company = lotCompany(lots, lotId)
@@ -82,7 +91,7 @@ export function LotControl(props: Props) {
   }
 
   return (
-    <div style={{ padding: '12px', paddingBottom: '90px' }}>
+    <div ref={containerRef} style={{ padding: '12px', paddingBottom: '90px' }}>
       <button onClick={onBack} style={{ ...linkBtn, marginBottom: '10px' }}>
         <ArrowLeft size={15} /> {zone.label}
       </button>
@@ -239,7 +248,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const [collapsed, setCollapsed] = useState(
-    () => task.state === 'ok' || (task.state !== 'na' && (task.progress ?? 0) >= 100),
+    () => task.state === 'ok' && (task.progress ?? 0) === 100,
   )
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -350,8 +359,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
-        {/* Replier si la tâche était terminée */}
-        {(task.state === 'ok' || (task.progress ?? 0) >= 100) && (
+        {/* Replier si la tâche était terminée (ok + 100%) */}
+        {task.state === 'ok' && (task.progress ?? 0) === 100 && (
           <button onClick={() => setCollapsed(true)} title="Replier" style={miniBtn('#15803d', false)}>
             <Check size={14} />
           </button>

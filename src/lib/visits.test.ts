@@ -149,11 +149,11 @@ describe('progress helpers', () => {
   const tasks = [
     check({ taskId: 'a', lotId: 'L05', state: 'ok', progress: 100 }),
     check({ taskId: 'b', lotId: 'L05', state: 'ok', progress: 50 }),
-    check({ taskId: 'c', lotId: 'L05' }),                       // not checked → 0 %
+    check({ taskId: 'c', lotId: 'L05', plannedProgress: 75 }),   // not checked → uses plannedProgress (75%)
     check({ taskId: 'd', lotId: 'L05', state: 'na', progress: 100 }), // excluded
   ]
   it('averages observed works progress over applicable tasks', () => {
-    expect(tasksWorksProgress(tasks)).toBe(50)   // (100 + 50 + 0) / 3
+    expect(tasksWorksProgress(tasks)).toBe(75)   // (100 + 50 + 75) / 3
   })
   it('measures the tour separately from the works', () => {
     expect(tasksControlProgress(tasks)).toBe(67) // 2 controlled / 3 applicable
@@ -161,6 +161,40 @@ describe('progress helpers', () => {
   it('returns 0 when nothing is applicable', () => {
     expect(tasksWorksProgress([])).toBe(0)
     expect(tasksControlProgress([check({ taskId: 'x', lotId: 'L05', state: 'na' })])).toBe(0)
+  })
+  it('uses plannedProgress for unobserved tasks (bug fix: 100% task shows 100% in rollup)', () => {
+    const tasksWithCompleted = [
+      check({ taskId: 'a', lotId: 'L05', plannedProgress: 100 }), // 100% in planning, not yet observed
+    ]
+    expect(tasksWorksProgress(tasksWithCompleted)).toBe(100) // Should be 100, not 0
+  })
+})
+
+describe('task completion & collapse rules', () => {
+  it('plannedProgress=100 + state=not_checked is NOT complete', () => {
+    const uncheckedTask = check({ taskId: 'a', lotId: 'L05', plannedProgress: 100, state: 'not_checked' })
+    expect(tasksState([uncheckedTask])).toBe('not_started')
+  })
+  it('state=ok + progress=100 is complete and collapsible', () => {
+    const completedTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'ok' })
+    expect(tasksState([completedTask])).toBe('done')
+  })
+  it('state=ok + progress=50 is complete for state tracking but NOT collapsible visually', () => {
+    // tasksState says 'done' (controlled), but UI collapse requires progress === 100
+    const checkedPartialTask = check({ taskId: 'a', lotId: 'L05', progress: 50, state: 'ok' })
+    expect(tasksState([checkedPartialTask])).toBe('done')
+  })
+  it('state=ok + progress=80 is complete for state tracking but NOT collapsible visually', () => {
+    const checkedPartialTask = check({ taskId: 'a', lotId: 'L05', progress: 80, state: 'ok' })
+    expect(tasksState([checkedPartialTask])).toBe('done')
+  })
+  it('state=blocked + progress=100 is NOT collapsible (blocked takes precedence)', () => {
+    const blockedTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'blocked' })
+    expect(tasksState([blockedTask])).toBe('blocked')
+  })
+  it('state=to_review + progress=100 is NOT collapsible (needs review)', () => {
+    const reviewTask = check({ taskId: 'a', lotId: 'L05', progress: 100, state: 'to_review' })
+    expect(tasksState([reviewTask])).toBe('to_review')
   })
 })
 

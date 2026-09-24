@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, ChevronLeft, ChevronDown, Camera, Pencil, Trash2, Check, Plus,
   Eye, Flag,
@@ -57,13 +57,22 @@ export function ZoneControl(props: Props) {
     onOpenLot, onAddRemark, onUpdateRemark, onRemoveRemark, onFollowUp, onAddPhoto, onUpdatePhoto, onRemovePhoto,
     onBack, onPrev, onCloseZone } = props
 
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to top when changing zones (logements)
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [zone.refId])
+
   const [showDoneLots, setShowDoneLots] = useState(false)
   const groups = lotGroups(zone)
   const st = ZONE_META[zoneState(zone)]
   const zoneRemarks = visitReserves.filter(r => r.logementId === zone.refId)
 
   return (
-    <div style={{ padding: '12px', paddingBottom: '90px' }}>
+    <div ref={containerRef} style={{ padding: '12px', paddingBottom: '90px' }}>
       <button onClick={onBack} style={{ ...linkBtn, marginBottom: '10px' }}>← Tableau de bord</button>
 
       {/* The logement being visited is the anchor of the whole screen */}
