@@ -324,7 +324,10 @@ export function PlanningGantt({
           allTasksById={planningById}
           onClose={() => setSelectedId(null)}
           onDelayCauseChange={onDelayCauseChange ? cause => onDelayCauseChange(selectedTask.id, cause) : undefined}
-          onProgress={onProgress ? progress => onProgress(selectedTask.id, progress) : undefined}
+          // CRITICAL BUG FIX: Only allow progress editing on leaf tasks (no children).
+          // Synthetic parents (grp-lg-*, grp-bld-*) should be read-only.
+          // Prevent synthetic task IDs from being passed to handleProgress.
+          onProgress={onProgress && !selectedTask.children?.length ? progress => onProgress(selectedTask.id, progress) : undefined}
           onPlannedDates={onPlannedDates ? updates => onPlannedDates(selectedTask.id, updates) : undefined}
           onActualStart={onActualStart ? date => onActualStart(selectedTask.id, date) : undefined}
           onActualEnd={onActualEnd ? date => onActualEnd(selectedTask.id, date) : undefined}

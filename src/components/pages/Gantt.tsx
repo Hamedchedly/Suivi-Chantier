@@ -198,10 +198,24 @@ export function Gantt() {
    * setGanttTasks) pour garder les effets de bord (lecture/écriture de
    * l'historique) hors de l'updater : StrictMode invoque un updater deux fois
    * en développement, ce qui dupliquerait les entrées d'historique.
+   *
+   * CRITICAL BUG FIX: Validate that the task ID exists in ganttTasks before
+   * modifying. This prevents synthetic parent IDs (grp-lg-*, grp-bld-*) from
+   * being processed. These IDs don't exist in the actual task tree and would
+   * cause mapTaskInList to silently fail, potentially causing subsequent bugs
+   * if the code assumes the task was modified.
    */
   const handleProgress = (id: string, progress: number) => {
     const today = new Date()
     const before = ganttTasks
+
+    // GUARD: Ensure task ID exists in ganttTasks before modifying
+    const task = findTaskInList(before, id)
+    if (!task) {
+      console.warn(`[handleProgress] Task ID not found: ${id}. Aborting progress update.`)
+      return
+    }
+
     const bumped = mapTaskInList(before, id, t => ({ ...t, progress, status: deriveTaskStatus(progress, t.status) }))
     const rolledUp = recomputeAll(bumped)
 
