@@ -36,7 +36,7 @@ export interface Reserve {
   photo?: string // data URL (downscaled)
   createdAt: string // ISO
   visitId?: string // set when the reserve is a "point à revoir" raised during a visit
-  company?: string // entreprise concernée (optional)
+  company?: string // entreprise concernée (legacy, une seule) — voir companyIds/allCompanies
   kind?: ReserveKind // undefined = action (legacy reserves)
   taskId?: string // the planning task it was raised on
   dueDate?: string // ISO yyyy-mm-dd — échéance for an action
@@ -45,10 +45,66 @@ export interface Reserve {
   crNo?: number          // n° du CR (= une réunion/visite)
   meetingDate?: string   // ISO yyyy-mm-dd — date de la réunion/visite du CR
   reminder?: boolean     // rappel / mémo important → mis en évidence (rouge)
-  archived?: boolean     // archived items are hidden by default
+  archived?: boolean     // archived items are hidden by default (archivage manuel)
+  // ── Sprint Journal CR — une remarque, plusieurs destinataires/lots/logements ──
+  // Un seul objet en base : jamais de duplication pour couvrir plusieurs entreprises/
+  // lots/logements. lotId/logementId/company restent lus par les anciennes remarques
+  // (voir getReserveLots/getReserveLocations/getReserveCompanies, normalisation à la
+  // lecture — aucune migration destructive).
+  companyIds?: string[]   // plusieurs entreprises concernées
+  allCompanies?: boolean  // « Toutes les entreprises » — prioritaire sur companyIds/company
+  logementIds?: string[]  // plusieurs logements concernés (aucun = partie commune / non localisé)
+  lotIds?: string[]       // plusieurs lots concernés — affichée dans chacun, jamais dupliquée en base
+  // ── Clôture différée (section 11) : reste visible au CR de clôture + les 2 suivants,
+  // puis archivée automatiquement au CR N+3. Le numéro est celui du CR où le point a
+  // été clos — jamais déduit d'une date, toujours explicite.
+  closedCrNo?: number
+  // ── Nouveauté / modification du CR courant (section 12) : affichage bleu + gras.
+  createdCrNo?: number      // n° du CR où la remarque a été créée
+  lastModifiedCrNo?: number // n° du CR de la dernière modification significative
 }
 
 export const reserveKind = (r: Reserve): ReserveKind => r.kind ?? 'action'
+
+// ── Normalisation à la lecture (rétrocompatible — section 20) ───────────────
+// Les anciennes remarques (un seul lotId/logementId/company) continuent à
+// fonctionner sans migration : ces fonctions retombent dessus quand le champ
+// pluriel est absent. Toujours utiliser CES fonctions pour lire l'affectation
+// d'une remarque, jamais r.lotId/r.logementId/r.company directement (sauf pour
+// écrire un fallback de compatibilité).
+
+export function getReserveLots(r: Reserve): string[] {
+  if (r.lotIds?.length) return r.lotIds
+  return r.lotId ? [r.lotId] : []
+}
+
+export function getReserveLocations(r: Reserve): string[] {
+  if (r.logementIds?.length) return r.logementIds
+  return r.logementId ? [r.logementId] : []
+}
+
+export function getReserveCompanies(r: Reserve): string[] {
+  if (r.allCompanies) return []
+  if (r.companyIds?.length) return r.companyIds
+  return r.company ? [r.company] : []
+}
+
+/** Le n° de CR courant est-il assez éloigné du CR de clôture pour archiver
+ * automatiquement (section 11) ? Clôture au CR N ⇒ visible en N, N+1, N+2,
+ * archivée à partir de N+3. Ne dépend jamais d'une date, seulement du n°. */
+export function isAutoArchivedAt(r: Reserve, currentCrNo: number): boolean {
+  return r.closedCrNo != null && currentCrNo - r.closedCrNo >= 3
+}
+
+/** Une remarque est masquée par défaut (archivage manuel OU automatique). */
+export function isArchivedAt(r: Reserve, currentCrNo: number): boolean {
+  return !!r.archived || isAutoArchivedAt(r, currentCrNo)
+}
+
+/** Créée ou modifiée AU CR courant (section 12) → affichage bleu + gras. */
+export function isNewOrModifiedAt(r: Reserve, currentCrNo: number): boolean {
+  return r.createdCrNo === currentCrNo || r.lastModifiedCrNo === currentCrNo
+}
 
 /** Next sequential number R-00N based on existing reserves. */
 export function nextReserveNumber(reserves: Reserve[]): string {

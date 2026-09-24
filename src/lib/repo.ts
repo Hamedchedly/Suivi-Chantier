@@ -97,6 +97,7 @@ const SCOPED = {
   progressHistory: 'sc-progress-history-v1',
   actualDateOverrides: 'sc-actual-date-overrides-v1',
   taskUnitNa: 'sc-task-unit-na-v1',
+  crExportConfig: 'sc-cr-export-config-v1',
 } as const
 
 /** Projet sans identifiant : les lectures tombent sur les valeurs par défaut. */
@@ -574,6 +575,59 @@ export function getMeetings(): Meeting[] {
 }
 export function saveMeetings(m: Meeting[]): void {
   saveState(k(SCOPED.meetings), m)
+}
+
+// ── Configuration d'export CR (section 18 du sprint Planning/Journal CR) ────
+// Sections affichées + leur ordre, mémorisés PAR OPÉRATION (clé cloisonnée k())
+// — le prochain export réutilise la même configuration tant qu'elle n'est pas
+// changée explicitement, jamais redemandée à chaque CR.
+
+export type CrExportSectionKey =
+  | 'infos' | 'presents' | 'avancement' | 'remarquesOuvertes' | 'remarquesNouvelles'
+  | 'actions' | 'photos' | 'planningSemaine' | 'prochaineReunion'
+
+export interface CrExportConfig {
+  sections: Record<CrExportSectionKey, boolean>
+  order: CrExportSectionKey[]
+}
+
+export const CR_EXPORT_SECTION_LABEL: Record<CrExportSectionKey, string> = {
+  infos: 'Informations générales',
+  presents: 'Présents',
+  avancement: 'Avancement par lot',
+  remarquesOuvertes: 'Dernières remarques non terminées',
+  remarquesNouvelles: 'Nouvelles remarques du CR',
+  actions: 'Actions / engagements',
+  photos: 'Photos',
+  planningSemaine: 'Planning de la semaine',
+  prochaineReunion: 'Prochaine réunion',
+}
+
+const DEFAULT_CR_EXPORT_ORDER: CrExportSectionKey[] = [
+  'infos', 'presents', 'avancement', 'remarquesOuvertes', 'remarquesNouvelles',
+  'actions', 'photos', 'planningSemaine', 'prochaineReunion',
+]
+
+function defaultCrExportConfig(): CrExportConfig {
+  const sections = {} as Record<CrExportSectionKey, boolean>
+  for (const k of DEFAULT_CR_EXPORT_ORDER) sections[k] = true
+  return { sections, order: [...DEFAULT_CR_EXPORT_ORDER] }
+}
+
+export function getCrExportConfig(): CrExportConfig {
+  const stored = loadState<CrExportConfig | null>(k(SCOPED.crExportConfig), null)
+  if (!stored) return defaultCrExportConfig()
+  // Rétrocompatible avec une future section ajoutée après coup : toute clé
+  // manquante retombe sur la config par défaut plutôt que de disparaître.
+  const def = defaultCrExportConfig()
+  return {
+    sections: { ...def.sections, ...stored.sections },
+    order: stored.order?.length ? [...stored.order, ...def.order.filter(s => !stored.order.includes(s))] : def.order,
+  }
+}
+
+export function saveCrExportConfig(config: CrExportConfig): void {
+  saveState(k(SCOPED.crExportConfig), config)
 }
 
 // ── Historique du planning ───────────────────────────────────────────────────
