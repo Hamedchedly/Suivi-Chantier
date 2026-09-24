@@ -74,5 +74,7 @@ export interface GanttTask {
 
   delay_cause?: DelayCause
 
+  blocks?: string[]       // IDs des tâches bloquées par celle-ci (symétrique de dependencies)
+
   children?: GanttTask[]
 }
