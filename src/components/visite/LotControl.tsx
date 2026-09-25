@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
   X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical,
@@ -73,17 +73,6 @@ export function LotControl(props: Props) {
   const pct = tasksWorksProgress(tasks)
   const company = lotCompany(lots, lotId)
 
-  // Memoize sorted tasks to prevent React from misaligning components when state changes
-  const sortedTasks = useMemo(() =>
-    [...tasks].sort((a, b) => {
-      const rank = (t: VisitTaskCheck) => t.state === 'na' ? 3 : (t.state === 'ok' ? 2 : 0)
-      const rankDiff = rank(a) - rank(b)
-      // Secondary sort by taskId for stable ordering within same rank
-      return rankDiff !== 0 ? rankDiff : a.taskId.localeCompare(b.taskId)
-    }),
-    [tasks]
-  )
-
   const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
@@ -128,7 +117,7 @@ export function LotControl(props: Props) {
 
       {tasks.length === 0 && <Empty>Aucune tâche planifiée pour ce lot dans ce logement.</Empty>}
 
-      {sortedTasks.map(t => (
+      {tasks.map(t => (
         <TaskCard
           key={t.taskId}
           task={t}
