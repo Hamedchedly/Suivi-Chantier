@@ -399,11 +399,6 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             )}
           </div>
         )}
-        {!isNa && (
-          <strong style={{ fontSize: '19px', color: checked ? 'var(--navy)' : 'var(--muted)' }} title={checked ? undefined : 'Valeur de départ (dernière réunion) — bougez le curseur pour constater'}>
-            {thumb}%{!checked && <span style={{ fontSize: '10px', fontWeight: 600, verticalAlign: '2px', marginLeft: '2px' }}>·</span>}
-          </strong>
-        )}
       </div>
 
       {/* A non-applicable task is set aside: no bar, and it stops counting */}
@@ -424,19 +419,32 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
           )}
         </div>
       ) : (
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', background: '#f8fafc', borderRadius: '10px', padding: '12px' }}>
           {/* Progress bar with context marks */}
-          <div style={{ position: 'relative', marginBottom: 12 }}>
-            <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: 8 }}>
-              <div style={{ height: '100%', background: '#0284c7', width: `${thumb}%`, transition: 'width 150ms ease' }} />
+          <div style={{ position: 'relative', marginBottom: 14 }}>
+            <div style={{
+              height: '12px',
+              background: '#e2e8f0',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              marginBottom: 8,
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #0284c7, #0369a1)',
+                width: `${thumb}%`,
+                transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+                borderRadius: '6px'
+              }} />
             </div>
             {/* Marks for planned and previous progress */}
-            {planned !== undefined && <ProgressMark pct={planned} color="#0284c7" title={`Prévu: ${planned}%`} />}
-            {prev !== undefined && <ProgressMark pct={prev} color="#f59e0b" title={`Réunion préc.: ${prev}%`} />}
+            {planned !== undefined && planned !== thumb && <ProgressMark pct={planned} color="#0284c7" title={`Prévu: ${planned}%`} />}
+            {prev !== undefined && prev !== thumb && <ProgressMark pct={prev} color="#f59e0b" title={`Réunion préc.: ${prev}%`} />}
           </div>
 
           {/* Spinner control */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
             <ProgressSpinner
               value={thumb}
               onChange={patchProgress}
@@ -696,18 +704,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               onClose={() => setPanel(null)}
             />
           )}
-
-          <textarea
-            value={task.comment ?? ''}
-            onChange={e => onPatch({ comment: e.target.value || undefined })}
-            placeholder="Note libre sur cette tâche…"
-            style={{ ...input, width: '100%', minHeight: '38px', resize: 'vertical', fontSize: '12px', marginTop: '8px' }}
-          />
         </>
-      )}
-
-      {readOnly && task.comment && (
-        <div style={{ fontSize: '11px', color: '#b45309', fontStyle: 'italic' }}>{task.comment}</div>
       )}
     </div>
   )
