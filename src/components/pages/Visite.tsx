@@ -388,16 +388,22 @@ export function Visite() {
       <>
       {active.status === 'en_cours' && <TourBar visit={active} zoneRef={null} />}
       <div style={{ padding: '12px', paddingBottom: '90px' }}>
-        <button onClick={back} style={{ ...linkBtn, marginBottom: '8px' }}>← Toutes les sessions</button>
+        {/* Enhanced context header */}
+        <VisiteContextHeader
+          title={fmtFr(active.date)}
+          subtitle={`${visitKindLabel(active)} • ${counts.total} zones`}
+          onBack={back}
+        />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-          <span style={{ ...badge, background: kindBadge(active).bg, color: kindBadge(active).fg }}>{kindBadge(active).label}</span>
-          <h2 style={{ margin: 0, flex: 1 }}>{fmtFr(active.date)}</h2>
-        </div>
-        <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
-          {visitKindLabel(active)} • {counts.total} zones • {active.participants.length} présents
-          {active.startedAt && <> • démarrée à {fmtTime(active.startedAt)}</>}
-        </div>
+        {/* Progress summary bar */}
+        <VisiteSummaryBar
+          totalZones={counts.total}
+          completedZones={counts.done}
+          toReviewCount={counts.to_review}
+          photosCount={photos.length}
+          remarksCount={visitReserves.length}
+          onShowSummary={() => {}}
+        />
 
         <div style={{ display: 'flex', gap: '14px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
