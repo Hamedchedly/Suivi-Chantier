@@ -46,6 +46,7 @@ import { VisiteZonesList } from '../visite/VisiteZonesList'
 import { VisiteSessionView } from '../visite/VisiteSessionView'
 import { VisiteContextHeader } from '../visite/VisiteContextHeader'
 import { VisiteSummaryBar } from '../visite/VisiteSummaryBar'
+import { VisiteV2 } from '../visiteV2/VisiteV2'
 import { setBackHandler } from '../../lib/backHandler'
 import { User, canEditLocked, isSuperadmin } from '../../lib/auth'
 import { getSession, getUsers } from '../../lib/repo'
@@ -85,6 +86,7 @@ type View =
   | { v: 'notes' }
   | { v: 'cr' }
   | { v: 'report' }
+  | { v: 'sessionV2' } // V2 lot-by-lot interface
 
 export function Visite() {
   // Who is signed in decides whether a diffused CR can be reopened.
@@ -521,15 +523,23 @@ export function Visite() {
         </div>
 
         {active.status === 'en_cours' && (
-          <button
-            onClick={() => {
-              if (remaining.length > 0 && !window.confirm(`${remaining.length} zone(s) ne sont pas entièrement contrôlées. Terminer et enregistrer quand même ?`)) return
-              terminate(active)
-            }}
-            style={{ ...bigBtn, background: 'var(--ok)' }}
-          >
-            <CheckCircle2 size={17} /> Terminer et enregistrer
-          </button>
+          <>
+            <button
+              onClick={() => push({ v: 'sessionV2' })}
+              style={{ ...bigBtn, background: '#2563eb', marginBottom: '10px' }}
+            >
+              🚀 Essayer la nouvelle interface V2
+            </button>
+            <button
+              onClick={() => {
+                if (remaining.length > 0 && !window.confirm(`${remaining.length} zone(s) ne sont pas entièrement contrôlées. Terminer et enregistrer quand même ?`)) return
+                terminate(active)
+              }}
+              style={{ ...bigBtn, background: 'var(--ok)' }}
+            >
+              <CheckCircle2 size={17} /> Terminer et enregistrer
+            </button>
+          </>
         )}
       </div>
       </>
@@ -601,6 +611,16 @@ export function Visite() {
       companies={companiesOf(active)}
       onBack={back}
     />
+  }
+
+  // ── V2 Lot-by-Lot Interface ───────────────────────────────────────────────
+  if (view.v === 'sessionV2' && active) {
+    return (
+      <VisiteV2
+        visit={active}
+        onBack={back}
+      />
+    )
   }
 
   // ── List ───────────────────────────────────────────────────────────────────
