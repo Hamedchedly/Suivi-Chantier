@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Visite Chantier</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; }
+
+    body {
+      background: #f8f9fa;
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      padding: 0 16px;
+      padding-top: max(16px, env(safe-area-inset-top, 0px));
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    }
+
+    h1, h2, h3 { margin: 0; font-weight: 700; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 15px; }
+
+    button { font-family: inherit; font-size: inherit; cursor: pointer; border: none; transition: all 150ms ease; }
+
+    .screen { display: none; animation: fadeIn 200ms ease; }
+    .screen.active { display: block; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .header {
+      padding: 20px 0 16px 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .header-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #0066cc;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      background: none;
+      padding: 0;
+    }
+
+    .header-back:active { opacity: 0.7; }
+
+    .header-title { font-size: 22px; font-weight: 800; color: #000; margin-bottom: 2px; }
+    .header-info { font-size: 12px; color: #666; }
+
+    .breadcrumb {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .breadcrumb span::after { content: " • "; margin: 0 4px; }
+    .breadcrumb span:last-child::after { content: ""; }
+
+    .card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+
+    .card:active { transform: scale(0.98); }
+    .card:hover { border-color: #999; }
+
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+    .card-title { font-size: 15px; font-weight: 700; }
+    .card-subtitle { font-size: 12px; color: #666; margin: 2px 0; }
+
+    .progress { margin: 8px 0; }
+    .progress-bg { width: 100%; height: 6px; background: #e8e8e8; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2563eb; border-radius: 3px; transition: width 200ms ease; }
+
+    .task-item {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .task-item.level-1 { margin-left: 20px; background: #f9fafb; }
+    .task-item.level-2 { margin-left: 40px; background: #fafbfc; }
+
+    .task-info { flex: 1; min-width: 0; }
+    .task-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .task-status { font-size: 11px; color: #666; }
+
+    .task-menu {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .slider-container { margin: 8px 0; }
+    .slider-label { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 6px; }
+    .slider-value { font-weight: 700; color: #2563eb; }
+
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      background: #e8e8e8;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-menu {
+      background: none;
+      color: #999;
+      font-size: 18px;
+      padding: 4px 6px;
+      line-height: 1;
+    }
+
+    .btn-menu:active { color: #2563eb; }
+
+    /* Modal */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
+    .modal.active { display: flex; align-items: flex-end; }
+    .modal-content {
+      background: white;
+      border-radius: 16px 16px 0 0;
+      padding: 24px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp 300ms ease;
+    }
+
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h2 { margin: 0; font-size: 18px; }
+
+    .close-btn { background: none; color: #999; font-size: 24px; padding: 0; width: 24px; height: 24px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .form-input, .form-textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .form-input:focus, .form-textarea:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .form-textarea { resize: vertical; min-height: 80px; }
+
+    .form-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .form-checkbox input { width: 18px; height: 18px; cursor: pointer; }
+
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid #ddd;
+      padding: 12px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      display: flex;
+      gap: 8px;
+      z-index: 20;
+    }
+
+    .bottom-bar button {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .bottom-bar button.secondary { background: #f0f0f0; color: #333; }
+
+    .safe-padding { padding-bottom: max(100px, env(safe-area-inset-bottom, 0px)); }
+
+    .badge {
+      display: inline-block;
+      background: #f0f0f0;
+      color: #333;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .badge.done { background: #d1fae5; color: #065f46; }
+    .badge.review { background: #fef3c7; color: #92400e; }
+    .badge.blocked { background: #fee2e2; color: #991b1b; }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+    .stat { text-align: center; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+    .stat-value { font-size: 20px; font-weight: 800; color: #2563eb; }
+    .stat-label { font-size: 11px; color: #666; margin-top: 4px; }
+
+    @media (min-width: 768px) {
+      body { padding: 0 32px; padding-top: 32px; }
+      .bottom-bar { display: none; }
+      .grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- HOME -->
+    <div id="home" class="screen active safe-padding">
+      <div class="header">
+        <h1>Visite chantier</h1>
+        <div class="header-info">Résidence Gambetta • A205 • Bâtiment A</div>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <div style="font-size: 48px; margin-bottom: 12px;">🏗️</div>
+        <h2 style="color: #2563eb; margin-bottom: 8px;">Logement A205</h2>
+        <div style="font-size: 14px; color: #666;">62 m² • T3</div>
+      </div>
+
+      <div style="background: #f0f7ff; border: 1px solid #2563eb; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
+        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Progression générale</div>
+        <div class="progress">
+          <div class="progress-bg">
+            <div class="progress-fill" style="width: 65%;"></div>
+          </div>
+        </div>
+        <div style="font-size: 24px; font-weight: 800; color: #2563eb; margin-top: 8px;">65%</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value">3</div>
+          <div class="stat-label">Lots</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">12</div>
+          <div class="stat-label">Tâches</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">8</div>
+          <div class="stat-label">Complètes</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">1</div>
+          <div class="stat-label">À revoir</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 24px 0 12px 0;">Lots à contrôler</h3>
+
+      <div class="card" onclick="app.goToLot(0)">
+        <div class="card-header">
+          <div style="flex: 1;">
+            <div class="card-title">Lot 04 — Menuiseries ext.</div>
+            <div class="card-subtitle">Parquet Habitat</div>
+          </div>
+          <div style="text-align: right; font-size: 18px; font-weight: 700; color: #2563eb;">80%</div>
+        </div>
+        <div class="progress">
+          <div class="progress-bg">
+            <div class="progress-fill" style="width: 80%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" onclick="app.goToLot(1)">
+        <div class="card-header">
+          <div style="flex: 1;">
+            <div class="card-title">Lot 05 — Menuiseries int.</div>
+            <div class="card-subtitle">Parquet Habitat</div>
+          </div>
+          <div style="text-align: right; font-size: 18px; font-weight: 700; color: #2563eb;">40%</div>
+        </div>
+        <div class="progress">
+          <div class="progress-bg">
+            <div class="progress-fill" style="width: 40%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" onclick="app.goToLot(2)">
+        <div class="card-header">
+          <div style="flex: 1;">
+            <div class="card-title">Lot 06 — Électricité</div>
+            <div class="card-subtitle">ETE Électro</div>
+          </div>
+          <div style="text-align: right; font-size: 18px; font-weight: 700; color: #2563eb;">80%</div>
+        </div>
+        <div class="progress">
+          <div class="progress-bg">
+            <div class="progress-fill" style="width: 80%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="app.go('summary')" style="width: 100%; padding: 14px; background: #f0f0f0; color: #333; border-radius: 10px; font-weight: 600; margin-top: 24px;">
+        Résumé visite
+      </button>
+    </div>
+
+    <!-- LOT DETAIL -->
+    <div id="lot" class="screen safe-padding">
+      <div class="header">
+        <button onclick="app.go('home')" class="header-back">← Logement</button>
+        <h2 class="header-title" id="lotTitle">Lot 04 — Menuiseries ext.</h2>
+        <div class="breadcrumb">
+          <span>A205</span>
+          <span>Parquet Habitat</span>
+        </div>
+      </div>
+
+      <div style="background: #f0f7ff; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+        <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Progression du lot</div>
+        <div style="font-size: 28px; font-weight: 800; color: #2563eb;" id="lotProgress">80%</div>
+      </div>
+
+      <h3 style="margin: 20px 0 12px 0;">Tâches</h3>
+
+      <div id="tasksList">
+        <!-- Tasks dynamically populated -->
+      </div>
+    </div>
+
+    <!-- SUMMARY -->
+    <div id="summary" class="screen safe-padding">
+      <div class="header">
+        <button onclick="app.go('home')" class="header-back">← Logement</button>
+        <h2 class="header-title">Résumé visite</h2>
+      </div>
+
+      <div style="background: #f0f7ff; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
+        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Progression générale</div>
+        <div class="progress">
+          <div class="progress-bg">
+            <div class="progress-fill" style="width: 65%;"></div>
+          </div>
+        </div>
+        <div style="font-size: 24px; font-weight: 800; color: #2563eb; margin-top: 8px;">65% complet</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" style="color: #059669;">8</div>
+          <div class="stat-label">Terminées</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" style="color: #d97706;">1</div>
+          <div class="stat-label">À revoir</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" style="color: #999;">2</div>
+          <div class="stat-label">N/A</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" style="color: #666;">1</div>
+          <div class="stat-label">Bloquée</div>
+        </div>
+      </div>
+
+      <button style="width: 100%; padding: 14px; background: #059669; color: white; border-radius: 10px; font-weight: 600; margin-top: 24px;">
+        Générer le CR
+      </button>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <div id="modalAddSubtask" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Ajouter une sous-tâche</h2>
+        <button class="close-btn" onclick="app.closeModal('modalAddSubtask')">×</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nom de la sous-tâche</label>
+        <input type="text" class="form-input" placeholder="Ex: Fenêtre séjour">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date d'échéance (optionnel)</label>
+        <input type="date" class="form-input">
+      </div>
+      <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border-radius: 8px; font-weight: 600;">
+        Créer
+      </button>
+    </div>
+  </div>
+
+  <div id="modalNote" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Ajouter une note</h2>
+        <button class="close-btn" onclick="app.closeModal('modalNote')">×</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-textarea" placeholder="Remarques, observations..."></textarea>
+      </div>
+      <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border-radius: 8px; font-weight: 600;">
+        Enregistrer
+      </button>
+    </div>
+  </div>
+
+  <div id="modalPhoto" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Ajouter une photo</h2>
+        <button class="close-btn" onclick="app.closeModal('modalPhoto')">×</button>
+      </div>
+      <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 32px; text-align: center; margin-bottom: 16px;">
+        <div style="font-size: 32px; margin-bottom: 8px;">📷</div>
+        <div style="font-size: 13px; color: #666;">Tap pour prendre une photo ou importer</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Annotation (optionnel)</label>
+        <input type="text" class="form-input" placeholder="Description de la photo">
+      </div>
+      <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border-radius: 8px; font-weight: 600;">
+        Ajouter
+      </button>
+    </div>
+  </div>
+
+  <div id="modalEditTask" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Modifier la tâche</h2>
+        <button class="close-btn" onclick="app.closeModal('modalEditTask')">×</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nom</label>
+        <input type="text" class="form-input" value="Châssis fenêtres">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Marquer comme N/A</label>
+        <div class="form-checkbox">
+          <input type="checkbox" id="checkNA">
+          <label for="checkNA">Cette tâche ne s'applique pas à ce logement</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gestion des blocages</label>
+        <div style="font-size: 12px; color: #666; margin: 8px 0;">
+          <div class="form-checkbox">
+            <input type="checkbox">
+            <label>Prédécesseur: Joints étanchéité</label>
+          </div>
+          <div class="form-checkbox">
+            <input type="checkbox">
+            <label>Successeur: Peinture</label>
+          </div>
+        </div>
+      </div>
+      <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border-radius: 8px; font-weight: 600;">
+        Enregistrer
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const app = {
+      currentLot: 0,
+      lots: [
+        {
+          id: "04",
+          name: "Menuiseries ext.",
+          company: "Parquet Habitat",
+          progress: 80,
+          tasks: [
+            { id: "t1", name: "Châssis fenêtres", progress: 80, subtasks: [] },
+            { id: "t2", name: "Joints étanchéité", progress: 60, subtasks: [] }
+          ]
+        },
+        {
+          id: "05",
+          name: "Menuiseries int.",
+          company: "Parquet Habitat",
+          progress: 40,
+          tasks: [
+            {
+              id: "t3",
+              name: "Portes intérieures",
+              progress: 40,
+              subtasks: [
+                { id: "s1", name: "Porte séjour", progress: 50 },
+                { id: "s2", name: "Porte cuisine", progress: 30 }
+              ]
+            }
+          ]
+        },
+        {
+          id: "06",
+          name: "Électricité",
+          company: "ETE Électro",
+          progress: 80,
+          tasks: [
+            { id: "t4", name: "Tableau électrique", progress: 100, subtasks: [] },
+            {
+              id: "t5",
+              name: "Prises interrupteurs",
+              progress: 80,
+              subtasks: [
+                { id: "s3", name: "Prises séjour", progress: 100 },
+                { id: "s4", name: "Prises cuisine", progress: 100 },
+                { id: "s5", name: "Prises chambre", progress: 60 }
+              ]
+            }
+          ]
+        }
+      ],
+
+      go(screen) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screen).classList.add('active');
+        window.scrollTo(0, 0);
+      },
+
+      goToLot(index) {
+        this.currentLot = index;
+        const lot = this.lots[index];
+        document.getElementById('lotTitle').textContent = `Lot ${lot.id} — ${lot.name}`;
+        document.getElementById('lotProgress').textContent = lot.progress + '%';
+        this.renderTasks();
+        this.go('lot');
+      },
+
+      renderTasks() {
+        const lot = this.lots[this.currentLot];
+        let html = '';
+
+        lot.tasks.forEach(task => {
+          html += `
+            <div class="task-item level-0">
+              <div class="task-info">
+                <div class="task-name">${task.name}</div>
+                <div class="task-status">${task.progress}% • ${task.subtasks.length} sous-tâches</div>
+              </div>
+              <div class="slider-container">
+                <div class="slider-label">
+                  <span>Avancement</span>
+                  <span class="slider-value">${task.progress}%</span>
+                </div>
+                <input type="range" min="0" max="100" value="${task.progress}">
+              </div>
+              <button class="btn-menu" onclick="app.openMenu('${task.id}')">⋯</button>
+            </div>
+          `;
+
+          task.subtasks.forEach(sub => {
+            html += `
+              <div class="task-item level-1">
+                <div class="task-info">
+                  <div class="task-name">${sub.name}</div>
+                  <div class="task-status">${sub.progress}%</div>
+                </div>
+                <div class="slider-container">
+                  <div class="slider-label">
+                    <span>Avancement</span>
+                    <span class="slider-value">${sub.progress}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" value="${sub.progress}">
+                </div>
+                <button class="btn-menu" onclick="app.openMenu('${sub.id}')">⋯</button>
+              </div>
+            `;
+          });
+        });
+
+        document.getElementById('tasksList').innerHTML = html;
+      },
+
+      openMenu(taskId) {
+        const menu = document.createElement('div');
+        menu.style.cssText = `
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+          z-index: 200;
+          min-width: 250px;
+        `;
+        menu.innerHTML = `
+          <div style="padding: 12px 0;">
+            <button onclick="app.openModal('modalAddSubtask'); this.closest('.menu-popup').remove();" style="width: 100%; text-align: left; padding: 12px 20px; border: none; background: none; cursor: pointer; font-size: 14px;">
+              ➕ Ajouter sous-tâche
+            </button>
+            <button onclick="app.openModal('modalNote'); this.closest('.menu-popup').remove();" style="width: 100%; text-align: left; padding: 12px 20px; border: none; background: none; cursor: pointer; font-size: 14px;">
+              📝 Ajouter note
+            </button>
+            <button onclick="app.openModal('modalPhoto'); this.closest('.menu-popup').remove();" style="width: 100%; text-align: left; padding: 12px 20px; border: none; background: none; cursor: pointer; font-size: 14px;">
+              📷 Ajouter photo
+            </button>
+            <button onclick="app.openModal('modalEditTask'); this.closest('.menu-popup').remove();" style="width: 100%; text-align: left; padding: 12px 20px; border: none; background: none; cursor: pointer; font-size: 14px;">
+              ✏️ Modifier
+            </button>
+          </div>
+        `;
+        menu.className = 'menu-popup';
+        document.body.appendChild(menu);
+        setTimeout(() => {
+          if (document.contains(menu)) {
+            document.addEventListener('click', function removeMenu() {
+              menu.remove();
+              document.removeEventListener('click', removeMenu);
+            });
+          }
+        }, 0);
+      },
+
+      openModal(id) {
+        document.getElementById(id).classList.add('active');
+      },
+
+      closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+      }
+    };
+
+    // Initialize
+    app.renderTasks();
+  </script>
+</body>
+</html>

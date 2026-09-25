@@ -6,58 +6,60 @@
 
 **Statut**: ✅ Fondations complètes - Intégration progressive en cours
 
-## 🎯 Prototype Interactif Complet — Version Améliorée 2.0
+## 🎯 Prototype Interactif Complet — Version Lot-by-Lot (v4.0)
 
 Un prototype **fonctionnel, navigable et production-ready** a été créé et est disponible à:
 - **URL**: https://claude.ai/artifact/ETjm9MwLFK6KSLc8oqNvSs
+- **Fichier local**: `prototypes/prototype-visite-lot-by-lot.html`
 - **Documentation détaillée**: PROTOTYPE_VISITE_ENHANCED.md
 
-Le prototype démontre le parcours utilisateur complet avec améliorations majeures:
-1. ✅ Accueil avec visite en cours
-2. ✅ Liste des logements avec filtres (Tous/À faire/À revoir/Terminés)
-3. ✅ Recherche par numéro, bâtiment, étage
-4. ✅ Cartes de logements avec avancement
-5. ✅ Ouverture d'un logement avec tous les lots
-6. ✅ Visualisation hiérarchique complète: Logement → Lot → Tâche → Sous-tâche
-7. ✅ Modification rapide de l'avancement (buttons 0% 25% 50% 75% 100%)
-8. ✅ Changement d'état (Contrôlé/À revoir/Bloqué/N.A.)
-9. ✅ Affichage des dernières remarques
-10. ✅ Ajout d'observation via bottom sheet
-11. ✅ Ajout de photo
-12. ✅ Navigation vers le logement suivant
-13. ✅ **🆕 Écran "Tâches globales"** pour contrôler tous les lots sans entrer chaque logement
-14. ✅ **🆕 Sliders interactifs 0-100%** pour chaque tâche/sous-tâche
-15. ✅ **🆕 Hiérarchie visuelle codée par couleurs** (bleu → cyan → turquoise → vert)
-16. ✅ Résumé de visite
-17. ✅ Liste des observations
-18. ✅ Compte rendu
-19. ✅ Gantt dans le CR
-20. ✅ Layout responsive desktop (sidebar + grid)
-21. ✅ Design aligné avec palette Suivi-Chantier
-22. ✅ Breadcrumbs contextuels à chaque niveau
+Le prototype démontre le parcours utilisateur complet avec architecture lot-by-lot:
+1. ✅ Accueil (Logement overview) avec progression générale
+2. ✅ Statistiques rapides (Lots, Tâches, Complètes, À revoir)
+3. ✅ Cartes de lots cliquables depuis l'accueil
+4. ✅ **🆕 Architecture lot-by-lot**: chaque lot sur sa propre page
+5. ✅ Visualisation hiérarchique complète: Tâche → Sous-tâche par lot
+6. ✅ Sliders interactifs 0-100% pour chaque tâche/sous-tâche
+7. ✅ Menu 3-points (⋯) pour actions contextuelles
+8. ✅ Ajouter une sous-tâche (modal + date d'échéance optionnelle)
+9. ✅ Ajouter une note (modal avec date + textarea)
+10. ✅ Ajouter une photo (modal upload + annotation optionnelle)
+11. ✅ Modifier tâche (modal: nom, N/A, gestion blocages successeur/prédécesseur)
+12. ✅ Bottom bar mobile avec navigation lot suivant/précédent
+13. ✅ Breadcrumb navigation pour contexte permanent
+14. ✅ Résumé de visite (statistiques + bouton CR)
+15. ✅ Responsive design mobile-first (notches/safe-area)
+16. ✅ Design minimaliste sans référence plateforme
+17. ✅ Animations fluides (fade-in, slide-up modals)
+18. ✅ Icônes emoji pour actions rapides
 
 ## ✅ Travail Réalisé
 
-### 0. Améliorations Design Majeures (V2.0)
+### 0. Nouvelle Architecture Lot-by-Lot (V4.0)
 
-#### Palette Alignée avec Suivi-Chantier
-- Couleurs primaires: `--navy: #0f1628`, `--blue: #0284c7`
-- Badges sémantiques: info/done/warning/error avec backgrounds transparents
+#### Navigation Simplifiée
+- Accueil → Sélection lot → Gestion lot → Retour accueil
+- Chaque lot isolé dans une page dédiée
+- Bottom bar mobile pour navigation fluide entre lots
+- Breadcrumb persistant pour contexte
+
+#### Design Minimaliste
+- Couleur primaire: `--blue: #2563eb`
+- Palette réduite (blanc, gris, bleu)
 - Spacing cohérent: 14px cards, 12px gaps, 6px progress bars
-- Typography hiérarchisée: 28px H1, 20px H2, 14px H3
+- Typography hiérarchisée: 28px H1, 20px H2, 15px H3
 
-#### Nouvelle Fonctionnalité: Tâches Globales
-- Écran dédié pour ajuster tous les lots sans entrer chaque logement
-- Sliders interactifs 0-100% pour chaque tâche/sous-tâche
-- Visualisation hiérarchique avec indentation progressive
-- Groupement par lot avec progression aggregée
-- Icône action rapide depuis l'accueil
+#### Menu Contextuels (3-Points)
+- Popup menu sans clutter visual
+- 4 actions par tâche/sous-tâche:
+  1. ➕ Ajouter sous-tâche
+  2. 📝 Ajouter note (avec date)
+  3. 📷 Ajouter photo (avec annotation)
+  4. ✏️ Modifier tâche (nom, N/A, blocages)
 
-#### Hiérarchie Visualisée
-- Niveau 0 (Logement): fond #e0f2fe, bordure bleue
-- Niveau 1 (Lot): fond #e0f7fa, bordure cyan, padding +20px
-- Niveau 2 (Tâche): fond #f0fdfa, bordure turquoise, padding +32px
-- Niveau 3 (Sous-tâche): fond #f0fdf4, bordure verte, padding +44px
+#### Hiérarchie Lot-by-Lot
+- Niveau 0 (Tâche): fond #fff, bordure grise
+- Niveau 1 (Sous-tâche): fond #f9fafb, indentation +20px
 
 ### 1. Nouveaux Composants Créés
 
@@ -318,7 +320,8 @@ npm run dev
 
 ---
 
-**Dernière mise à jour**: 25 septembre 2026 (16:30 UTC)
-**Version**: 2.0 — Design System Aligned + Global Task Control
+**Dernière mise à jour**: 25 septembre 2026 (après ajustements)
+**Version**: 4.0 — Lot-by-Lot Architecture + Task Management
 **Branche**: main
 **Statut**: ✅ Prototype production-ready - Prêt pour Phase 3 (React Integration)
+**Prototype URL**: https://claude.ai/artifact/ETjm9MwLFK6KSLc8oqNvSs
