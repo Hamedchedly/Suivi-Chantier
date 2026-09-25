@@ -170,6 +170,8 @@ export function CrExport({ reserves, lots, crNumbers, zoneRefs, onClose }: Props
                   meeting?.attendees.length ? <p style={pText}>{meeting.attendees.join(', ')}</p> : <p style={pText}>Non renseigné.</p>
                 )}
                 {key === 'avancement' && <AvancementParLot ganttTasks={ganttTasks} />}
+                {key === 'ecartAvancement' && <EcartAvancementParLot ganttTasks={ganttTasks} lots={lots} />}
+                {key === 'damierAvancement' && <DamierAvancement ganttTasks={ganttTasks} zoneRefsLocal={zoneRefsLocal} />}
                 {key === 'remarquesOuvertes' && <RemarquesList rows={nonTerminees} crNo={crNo} lotLabel={lotLabel} zoneLabel={zoneLabel} />}
                 {key === 'remarquesNouvelles' && (
                   nouvelles.length ? <RemarquesList rows={nouvelles} crNo={crNo} lotLabel={lotLabel} zoneLabel={zoneLabel} /> : <p style={pText}>Aucune nouvelle remarque à ce CR.</p>
@@ -253,6 +255,116 @@ function AvancementParLot({ ganttTasks }: { ganttTasks: GanttTask[] }) {
         ))}
       </tbody>
     </table>
+  )
+}
+
+function EcartAvancementParLot({ ganttTasks, lots }: { ganttTasks: GanttTask[]; lots: { id: string; name: string; company?: string }[] }) {
+  if (ganttTasks.length === 0) return <p style={pText}>Aucun lot planifié.</p>
+
+  const calculateExpectedProgress = (task: GanttTask): number => {
+    if (!task.planned_start || !task.planned_end) return 0
+    const now = new Date()
+    const start = new Date(task.planned_start)
+    const end = new Date(task.planned_end)
+    if (now < start) return 0
+    if (now >= end) return 100
+    const total = end.getTime() - start.getTime()
+    const elapsed = now.getTime() - start.getTime()
+    return Math.round((elapsed / total) * 100)
+  }
+
+  const gaps = ganttTasks.map(lot => {
+    const expected = calculateExpectedProgress(lot)
+    const gap = lot.progress - expected
+    return { lot, expected, gap }
+  })
+
+  return (
+    <div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Lot</th>
+            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Réel</th>
+            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Attendu</th>
+            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Écart</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gaps.map(({ lot, expected, gap }) => (
+            <tr key={lot.id}>
+              <td style={{ padding: '6px 0', color: '#1f2937' }}>{lot.title}</td>
+              <td style={{ padding: '6px 0', textAlign: 'center', color: '#1f2937', fontWeight: 600 }}>{lot.progress}%</td>
+              <td style={{ padding: '6px 0', textAlign: 'center', color: '#64748b' }}>{expected}%</td>
+              <td style={{ padding: '6px 0', textAlign: 'center', fontWeight: 600, color: gap >= 0 ? '#15803d' : '#dc2626' }}>
+                {gap > 0 ? '+' : ''}{gap}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function DamierAvancement({ ganttTasks, zoneRefsLocal }: { ganttTasks: GanttTask[]; zoneRefsLocal: { refId: string; label: string; buildingLabel: string }[] }) {
+  if (ganttTasks.length === 0) return <p style={pText}>Aucun lot planifié.</p>
+
+  const flatTasks = flattenLeaves(ganttTasks)
+  const byLogement = new Map<string, GanttTask[]>()
+  for (const task of flatTasks) {
+    if (!task.logement_id) continue
+    if (!byLogement.has(task.logement_id)) byLogement.set(task.logement_id, [])
+    byLogement.get(task.logement_id)!.push(task)
+  }
+
+  const logements = zoneRefsLocal.filter(z => byLogement.has(z.refId))
+  if (logements.length === 0) return <p style={pText}>Aucune tâche associée à des logements.</p>
+
+  const cellSize = 28
+  const maxTasks = Math.max(...Array.from(byLogement.values()).map(t => t.length))
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'inline-flex', gap: 2 }}>
+          <div style={{ width: 140, minWidth: 140, fontSize: 11, fontWeight: 600, color: '#64748b', padding: '2px 4px' }}>Logement</div>
+          {Array.from({ length: maxTasks }).map((_, i) => (
+            <div key={i} style={{ width: cellSize, minWidth: cellSize, textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#64748b', padding: '2px 0' }}>T{i + 1}</div>
+          ))}
+        </div>
+        {logements.map(z => {
+          const tasks = byLogement.get(z.refId) || []
+          return (
+            <div key={z.refId} style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
+              <div style={{ width: 140, minWidth: 140, fontSize: 11, color: '#1f2937', padding: '2px 4px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{z.label}</div>
+              {tasks.map((t, i) => (
+                <div
+                  key={`${z.refId}-${t.id}`}
+                  style={{
+                    width: cellSize,
+                    minWidth: cellSize,
+                    height: cellSize,
+                    borderRadius: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: '#fff',
+                    background: t.progress === 0 ? '#e2e8f0' : t.progress >= 100 ? '#15803d' : `linear-gradient(90deg, #0284c7 0%, #0284c7 ${t.progress}%, #e2e8f0 ${t.progress}%, #e2e8f0 100%)`,
+                    border: '1px solid #cbd5e1',
+                  }}
+                  title={`${t.title}: ${t.progress}%`}
+                >
+                  {t.progress}
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

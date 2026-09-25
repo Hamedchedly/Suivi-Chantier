@@ -583,8 +583,9 @@ export function saveMeetings(m: Meeting[]): void {
 // changée explicitement, jamais redemandée à chaque CR.
 
 export type CrExportSectionKey =
-  | 'infos' | 'presents' | 'avancement' | 'remarquesOuvertes' | 'remarquesNouvelles'
-  | 'actions' | 'photos' | 'planningSemaine' | 'prochaineReunion'
+  | 'infos' | 'presents' | 'avancement' | 'ecartAvancement' | 'damierAvancement'
+  | 'remarquesOuvertes' | 'remarquesNouvelles' | 'actions' | 'photos'
+  | 'planningSemaine' | 'prochaineReunion'
 
 export interface CrExportConfig {
   sections: Record<CrExportSectionKey, boolean>
@@ -595,6 +596,8 @@ export const CR_EXPORT_SECTION_LABEL: Record<CrExportSectionKey, string> = {
   infos: 'Informations générales',
   presents: 'Présents',
   avancement: 'Avancement par lot',
+  ecartAvancement: 'Écart d\'avancement par lot',
+  damierAvancement: 'Damier d\'avancement (logements/tâches)',
   remarquesOuvertes: 'Dernières remarques non terminées',
   remarquesNouvelles: 'Nouvelles remarques du CR',
   actions: 'Actions / engagements',
@@ -604,8 +607,9 @@ export const CR_EXPORT_SECTION_LABEL: Record<CrExportSectionKey, string> = {
 }
 
 const DEFAULT_CR_EXPORT_ORDER: CrExportSectionKey[] = [
-  'infos', 'presents', 'avancement', 'remarquesOuvertes', 'remarquesNouvelles',
-  'actions', 'photos', 'planningSemaine', 'prochaineReunion',
+  'infos', 'presents', 'avancement', 'ecartAvancement', 'damierAvancement',
+  'remarquesOuvertes', 'remarquesNouvelles', 'actions', 'photos',
+  'planningSemaine', 'prochaineReunion',
 ]
 
 function defaultCrExportConfig(): CrExportConfig {
