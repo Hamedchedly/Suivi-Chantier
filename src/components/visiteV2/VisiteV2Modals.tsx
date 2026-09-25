@@ -12,15 +12,16 @@ function Modal({ isOpen, title, onClose, children }: ModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-      <div className="bg-white w-full rounded-t-2xl p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-3xl p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-lg transition-all flex-shrink-0"
+            title="Fermer"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
         {children}
@@ -52,9 +53,9 @@ export function AddSubtaskModal({ isOpen, onClose, onSubmit }: AddSubtaskModalPr
 
   return (
     <Modal isOpen={isOpen} title="Ajouter une sous-tâche" onClose={onClose}>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Nom de la sous-tâche
           </label>
           <input
@@ -62,25 +63,25 @@ export function AddSubtaskModal({ isOpen, onClose, onSubmit }: AddSubtaskModalPr
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ex: Fenêtre séjour"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Date d'échéance (optionnel)
           </label>
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
           />
         </div>
         <button
           onClick={handleSubmit}
-          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all shadow-md hover:shadow-lg"
         >
-          Créer
+          + Créer
         </button>
       </div>
     </Modal>
@@ -109,20 +110,20 @@ export function AddNoteModal({ isOpen, onClose, onSubmit }: AddNoteModalProps) {
 
   return (
     <Modal isOpen={isOpen} title="Ajouter une note" onClose={onClose}>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Date
           </label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Note
           </label>
           <textarea
@@ -130,14 +131,14 @@ export function AddNoteModal({ isOpen, onClose, onSubmit }: AddNoteModalProps) {
             onChange={(e) => setNote(e.target.value)}
             placeholder="Remarques, observations..."
             rows={5}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all resize-none"
           />
         </div>
         <button
           onClick={handleSubmit}
-          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all shadow-md hover:shadow-lg"
         >
-          Enregistrer
+          💾 Enregistrer
         </button>
       </div>
     </Modal>
@@ -167,13 +168,13 @@ export function AddPhotoModal({ isOpen, onClose, onSubmit }: AddPhotoModalProps)
 
   return (
     <Modal isOpen={isOpen} title="Ajouter une photo" onClose={onClose}>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
           <label htmlFor="photo" className="block">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
-              <div className="text-4xl mb-3">📷</div>
-              <p className="text-sm text-gray-600">
-                {selectedFile ? selectedFile.name : 'Tap pour ajouter une photo'}
+            <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors bg-slate-50">
+              <div className="text-5xl mb-3">📷</div>
+              <p className="text-sm text-slate-600 font-medium">
+                {selectedFile ? selectedFile.name : 'Appuyez pour ajouter une photo'}
               </p>
             </div>
           </label>
@@ -186,7 +187,7 @@ export function AddPhotoModal({ isOpen, onClose, onSubmit }: AddPhotoModalProps)
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Annotation (optionnel)
           </label>
           <input
@@ -194,15 +195,15 @@ export function AddPhotoModal({ isOpen, onClose, onSubmit }: AddPhotoModalProps)
             value={annotation}
             onChange={(e) => setAnnotation(e.target.value)}
             placeholder="Description de la photo"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
           />
         </div>
         <button
           onClick={handleSubmit}
           disabled={!selectedFile}
-          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:from-slate-400 disabled:to-slate-500 active:scale-95 transition-all shadow-md hover:shadow-lg"
         >
-          Ajouter
+          📸 Ajouter
         </button>
       </div>
     </Modal>
@@ -229,40 +230,37 @@ export function EditTaskModal({ isOpen, taskName, onClose, onSubmit }: EditTaskM
 
   return (
     <Modal isOpen={isOpen} title="Modifier la tâche" onClose={onClose}>
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-slate-900 mb-2">
             Nom
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
           />
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-3">
-            Marquer comme N/A
-          </label>
-          <div className="flex items-center gap-2">
+        <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
               id="checkNA"
               checked={isNA}
               onChange={(e) => setIsNA(e.target.checked)}
-              className="w-5 h-5 cursor-pointer"
+              className="w-5 h-5 cursor-pointer accent-blue-600 rounded"
             />
-            <label htmlFor="checkNA" className="text-sm text-gray-700">
+            <span className="text-sm font-medium text-slate-700">
               Cette tâche ne s'applique pas à ce logement
-            </label>
-          </div>
+            </span>
+          </label>
         </div>
         <button
           onClick={handleSubmit}
-          className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-700 active:scale-95 transition-all"
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all shadow-md hover:shadow-lg"
         >
-          Enregistrer
+          ✓ Enregistrer
         </button>
       </div>
     </Modal>

@@ -85,24 +85,25 @@ export function TaskActionMenu({
       {/* Menu */}
       <div
         ref={menuRef}
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-xl shadow-2xl overflow-hidden w-64"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-2xl shadow-2xl overflow-hidden w-72 border border-slate-200"
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-start">
+        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
           <div className="flex-1">
-            <p className="text-sm font-bold text-gray-900 truncate">{taskTitle}</p>
-            <p className="text-xs text-gray-500 mt-1">ID: {taskId}</p>
+            <p className="text-sm font-bold text-slate-900 truncate leading-tight">{taskTitle}</p>
+            <p className="text-xs text-slate-500 mt-1 font-medium">ID: {taskId}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded transition-all flex-shrink-0"
+            title="Fermer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Actions */}
-        <div className="py-1">
+        <div className="py-2">
           {actions.map((action) => (
             <button
               key={action.id}
@@ -110,12 +111,12 @@ export function TaskActionMenu({
                 onAction(action.id)
                 onClose()
               }}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+              className="w-full flex items-center gap-4 px-5 py-3 hover:bg-blue-50 active:bg-blue-100 transition-colors text-left group border-b border-slate-100 last:border-b-0"
             >
-              <span className={`${action.color}`}>
+              <span className={`${action.color} group-hover:scale-110 transition-transform`}>
                 {action.icon}
               </span>
-              <span className="text-sm font-medium text-gray-900">
+              <span className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                 {action.label}
               </span>
             </button>
