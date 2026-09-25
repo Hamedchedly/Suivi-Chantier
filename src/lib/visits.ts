@@ -26,7 +26,7 @@
 import type { Reserve } from './reserves'
 import type { GanttTask, TaskStatus } from '../types/gantt'
 import type { DateCommitment, CommitmentType } from './commitments'
-import { flattenLeaves, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
+import { flattenLeaves, flattenAll, lotSummaries, overallProgress, maxDrift, lateTasks, driftDays, diffDays, startOfDay } from './schedule'
 import { forecastDrift } from './forecast'
 import { analyzePlanning, deriveTaskStatus } from './planningEngine'
 import { recomputeAll, addBlockedTask } from './planning'

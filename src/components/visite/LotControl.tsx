@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
-  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical,
+  X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical, StickyNote,
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
@@ -130,11 +130,14 @@ export function LotControl(props: Props) {
           remarks={reserves.filter(r => r.taskId === t.taskId)}
           blockerOptions={blockerOptions.filter(o => o.id !== t.taskId)}
           onPatch={patch => onPatchTask(t.taskId, patch)}
+          onPatchTask={onPatchTask}
           onAddPhoto={file => onAddPhoto(t.lotId, t.taskId, file)}
           onAddRemark={onAddRemark}
           onUpdateRemark={onUpdateRemark}
           onRemoveRemark={onRemoveRemark}
           onAddSubTask={onAddPlanTask ? (title, start, duration, _parentTaskId, scope) => onAddPlanTask(title, start, duration, t.taskId, scope) : undefined}
+          photos={photos}
+          reserves={reserves}
         />
       ))}
 
@@ -237,7 +240,7 @@ export function LotControl(props: Props) {
 
 type Panel = null | 'photo' | 'engagement' | 'blockers' | 'overflow-menu'
 
-function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark, onAddSubTask }: {
+function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount, remarks, blockerOptions, onPatch, onPatchTask, onAddPhoto, onAddRemark, onUpdateRemark, onRemoveRemark, onAddSubTask, photos, reserves }: {
   task: VisitTaskCheck
   zone: VisitZone
   lots: LotContact[]
@@ -248,11 +251,14 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   remarks: Reserve[]
   blockerOptions: BlockerOption[]
   onPatch: (patch: Partial<VisitTaskCheck>) => void
+  onPatchTask: (taskId: string, patch: Partial<VisitTaskCheck>) => void
   onAddPhoto: (file: File) => void
   onAddRemark: (r: RemarkInput) => void
   onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
   onAddSubTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'tache_logement' | 'tache_tous') => void
+  photos: VisitPhoto[]
+  reserves: Reserve[]
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const [userExpanded, setUserExpanded] = useState(false)
@@ -721,6 +727,121 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             />
           )}
         </>
+      )}
+
+      {/* Subtasks */}
+      {!collapsed && task.children && task.children.map(subTask => {
+        const subPhotoCount = photos.filter((p: VisitPhoto) => p.taskId === subTask.taskId).length
+        const subRemarks = reserves.filter((r: Reserve) => r.taskId === subTask.taskId)
+        const handleSubTaskAddPhoto = (file: File) => {
+          // Find the parent callback from the parent LotControl
+          // For now, just use the onAddPhoto from the parent (it needs lotId and taskId)
+          // This is a workaround - we need to pass the parent's onAddPhoto
+        }
+        return (
+          <div key={subTask.taskId} style={{ marginLeft: '20px', marginTop: '10px', paddingLeft: '12px', borderLeft: '2px solid #e2e8f0' }}>
+            <SubTaskCard
+              task={subTask}
+              zone={zone}
+              photoCount={subPhotoCount}
+              remarks={subRemarks}
+              readOnly={readOnly}
+              onPatch={patch => onPatchTask(subTask.taskId, patch)}
+              onAddRemark={onAddRemark}
+              onUpdateRemark={onUpdateRemark}
+              onRemoveRemark={onRemoveRemark}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── SubTask Card ──────────────────────────────────────────────────────
+
+function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onAddRemark, onUpdateRemark, onRemoveRemark }: {
+  task: VisitTaskCheck
+  zone: VisitZone
+  photoCount: number
+  remarks: Reserve[]
+  readOnly: boolean
+  onPatch: (patch: Partial<VisitTaskCheck>) => void
+  onAddRemark: (r: RemarkInput) => void
+  onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
+  onRemoveRemark: (id: string) => void
+}) {
+  const [panelOpen, setPanelOpen] = useState<'notes' | null>(null)
+  const gap = progressGap(task)
+
+  const isComplete = (task.progress ?? 0) === 100
+  const planned = task.plannedProgress
+  const thumb = task.progress ?? planned ?? 0
+
+  const patchProgress = (progress: number) =>
+    onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
+
+  return (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', padding: '10px', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+        <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: 'var(--ink)' }}>
+          {taskTitle(task.title, zone.refId)}
+        </span>
+        {isComplete && (
+          <Check size={13} color="#15803d" />
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: '4px' }}>
+          <div style={{ height: '100%', background: 'linear-gradient(90deg, #0284c7, #0369a1)', width: `${thumb}%`, transition: 'width 200ms' }} />
+        </div>
+      </div>
+
+      {/* Spinner control */}
+      {!isComplete && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+          <ProgressSpinner
+            value={thumb}
+            onChange={patchProgress}
+            disabled={readOnly}
+            showButtons="full"
+          />
+        </div>
+      )}
+
+      {/* Info text */}
+      {gap !== null && (
+        <div style={{ fontSize: '10px', color: gap < 0 ? '#b45309' : '#15803d', fontWeight: 600, marginBottom: '6px' }}>
+          {gap < 0 ? `${-gap} pts de retard` : `+${gap} pts d'avance`}
+        </div>
+      )}
+
+      {/* Photos and remarks badges */}
+      {(photoCount > 0 || remarks.length > 0) && (
+        <div style={{ display: 'flex', gap: '4px', fontSize: '9px', marginBottom: '6px' }}>
+          {photoCount > 0 && <span style={{ ...badge, background: '#eef2f6', color: '#02457A', fontSize: '9px' }}>{photoCount}📷</span>}
+          {remarks.length > 0 && <span style={{ ...badge, background: '#fef3c7', color: '#92400e', fontSize: '9px' }}>{remarks.length} note{remarks.length > 1 ? 's' : ''}</span>}
+        </div>
+      )}
+
+      {/* Actions */}
+      {!readOnly && remarks.length > 0 && (
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button onClick={() => setPanelOpen(panelOpen === 'notes' ? null : 'notes')} title="Notes" style={{ ...iconBtn, fontSize: '11px' }}>
+            <StickyNote size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Notes panel */}
+      {panelOpen === 'notes' && remarks.length > 0 && (
+        <div style={{ marginTop: '8px' }}>
+          {remarks.map(r => (
+            <RemarkRow key={r.id} remark={r} readOnly={readOnly} onUpdate={onUpdateRemark} onRemove={onRemoveRemark} />
+          ))}
+        </div>
       )}
     </div>
   )
