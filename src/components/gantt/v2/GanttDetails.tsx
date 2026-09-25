@@ -40,11 +40,11 @@ export function GanttDetails({
   const [showHistory, setShowHistory] = useState(false)
   const [depSearch, setDepSearch] = useState('')
   const [subTaskForm, setSubTaskForm] = useState(false)
-  // Tampon local pendant le glissement du curseur : évite de relancer le
-  // recalcul complet (CPM/forecast/geometry) + la sauvegarde à chaque pixel
-  // déplacé — seul le relâchement propage la vraie mise à jour.
-  const [localProgress, setLocalProgress] = useState(task.progress)
-  useEffect(() => { setLocalProgress(task.progress) }, [task.progress])
+  // Feedback visuel UNIQUEMENT pendant le glissement du curseur — la vraie source est task.progress.
+  // Quand l'utilisateur relâche (onMouseUp/onTouchEnd/onKeyUp), onProgress('taskId', value) met à jour la source.
+  // Dès que task.progress change (après onProgress), ce composant reçoit une nouvelle prop et l'affiche.
+  const [dragProgress, setDragProgress] = useState<number | null>(null)
+  const displayProgress = dragProgress !== null ? dragProgress : task.progress
   const v = task.variance
 
   return (
@@ -68,16 +68,16 @@ export function GanttDetails({
           <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Avancement</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{localProgress}%</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{displayProgress}%</span>
             </div>
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${localProgress}%` }} /></div>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${displayProgress}%` }} /></div>
             {onProgress && !task.isMilestone && !task.children?.length && (
               <input
-                type="range" min={0} max={100} step={5} value={localProgress}
-                onChange={e => setLocalProgress(Number(e.target.value))}
-                onMouseUp={e => onProgress(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={e => onProgress(Number((e.target as HTMLInputElement).value))}
-                onKeyUp={e => onProgress(Number((e.target as HTMLInputElement).value))}
+                type="range" min={0} max={100} step={5} value={displayProgress}
+                onChange={e => setDragProgress(Number(e.target.value))}
+                onMouseUp={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
+                onTouchEnd={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
+                onKeyUp={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
                 style={{ width: '100%', marginTop: 8 }}
               />
             )}

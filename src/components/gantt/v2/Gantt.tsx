@@ -145,24 +145,37 @@ export function PlanningGantt({
     setCollapsed(prev => new Set([...prev, ...completedGroupIds]))
   }, [planningTasks, completedGroupIds])
 
-  // Section 1.3 : auto-collapse quand un groupe DEVIENT 100% après modification.
-  // Contrairement à 1.2, ce mécanisme s'exécute à chaque changement de completed status.
-  // Il ajoute les nouveaux groupes terminés à collapsed sans jamais les retirer
-  // (l'utilisateur peut toujours les rouvrir manuellement si besoin).
+  // Section 1.3 : auto-collapse quand un groupe DEVIENT 100% (transition uniquement).
+  // Tracker de l'état précédent : seuls les groupes qui ne SONT PAS dans l'état précédent
+  // mais le SONT maintenant sont considérés comme "nouvellement terminés" et doivent déclencher
+  // un collapse automatique.
+  const previousCompletedGroupIdsRef = useRef(completedGroupIds)
   useEffect(() => {
-    if (collapseInitDone.current && completedGroupIds.size > 0) {
+    if (!collapseInitDone.current) return
+
+    const previousIds = previousCompletedGroupIdsRef.current
+    const newlyCompleted = new Set<string>()
+
+    // Trouver les groupes qui viennent de devenir terminés (dans current mais pas dans previous)
+    for (const id of completedGroupIds) {
+      if (!previousIds.has(id)) {
+        newlyCompleted.add(id)
+      }
+    }
+
+    // Ne collapsing que si au moins un groupe vient de devenir terminé
+    if (newlyCompleted.size > 0) {
       setCollapsed(prev => {
         const next = new Set(prev)
-        let changed = false
-        for (const id of completedGroupIds) {
-          if (!next.has(id)) {
-            next.add(id)
-            changed = true
-          }
+        for (const id of newlyCompleted) {
+          next.add(id)
         }
-        return changed ? next : prev
+        return next
       })
     }
+
+    // Mémoriser l'état actuel pour le prochain cycle
+    previousCompletedGroupIdsRef.current = completedGroupIds
   }, [completedGroupIds])
 
   const analysis = useMemo(() => analyzePlanning(tasks, today), [tasks, today])
