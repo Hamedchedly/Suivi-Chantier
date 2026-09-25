@@ -1,8 +1,8 @@
 # Visite V2 — État d'Avancement
 
 **Date**: 25 septembre 2026  
-**Version**: V2.0 — Lot-by-Lot React Implementation  
-**Status**: ✅ Architecture fondations en place - Prête pour évolution
+**Version**: V2.1 — TypeScript Fixes & Build Success  
+**Status**: ✅ Compilation réussie - Prête pour tests et intégration Phase 1
 
 ## 📋 Vue d'ensemble
 
@@ -108,11 +108,13 @@ V2 intègre progressivement:
 ### Phase 1: Fonctionnalité (Immédiate)
 **Priorité**: Critical
 
-- [ ] Connecter bouton menu 3-points → ouvre modales
-- [ ] Modales persistent data → state + auto-save
-- [ ] Implémentation photos (upload + stockage)
-- [ ] Implémentation sous-tâches (création + gestion)
-- [ ] Synchronisation progress avec Visit.tasks
+- ✅ TypeScript compilation fixes (tous les composants compilent)
+- ✅ Connecter bouton menu 3-points → ouvre modales (implémenté)
+- ✅ Modales persistent data → state + auto-save (callbacks en place)
+- ⚠️ Tests runtime requis (modales, sliders, persistence)
+- [ ] Intégration photos avec photoStore
+- [ ] Complétion logique sous-tâches
+- ✅ Synchronisation progress avec Visit via onUpdateVisit
 
 ### Phase 2: Polish (1 semaine)
 **Priorité**: High
@@ -142,19 +144,24 @@ V2 intègre progressivement:
 
 ## 🐛 Bugs Connus & Limitations
 
-### Actuels (V2.0)
-1. **Menu 3-points**: Modales ne font rien encore
-2. **Données**: Utilise données d'exemple (non réelles)
-3. **Photos**: Upload implémenté mais non persisté
-4. **Sous-tâches**: Modal créée mais logique absente
-5. **Multi-zone**: V2 fixe sur première zone (TODO: loop)
+### Fixés (V2.1)
+- ✅ TypeScript compilation errors (zone.ref → zone.refId)
+- ✅ Visit.tasks vs Visit.zones references
+- ✅ GanttTask import issues
+- ✅ Modal callback handlers structurally correct
 
-### À Corriger
-- [ ] Menu actions → callback handlers
+### Actuels (V2.1)
+1. **Photos**: Upload implémenté mais non persisté à photoStore
+2. **Sous-tâches**: Modal et logique créées, besoin tests
+3. **Multi-zone**: V2 fixe sur première zone (TODO: loop)
+4. **État persistance**: À tester en runtime
+
+### À Tester/Corriger
+- [ ] Runtime testing en browser (modales, sliders, menu)
 - [ ] Intégrer photos à photoStore
-- [ ] Créer vraies sous-tâches en planning
-- [ ] Gérer blocages tâches
-- [ ] Support multi-zone
+- [ ] Vérifier sous-tâches hierarchy display
+- [ ] Gérer blocages tâches (UI existe, logique à compléter)
+- [ ] Support multi-zone navigation
 
 ## 📊 Statistiques
 
@@ -203,6 +210,40 @@ V2 intègre progressivement:
 - **prototype-visite-lot-by-lot.html**: UI reference (artifact)
 - **Code comments**: Inline dans composants V2
 - **Types**: Réutilisent `Visit`, `VisitZone` existants
+
+## 🔧 Dernière Session (25 sept 2026)
+
+### Problèmes Résolus
+- **TypeScript compilation**: Toutes les erreurs de types corrigées
+  - `zone.ref` → `zone.refId` (6 instances)
+  - `visit.tasks` → `visit.zones` (3 instances)
+  - GanttTask import removed (not exported from repo)
+  - Task variable undefined → use currentZone.tasks
+  
+- **Architecture fixes**:
+  - AddSubtaskModal now properly searches zones for parent task
+  - VisiteV2Summary receives tasks from currentZone
+  - Modal callbacks properly integrated with state management
+  
+- **Build Status**: ✅ npm run build succeeds, 0 TypeScript errors
+
+### Prochaines Étapes (Phase 1.5 - Testing)
+1. **Runtime Testing** (browser):
+   - Vérifier V2 button navigation
+   - Test lot selection and display
+   - Test slider interactions
+   - Test modal form submissions
+   - Verify data persistence
+   
+2. **Functional Issues** (if any):
+   - Debug subtask hierarchy display
+   - Test multi-action scenarios
+   - Verify zone navigation
+   
+3. **Integration Work**:
+   - Connect photoStore for photo persistence
+   - Complete blocages management UI
+   - Add loading states for modals
 
 ## 🎓 Décisions Architecturales
 
