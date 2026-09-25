@@ -190,6 +190,13 @@ export function PlanningGantt({
   const selectedDepth = selectedId ? rows.find(r => r.task.id === selectedId)?.depth : undefined
   const canAddSubTask = !!onSubTaskAdd && selectedDepth === 1 && !selectedTask?.children?.length
 
+  // DEBUG: Log selected task to trace offset bug
+  useEffect(() => {
+    if (selectedTask) {
+      console.log('[PlanningGantt] selectedTask changed:', { id: selectedTask.id, title: selectedTask.title })
+    }
+  }, [selectedTask?.id])
+
   // Au chargement (ou changement de zoom), recentre la frise sur aujourd'hui.
   useEffect(() => {
     const el = timelinePaneRef.current

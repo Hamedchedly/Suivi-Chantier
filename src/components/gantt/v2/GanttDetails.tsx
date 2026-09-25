@@ -37,6 +37,9 @@ export function GanttDetails({
   task, allTasksById, onClose, onDelayCauseChange, onDependencyRemove, onDependencyAdd,
   onProgress, onPlannedDates, onActualStart, onActualEnd, onSubTaskAdd,
 }: Props) {
+  // DEBUG: Log the task being displayed
+  console.log('[GanttDetails] rendered with task:', { id: task.id, title: task.title, onProgressAvailable: !!onProgress })
+
   const [showHistory, setShowHistory] = useState(false)
   const [depSearch, setDepSearch] = useState('')
   const [subTaskForm, setSubTaskForm] = useState(false)
@@ -75,9 +78,9 @@ export function GanttDetails({
               <input
                 type="range" min={0} max={100} step={5} value={displayProgress}
                 onChange={e => setDragProgress(Number(e.target.value))}
-                onMouseUp={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
-                onTouchEnd={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
-                onKeyUp={e => { const v = Number((e.target as HTMLInputElement).value); setDragProgress(null); onProgress(v) }}
+                onMouseUp={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onMouseUp:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
+                onTouchEnd={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onTouchEnd:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
+                onKeyUp={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onKeyUp:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
                 style={{ width: '100%', marginTop: 8 }}
               />
             )}
