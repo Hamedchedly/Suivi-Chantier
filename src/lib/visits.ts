@@ -284,9 +284,15 @@ export function buildZonesFromPlanning(
   belongs: (task: GanttTask, refId: string) => boolean = (t, refId) => t.logement_id === refId,
   hideCompleted = false, // if true, filter out zones where all leaf tasks are completed
 ): VisitZone[] {
-  // Get all root tasks (direct children of lots, not leaves)
+  // Get all tasks and find root tasks (not children of other tasks)
   const allTasks = flattenAll(tasks)
-  const rootTasks = allTasks.filter(t => !t.parent_id)
+  const childIds = new Set<string>()
+  allTasks.forEach(t => {
+    if (t.children?.length) {
+      t.children.forEach(child => childIds.add(child.id))
+    }
+  })
+  const rootTasks = allTasks.filter(t => !childIds.has(t.id))
 
   const zones = refs.map(ref => ({
     refId: ref.refId,
@@ -295,7 +301,7 @@ export function buildZonesFromPlanning(
     buildingId: ref.buildingId,
     buildingLabel: ref.buildingLabel,
     override: null,
-    tasks: rootTasks.filter(t => belongs(t, ref.refId)).map(taskCheckFromPlanning),
+    tasks: rootTasks.filter(t => belongs(t, ref.refId) && t.lot_id !== t.id).map(taskCheckFromPlanning),
   }))
 
   // Filter out zones with only completed tasks if hideCompleted is true
