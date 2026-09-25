@@ -94,6 +94,7 @@ export interface VisitTaskCheck {
   blockedBy?: string[]     // ids of the planning tasks holding this one up
   blocks?: string[]        // ids of the planning tasks this one holds up (symmetric direction)
   company?: string
+  children?: VisitTaskCheck[] // sous-tâches
 }
 
 /** Gap between what the planning expected and what was observed, in points. */
@@ -274,6 +275,7 @@ export function taskCheckFromPlanning(t: GanttTask): VisitTaskCheck {
     baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
     plannedEnd: isoDay(t.planned_end),
     company: t.company_id,
+    children: t.children ? t.children.map(taskCheckFromPlanning) : undefined,
   }
 }
 
@@ -282,7 +284,10 @@ export function buildZonesFromPlanning(
   belongs: (task: GanttTask, refId: string) => boolean = (t, refId) => t.logement_id === refId,
   hideCompleted = false, // if true, filter out zones where all leaf tasks are completed
 ): VisitZone[] {
-  const leaves = flattenLeaves(tasks)
+  // Get all root tasks (direct children of lots, not leaves)
+  const allTasks = flattenAll(tasks)
+  const rootTasks = allTasks.filter(t => !t.parent_id)
+
   const zones = refs.map(ref => ({
     refId: ref.refId,
     label: ref.label,
@@ -290,7 +295,7 @@ export function buildZonesFromPlanning(
     buildingId: ref.buildingId,
     buildingLabel: ref.buildingLabel,
     override: null,
-    tasks: leaves.filter(t => belongs(t, ref.refId)).map(taskCheckFromPlanning),
+    tasks: rootTasks.filter(t => belongs(t, ref.refId)).map(taskCheckFromPlanning),
   }))
 
   // Filter out zones with only completed tasks if hideCompleted is true
@@ -298,9 +303,13 @@ export function buildZonesFromPlanning(
     return zones.filter(z => {
       // Keep zone if it has no tasks (notes/photos only) or has at least one non-completed task
       if (z.tasks.length === 0) return true
-      // Find tasks that are not at 100% progress
-      const tasksToCheck = leaves.filter(t => belongs(t, z.refId))
-      return tasksToCheck.some(t => t.progress < 100 || t.status !== 'completed')
+      // Check if all tasks in this zone are complete (recursively check children)
+      const hasIncompleteTask = (t: VisitTaskCheck): boolean => {
+        if ((t.progress ?? 0) < 100) return true
+        if (t.children?.some(hasIncompleteTask)) return true
+        return false
+      }
+      return z.tasks.some(hasIncompleteTask)
     })
   }
 

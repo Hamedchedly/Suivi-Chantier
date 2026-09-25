@@ -52,7 +52,7 @@ interface Props {
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
   /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. Renvoie le succès réel. */
-  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'logement' | 'lot' | 'partout' | 'tache_logement' | 'tache_tous') => boolean
+  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'logement' | 'lot' | 'tache_logement' | 'tache_tous') => boolean
 }
 
 export function LotControl(props: Props) {
@@ -74,7 +74,7 @@ export function LotControl(props: Props) {
   const company = lotCompany(lots, lotId)
 
   const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
-  const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' | 'partout' } | null>(null)
+  const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
   const [addFailed, setAddFailed] = useState(false)
 
@@ -190,10 +190,6 @@ export function LotControl(props: Props) {
                     <input type="radio" name="scope" value="lot" checked={addForm.scope === 'lot'} onChange={e => setAddForm({ ...addForm, scope: 'lot' })} />
                     Ce lot (tous les logements)
                   </label>
-                  <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input type="radio" name="scope" value="partout" checked={addForm.scope === 'partout'} onChange={e => setAddForm({ ...addForm, scope: 'partout' })} />
-                    Partout (tous les logements)
-                  </label>
                 </div>
               </div>
               <button
@@ -259,7 +255,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onAddSubTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'tache_logement' | 'tache_tous') => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
-  const [collapsed, setCollapsed] = useState(() => (task.progress ?? 0) === 100)
+  const [userExpanded, setUserExpanded] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string; scope: 'tache_logement' | 'tache_tous' } | null>(null)
@@ -268,12 +264,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
-  // Auto-collapse when progress reaches 100%
-  useEffect(() => {
-    if ((task.progress ?? 0) === 100) {
-      setCollapsed(true)
-    }
-  }, [task.progress])
+  const isComplete = (task.progress ?? 0) === 100
+  const collapsed = isComplete && !userExpanded
 
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
   const addDaysToToday = (days: number) => {
@@ -353,7 +345,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   if (collapsed && !isNa) {
     return (
       <div
-        onClick={() => setCollapsed(false)}
+        onClick={() => setUserExpanded(true)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '10px' }}
       >
         <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
@@ -376,9 +368,9 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
         </span>
-        {/* Replier si la tâche était terminée (ok + 100%) */}
-        {task.state === 'ok' && (task.progress ?? 0) === 100 && (
-          <button onClick={() => setCollapsed(true)} title="Replier" style={miniBtn('#15803d', false)}>
+        {/* Replier si la tâche était terminée */}
+        {isComplete && (
+          <button onClick={() => setUserExpanded(false)} title="Replier" style={miniBtn('#15803d', false)}>
             <Check size={14} />
           </button>
         )}

@@ -31,6 +31,12 @@ export function flattenAll(tasks: GanttTask[], acc: GanttTask[] = []): GanttTask
   return acc
 }
 
+/** Root tasks (no parent, direct children of lot/zone). */
+export function getRootTasks(tasks: GanttTask[]): GanttTask[] {
+  const all = flattenAll(tasks)
+  return all.filter(t => !t.parent_id || all.find(p => p.id === t.parent_id) === undefined)
+}
+
 /**
  * Écart de fin, en jours. Positif = la tâche se termine plus tard que prévu.
  *
