@@ -36,15 +36,18 @@ function flattenRows(tasks: PlanningTask[], depth: number, collapsed: Set<string
 
 function indexById<T extends { id: string; children?: T[] }>(tasks: T[]): Map<string, T> {
   const m = new Map<string, T>()
+  const ids = new Set<string>()
   const walk = (arr: T[], depth = 0) => {
     for (const t of arr) {
+      if (ids.has(t.id)) console.warn(`[indexById] DUPLICATE ID FOUND: ${t.id}`)
+      ids.add(t.id)
       m.set(t.id, t)
       if (depth <= 2 && 'title' in t) console.log(`  [${'  '.repeat(depth)}] indexById: ${(t as any).title} (${t.id})`)
       if (t.children?.length) walk(t.children, depth + 1)
     }
   }
   walk(tasks)
-  console.log('[indexById] Total items indexed:', m.size)
+  console.log('[indexById] Total items indexed:', m.size, 'unique IDs:', ids.size)
   return m
 }
 
