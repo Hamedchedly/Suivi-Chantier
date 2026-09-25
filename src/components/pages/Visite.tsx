@@ -41,6 +41,11 @@ import { summarizeAnnotations } from '../../lib/annotations'
 import { ZoneControl } from '../visite/ZoneControl'
 import { LotControl, type BlockerOption } from '../visite/LotControl'
 import { SessionNotes } from '../visite/SessionNotes'
+import { VisiteHome } from '../visite/VisiteHome'
+import { VisiteZonesList } from '../visite/VisiteZonesList'
+import { VisiteSessionView } from '../visite/VisiteSessionView'
+import { VisiteContextHeader } from '../visite/VisiteContextHeader'
+import { VisiteSummaryBar } from '../visite/VisiteSummaryBar'
 import { setBackHandler } from '../../lib/backHandler'
 import { User, canEditLocked, isSuperadmin } from '../../lib/auth'
 import { getSession, getUsers } from '../../lib/repo'
@@ -601,78 +606,44 @@ export function Visite() {
     leavePicking()
   }
 
+  // Use new VisiteHome component with enhanced UX
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
-      <button onClick={() => push({ v: 'create' })} style={bigBtn}>
-        <Plus size={18} /> Nouvelle visite ou réunion
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div style={{ ...sectionLabel, flex: 1 }}>Sessions</div>
-        {!picking && visits.length > 0 && (
-          <button onClick={() => setPicking(true)} title="Sélectionner des sessions"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', color: 'var(--navy)', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
-            <ListChecks size={15} /> Sélectionner
-          </button>
-        )}
-      </div>
-
-      <SelectionBar
-        active={picking}
-        selection={selection}
-        visibleIds={visitIds}
-        noun="session"
-        feminine
-        onToggleAll={() => setSelection(s => toggleAll(s, visitIds))}
-        onDelete={() => setConfirmDelete(true)}
-        onCancel={leavePicking}
+      <VisiteHome
+        visits={visits}
+        onCreateVisit={() => push({ v: 'create' })}
+        onOpenVisit={openVisit}
       />
 
-      {confirmDelete && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
-          <span style={{ flex: 1, fontSize: '12px', color: '#7a1c13', minWidth: '160px' }}>
-            Supprimer définitivement {selection.size} session(s), leurs relevés et leurs notes ?
-            Les réserves émises sont conservées.
-          </span>
-          <button onClick={deleteSelectedVisits} style={{ padding: '7px 13px', borderRadius: '8px', border: 'none', background: '#b42318', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-            Supprimer
-          </button>
-          <button onClick={() => setConfirmDelete(false)} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>
-            Annuler
-          </button>
-        </div>
+      {/* Legacy selection UI for now - can be refactored later */}
+      {picking && (
+        <>
+          <SelectionBar
+            active={picking}
+            selection={selection}
+            visibleIds={visitIds}
+            noun="session"
+            feminine
+            onToggleAll={() => setSelection(s => toggleAll(s, visitIds))}
+            onDelete={() => setConfirmDelete(true)}
+            onCancel={leavePicking}
+          />
+          {confirmDelete && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
+              <span style={{ flex: 1, fontSize: '12px', color: '#7a1c13', minWidth: '160px' }}>
+                Supprimer définitivement {selection.size} session(s), leurs relevés et leurs notes ?
+                Les réserves émises sont conservées.
+              </span>
+              <button onClick={deleteSelectedVisits} style={{ padding: '7px 13px', borderRadius: '8px', border: 'none', background: '#b42318', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                Supprimer
+              </button>
+              <button onClick={() => setConfirmDelete(false)} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--line)', background: '#fff', fontSize: '12px', cursor: 'pointer' }}>
+                Annuler
+              </button>
+            </div>
+          )}
+        </>
       )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {visits.length === 0 && <Empty>Aucune session. Démarrez une visite ou une réunion de chantier.</Empty>}
-        {visits.map(v => {
-          const c = visitCounts(v)
-          const st = STATUS_META[v.status]
-          const k = kindBadge(v)
-          const checked = selection.has(v.id)
-          return (
-            <button key={v.id}
-              onClick={() => (picking ? setSelection(s => toggle(s, v.id)) : openVisit(v))}
-              style={{ ...visitCard, border: checked ? '2px solid var(--accent)' : visitCard.border }}>
-              {picking
-                ? <input type="checkbox" checked={checked} readOnly aria-label={`Sélectionner la session du ${fmtFr(v.date)}`}
-                    style={{ width: '17px', height: '17px', flexShrink: 0, accentColor: 'var(--accent)' }} />
-                : <Calendar size={18} color="var(--muted)" style={{ flexShrink: 0 }} />}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ ...badge, background: k.bg, color: k.fg }}>{k.label}</span>
-                  <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--navy)' }}>{fmtFr(v.date)}</span>
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                  {c.total} zones • travaux {visitWorksProgress(v)}% • tournée {visitControlProgress(v)}%
-                </div>
-              </div>
-              <span style={{ ...badge, background: st.bg, color: st.fg }}>{st.label}</span>
-              {!picking && <ChevronRight size={14} color="var(--muted)" />}
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }
