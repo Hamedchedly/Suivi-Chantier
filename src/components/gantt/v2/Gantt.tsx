@@ -210,9 +210,9 @@ export function PlanningGantt({
   // DEBUG: Log selected task to trace offset bug
   useEffect(() => {
     if (selectedTask) {
-      console.log('[PlanningGantt] selectedTask changed:', { id: selectedTask.id, title: selectedTask.title })
+      console.log('[PlanningGantt] selectedTask changed:', { id: selectedTask.id, title: selectedTask.title, progress: selectedTask.progress })
     }
-  }, [selectedTask?.id])
+  }, [selectedTask?.id, selectedTask?.progress])
 
   // Au chargement (ou changement de zoom), recentre la frise sur aujourd'hui.
   useEffect(() => {
@@ -231,6 +231,7 @@ export function PlanningGantt({
   }, [])
 
   const handleSelectTask = useCallback((task: PlanningTask) => {
+    console.log('[Gantt.handleSelectTask] selecting:', { id: task.id, title: task.title })
     setSelectedId(task.id)
   }, [])
 
