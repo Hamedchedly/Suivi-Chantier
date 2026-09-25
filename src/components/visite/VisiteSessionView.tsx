@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Camera, Calendar, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
+import { Plus, Camera, Calendar, AlertTriangle, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import type { Visit, VisitZone, visitCounts as visitCountsType } from '../../lib/visits'
 import {
   ZONE_META, lotLabel, sectionLabel, badge, zoneRow, visitCard,
@@ -21,7 +21,17 @@ export function VisiteSessionView(props: Props) {
   const { visit, zones, counts, remainingCount, photos, onOpenZone, onAddObservation, onAddPhoto, onTerminate } = props
   const [showCompleted, setShowCompleted] = useState(false)
 
-  const progressPercent = counts.total > 0 ? Math.round((counts.done / counts.total) * 100) : 0
+  const activeZones = zones.filter(z => z.closedAt === undefined)
+  const completedZones = zones.filter(z => z.closedAt !== undefined)
+
+  const activeCounts = {
+    done: counts.done,
+    to_review: counts.to_review,
+    blocked: counts.blocked,
+    not_started: counts.not_started,
+    total: activeZones.length,
+  }
+  const progressPercent = activeCounts.total > 0 ? Math.round((activeCounts.done / activeCounts.total) * 100) : 0
 
   return (
     <div style={{ paddingBottom: '90px' }}>
@@ -57,37 +67,92 @@ export function VisiteSessionView(props: Props) {
         </div>
       </div>
 
-      {/* Zones List */}
-      <div style={sectionLabel}>À visiter</div>
+      {/* Zones List - Active */}
+      <div style={sectionLabel}>À visiter ({activeZones.length})</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
-        {zones
-          .filter(z => z.closedAt === undefined || showCompleted)
-          .map(z => {
-            const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : 'in_progress'
-            const m = ZONE_META[state]
-            const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
-            return (
-              <button
-                key={z.refId}
-                onClick={() => onOpenZone(z.refId)}
-                style={{
-                  ...zoneRow,
-                  display: 'grid',
-                  gridTemplateColumns: '24px 1fr auto auto',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.dot, justifySelf: 'center' }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Avancement {works}%</div>
-                </div>
-                <span style={{ ...badge, background: m.bg, color: m.fg, whiteSpace: 'nowrap' }}>{m.label}</span>
-                <ChevronRight size={14} color="var(--muted)" />
-              </button>
-            )
-          })}
+        {activeZones.map(z => {
+          const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : 'in_progress'
+          const m = ZONE_META[state]
+          const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
+          return (
+            <button
+              key={z.refId}
+              onClick={() => onOpenZone(z.refId)}
+              style={{
+                ...zoneRow,
+                display: 'grid',
+                gridTemplateColumns: '24px 1fr auto auto',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.dot, justifySelf: 'center' }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Avancement {works}%</div>
+              </div>
+              <span style={{ ...badge, background: m.bg, color: m.fg, whiteSpace: 'nowrap' }}>{m.label}</span>
+              <ChevronRight size={14} color="var(--muted)" />
+            </button>
+          )
+        })}
+        {activeZones.length === 0 && <p style={{ fontSize: '12px', color: 'var(--muted)', padding: '12px 0' }}>Aucun logement à visiter.</p>}
       </div>
+
+      {/* Completed Zones - Collapsible */}
+      {completedZones.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '8px 0',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '.04em',
+            }}
+          >
+            {showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}
+            Logements terminés ({completedZones.length})
+          </button>
+          {showCompleted && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', opacity: 0.7 }}>
+              {completedZones.map(z => {
+                const state = 'done'
+                const m = ZONE_META[state]
+                const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
+                return (
+                  <button
+                    key={z.refId}
+                    onClick={() => onOpenZone(z.refId)}
+                    style={{
+                      ...zoneRow,
+                      display: 'grid',
+                      gridTemplateColumns: '24px 1fr auto auto',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.dot, justifySelf: 'center' }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Avancement {works}%</div>
+                    </div>
+                    <span style={{ ...badge, background: m.bg, color: m.fg, whiteSpace: 'nowrap' }}>{m.label}</span>
+                    <ChevronRight size={14} color="var(--muted)" />
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {remainingCount === 0 && (
         <div style={{ textAlign: 'center', padding: '32px 16px', background: '#f1f5f9', borderRadius: '8px', marginBottom: '24px' }}>

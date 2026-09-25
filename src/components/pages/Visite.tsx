@@ -285,8 +285,14 @@ export function Visite() {
     const zone = active.zones.find(z => z.refId === view.ref)
     const lotTasks = zone?.tasks.filter(t => t.lotId === view.lotId) ?? []
     if (zone) {
-      // Neighbouring lots, so the tour can run lot after lot without detour.
-      const order = [...new Set(zone.tasks.map(t => t.lotId))]
+      // Neighbouring lots, skipping completed ones. Each lot's tasks determine its state.
+      const allLots = [...new Set(zone.tasks.map(t => t.lotId))]
+      const isLotComplete = (lotId: string) => {
+        const lotTaskList = zone.tasks.filter(t => t.lotId === lotId)
+        return lotTaskList.length > 0 && lotTaskList.every(t => t.state === 'ok')
+      }
+      const activeLots = allLots.filter(id => !isLotComplete(id))
+      const order = activeLots.length > 0 ? activeLots : allLots
       const at = order.indexOf(view.lotId)
       const asRef = (id?: string) => id ? { lotId: id, label: lotLabel(lots, id) } : null
       const neighbours = { prev: asRef(order[at - 1]), next: asRef(order[at + 1]) }
