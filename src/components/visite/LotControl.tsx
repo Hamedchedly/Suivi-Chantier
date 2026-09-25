@@ -253,6 +253,13 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
+  // Auto-collapse when task reaches 100% completion
+  useEffect(() => {
+    if (task.state === 'ok' && (task.progress ?? 0) === 100) {
+      setCollapsed(true)
+    }
+  }, [task.state, task.progress])
+
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
   const addDaysToToday = (days: number) => {
     const d = new Date()
