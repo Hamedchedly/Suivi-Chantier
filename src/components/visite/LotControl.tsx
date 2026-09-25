@@ -242,13 +242,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onAddSubTask?: (title: string, start: string, duration: number) => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
-
-  // Determine collapse state: task is done when progress=100% and state is effectively 'ok'
-  // Use stateAfterEdit to recalculate the expected state based on current progress/blockedBy
-  const effectiveState = stateAfterEdit({ state: task.state, progress: task.progress, blockedBy: task.blockedBy })
-  const isTaskDone = effectiveState === 'ok' && (task.progress ?? 0) === 100
-
-  const [collapsed, setCollapsed] = useState(() => isTaskDone)
+  const [collapsed, setCollapsed] = useState(() => (task.progress ?? 0) === 100)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
@@ -257,12 +251,12 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
-  // Auto-collapse when task reaches 100% completion
+  // Auto-collapse when progress reaches 100%
   useEffect(() => {
-    if (isTaskDone) {
+    if ((task.progress ?? 0) === 100) {
       setCollapsed(true)
     }
-  }, [isTaskDone])
+  }, [task.progress])
 
   const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
   const addDaysToToday = (days: number) => {
