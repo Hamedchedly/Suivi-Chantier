@@ -36,8 +36,15 @@ function flattenRows(tasks: PlanningTask[], depth: number, collapsed: Set<string
 
 function indexById<T extends { id: string; children?: T[] }>(tasks: T[]): Map<string, T> {
   const m = new Map<string, T>()
-  const walk = (arr: T[]) => { for (const t of arr) { m.set(t.id, t); if (t.children?.length) walk(t.children) } }
+  const walk = (arr: T[], depth = 0) => {
+    for (const t of arr) {
+      m.set(t.id, t)
+      if (depth <= 2 && 'title' in t) console.log(`  [${'  '.repeat(depth)}] indexById: ${(t as any).title} (${t.id})`)
+      if (t.children?.length) walk(t.children, depth + 1)
+    }
+  }
   walk(tasks)
+  console.log('[indexById] Total items indexed:', m.size)
   return m
 }
 
@@ -112,7 +119,14 @@ export function PlanningGantt({
     [filteredTasks, today, zoom, zoomMultiplier],
   )
   const todayBand = useMemo(() => currentWeekBand(scale, today), [scale, today])
-  const rows = useMemo(() => { const out: Row[] = []; flattenRows(filteredTasks, 0, collapsed, out); return out }, [filteredTasks, collapsed])
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    flattenRows(filteredTasks, 0, collapsed, out)
+    if (out.length > 0 && out.length <= 10) {
+      console.log('[PlanningGantt] rows order:', out.map(r => `${r.task.title}(${r.task.id})`).join(' → '))
+    }
+    return out
+  }, [filteredTasks, collapsed])
   const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
 
