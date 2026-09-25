@@ -321,7 +321,7 @@ export function Visite() {
             prevLot={neighbours.prev}
             nextLot={neighbours.next}
             onGoToLot={id => swap({ v: 'lot', ref: zone.refId, lotId: id })}
-            onAddPlanTask={(title, start, duration, parentTaskId) => {
+            onAddPlanTask={(title, start, duration, parentTaskId, scope) => {
               const tasks = getGanttTasks()
               const [y, m, d] = start.split('-').map(Number)
               const input = { title, start: new Date(y, m - 1, d), duration: Math.max(1, duration) }

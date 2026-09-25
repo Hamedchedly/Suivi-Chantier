@@ -52,7 +52,7 @@ interface Props {
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
   /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. Renvoie le succès réel. */
-  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string) => boolean
+  onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'logement' | 'lot' | 'partout' | 'tache_logement' | 'tache_tous') => boolean
 }
 
 export function LotControl(props: Props) {
@@ -74,16 +74,16 @@ export function LotControl(props: Props) {
   const company = lotCompany(lots, lotId)
 
   const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
-  const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string } | null>(null)
+  const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' | 'partout' } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
   const [addFailed, setAddFailed] = useState(false)
 
   const submitAdd = () => {
     if (!addForm || !addForm.title.trim() || !onAddPlanTask) return
-    const ok = onAddPlanTask(addForm.title.trim(), addForm.start, Math.max(1, parseInt(addForm.duration, 10) || 5))
+    const ok = onAddPlanTask(addForm.title.trim(), addForm.start, Math.max(1, parseInt(addForm.duration, 10) || 5), undefined, addForm.scope)
     if (ok) {
       setAddedName(addForm.title.trim())
-      setAddForm({ title: '', start: addForm.start, duration: '5' })
+      setAddForm({ title: '', start: addForm.start, duration: '5', scope: 'logement' })
       setTimeout(() => setAddedName(null), 3000)
     } else {
       setAddFailed(true)
@@ -134,7 +134,7 @@ export function LotControl(props: Props) {
           onAddRemark={onAddRemark}
           onUpdateRemark={onUpdateRemark}
           onRemoveRemark={onRemoveRemark}
-          onAddSubTask={onAddPlanTask ? (title, start, duration) => onAddPlanTask(title, start, duration, t.taskId) : undefined}
+          onAddSubTask={onAddPlanTask ? (title, start, duration, _parentTaskId, scope) => onAddPlanTask(title, start, duration, t.taskId, scope) : undefined}
         />
       ))}
 
@@ -142,7 +142,7 @@ export function LotControl(props: Props) {
       {onAddPlanTask && !readOnly && (
         <div style={{ marginTop: '12px', marginBottom: '4px', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
           <button
-            onClick={() => setAddForm(f => f ? null : { title: '', start: todayIso(), duration: '5' })}
+            onClick={() => setAddForm(f => f ? null : { title: '', start: todayIso(), duration: '5', scope: 'logement' })}
             style={{ display: 'flex', alignItems: 'center', gap: '7px', width: '100%', padding: '10px 12px', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--navy)', textAlign: 'left' }}
           >
             <Plus size={14} color="var(--accent)" />
@@ -179,10 +179,27 @@ export function LotControl(props: Props) {
                   <input type="number" min={1} value={addForm.duration} onChange={e => setAddForm({ ...addForm, duration: e.target.value })} style={{ ...input, width: '56px', fontSize: '12px' }} />
                 </label>
               </div>
+              <div style={{ borderTop: '1px solid var(--line)', paddingTop: '8px', marginTop: '4px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)', marginBottom: '6px' }}>Appliquer à:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input type="radio" name="scope" value="logement" checked={addForm.scope === 'logement'} onChange={e => setAddForm({ ...addForm, scope: 'logement' })} />
+                    Ce logement seulement
+                  </label>
+                  <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input type="radio" name="scope" value="lot" checked={addForm.scope === 'lot'} onChange={e => setAddForm({ ...addForm, scope: 'lot' })} />
+                    Ce lot (tous les logements)
+                  </label>
+                  <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input type="radio" name="scope" value="partout" checked={addForm.scope === 'partout'} onChange={e => setAddForm({ ...addForm, scope: 'partout' })} />
+                    Partout (tous les logements)
+                  </label>
+                </div>
+              </div>
               <button
                 onClick={submitAdd}
                 disabled={!addForm.title.trim()}
-                style={{ ...ghostBtn, background: addForm.title.trim() ? 'var(--accent)' : '#e5e7eb', color: addForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, alignSelf: 'flex-start' }}
+                style={{ ...ghostBtn, background: addForm.title.trim() ? 'var(--accent)' : '#e5e7eb', color: addForm.title.trim() ? '#fff' : 'var(--muted)', border: 'none', fontWeight: 700, alignSelf: 'flex-start', marginTop: '8px' }}
               >
                 Ajouter
               </button>
@@ -239,13 +256,13 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   onAddRemark: (r: RemarkInput) => void
   onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
-  onAddSubTask?: (title: string, start: string, duration: number) => void
+  onAddSubTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'tache_logement' | 'tache_tous') => void
 }) {
   const [panel, setPanel] = useState<Panel>(null)
   const [collapsed, setCollapsed] = useState(() => (task.progress ?? 0) === 100)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
-  const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string } | null>(null)
+  const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string; scope: 'tache_logement' | 'tache_tous' } | null>(null)
   const [subAdded, setSubAdded] = useState<string | null>(null)
   const [noteForm, setNoteForm] = useState<{ text: string; delayDays: number; important: boolean; engagementDate: string; engagementType: CommitmentType } | null>(null)
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
@@ -266,9 +283,9 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   }
   const submitSubTask = () => {
     if (!subForm || !subForm.title.trim() || !onAddSubTask) return
-    onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5))
+    onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5), undefined, subForm.scope)
     setSubAdded(subForm.title.trim())
-    setSubForm({ title: '', start: subForm.start, duration: '5' })
+    setSubForm({ title: '', start: subForm.start, duration: '5', scope: 'tache_logement' })
     setTimeout(() => setSubAdded(null), 3000)
   }
   const submitNote = () => {
@@ -381,7 +398,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                   onClick={() => { setPanel(null); setNoteForm({ text: '', delayDays: 7, important: false, engagementDate: '', engagementType: 'fin' }) }} />
                 {onAddSubTask && (
                   <MenuItem icon={<Plus size={14} />} label="Ajouter une sous-tâche"
-                    onClick={() => { setPanel(null); setSubForm({ title: '', start: todayStr, duration: '5' }) }} />
+                    onClick={() => { setPanel(null); setSubForm({ title: '', start: todayStr, duration: '5', scope: 'tache_logement' }) }} />
                 )}
                 <MenuItem icon={<Ban size={14} />} label={`Gérer les blocages${blockCount ? ` (${blockCount})` : ''}`} onClick={() => setPanel('blockers')} />
                 <div style={{ borderTop: '1px solid var(--line)' }} />
@@ -569,6 +586,19 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 Durée (j)
                 <input type="number" min={1} value={subForm.duration} onChange={e => setSubForm({ ...subForm, duration: e.target.value })} style={{ ...input, width: '54px', fontSize: '12px' }} />
               </label>
+            </div>
+            <div style={{ borderTop: '1px solid #90caf9', paddingTop: '8px', marginTop: '4px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#0369a1', marginBottom: '6px' }}>Appliquer à:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input type="radio" name="subScope" value="tache_logement" checked={subForm.scope === 'tache_logement'} onChange={e => setSubForm({ ...subForm, scope: 'tache_logement' })} />
+                  Ce logement seulement
+                </label>
+                <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input type="radio" name="subScope" value="tache_tous" checked={subForm.scope === 'tache_tous'} onChange={e => setSubForm({ ...subForm, scope: 'tache_tous' })} />
+                  Tous les logements
+                </label>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
