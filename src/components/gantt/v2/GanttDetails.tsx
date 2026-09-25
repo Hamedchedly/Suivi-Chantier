@@ -9,6 +9,7 @@ import { X, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { PlanningTask } from '../../../types/planning'
 import { DelayCause, DELAY_CAUSE_LABEL } from '../../../types/gantt'
 import { GanttDependency } from './GanttDependency'
+import { ProgressSpinner } from '../../common/ProgressSpinner'
 
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('fr') : '—')
 const isoDate = (d: Date): string => {
@@ -51,11 +52,6 @@ export function GanttDetails({
       console.log(`[GanttDetails.UNMOUNT] UNMOUNTED from task ${task.id}`)
     }
   }, []) // Empty dependency = only mount/unmount
-  // Feedback visuel UNIQUEMENT pendant le glissement du curseur — la vraie source est task.progress.
-  // Quand l'utilisateur relâche (onMouseUp/onTouchEnd/onKeyUp), onProgress('taskId', value) met à jour la source.
-  // Dès que task.progress change (après onProgress), ce composant reçoit une nouvelle prop et l'affiche.
-  const [dragProgress, setDragProgress] = useState<number | null>(null)
-  const displayProgress = dragProgress !== null ? dragProgress : task.progress
   const v = task.variance
 
   return (
@@ -79,18 +75,23 @@ export function GanttDetails({
           <div style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Avancement</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{displayProgress}%</span>
             </div>
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${displayProgress}%` }} /></div>
-            {onProgress && !task.isMilestone && !task.children?.length && (
-              <input
-                type="range" min={0} max={100} step={5} value={displayProgress}
-                onChange={e => setDragProgress(Number(e.target.value))}
-                onMouseUp={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onMouseUp:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
-                onTouchEnd={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onTouchEnd:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
-                onKeyUp={e => { const v = Number((e.target as HTMLInputElement).value); console.log('[GanttDetails.slider] onKeyUp:', { taskId: task.id, newValue: v }); setDragProgress(null); onProgress(v) }}
-                style={{ width: '100%', marginTop: 8 }}
-              />
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${task.progress}%` }} /></div>
+            {onProgress && !task.isMilestone && !task.children?.length ? (
+              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+                <ProgressSpinner
+                  value={task.progress}
+                  onChange={v => {
+                    console.log('[GanttDetails.spinner] value changed:', { taskId: task.id, newValue: v })
+                    onProgress(v)
+                  }}
+                  showButtons="full"
+                />
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, textAlign: 'center', fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>
+                {task.progress}%
+              </div>
             )}
           </div>
 

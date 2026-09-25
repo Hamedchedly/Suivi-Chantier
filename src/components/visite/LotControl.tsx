@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import {
   ArrowLeft, Camera, Check, Ban, Eye, Flag, Handshake, ArrowUp, ArrowDown,
   X, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, CalendarRange, CircleSlash, RotateCcw, LayoutList, ImageIcon, Plus, CheckCircle2, MoreVertical,
@@ -7,6 +7,7 @@ import {
   VisitZone, VisitTaskCheck, PreviousObservation,
   tasksState, tasksWorksProgress, progressGap, stateAfterEdit,
 } from '../../lib/visits'
+import { ProgressSpinner } from '../common/ProgressSpinner'
 import { DateCommitment, CommitmentType, latestCommitment, isBroken } from '../../lib/commitments'
 import { Reserve, reserveKind } from '../../lib/reserves'
 import { VisitPhoto } from '../../lib/photoStore'
@@ -424,17 +425,25 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         </div>
       ) : (
         <div style={{ position: 'relative' }}>
-          <input
-            className="task-slider"
-            type="range" min={0} max={100} step={5}
-            value={thumb}
-            disabled={readOnly}
-            onChange={e => patchProgress(Number(e.target.value))}
-            style={{ background: track }}
-          />
-          {/* Repère du prévu au planning et de l'avancement de la dernière réunion */}
-          {planned !== undefined && <SliderMark pct={planned} color="#0284c7" title={`Prévu au planning : ${planned}%`} />}
-          {prev !== undefined && <SliderMark pct={prev} color="#f59e0b" title={`Dernière réunion : ${prev}%`} />}
+          {/* Progress bar with context marks */}
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: 8 }}>
+              <div style={{ height: '100%', background: '#0284c7', width: `${thumb}%`, transition: 'width 150ms ease' }} />
+            </div>
+            {/* Marks for planned and previous progress */}
+            {planned !== undefined && <ProgressMark pct={planned} color="#0284c7" title={`Prévu: ${planned}%`} />}
+            {prev !== undefined && <ProgressMark pct={prev} color="#f59e0b" title={`Réunion préc.: ${prev}%`} />}
+          </div>
+
+          {/* Spinner control */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+            <ProgressSpinner
+              value={thumb}
+              onChange={patchProgress}
+              disabled={readOnly}
+              showButtons="full"
+            />
+          </div>
         </div>
       )}
 
@@ -897,18 +906,17 @@ function EngagementForm({ company, label, week, hasOne, onSubmit, onClear, onCan
 }
 
 /**
- * Repère vertical posé sur le curseur d'avancement. Le pouce fait 24px : son
- * centre va de 12px (0 %) à largeur−12px (100 %), d'où le calc d'alignement.
+ * Repère vertical sur la barre de progression.
  */
-function SliderMark({ pct, color, title }: { pct: number; color: string; title: string }) {
+function ProgressMark({ pct, color, title }: { pct: number; color: string; title: string }) {
   return (
     <div
       title={title}
       style={{
         position: 'absolute', top: '-2px', bottom: '-2px',
-        left: `calc(12px + (100% - 24px) * ${pct} / 100)`,
-        width: '3px', marginLeft: '-1.5px', background: color, borderRadius: '2px',
-        boxShadow: '0 0 0 1.5px rgba(255,255,255,.95)', pointerEvents: 'none', zIndex: 2,
+        left: `${pct}%`,
+        width: '2px', marginLeft: '-1px', background: color, borderRadius: '1px',
+        boxShadow: '0 0 0 1px rgba(255,255,255,.95)', pointerEvents: 'none', zIndex: 2,
       }}
     />
   )
