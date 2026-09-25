@@ -1,6 +1,6 @@
 // PlanningGantt — orchestrateur du nouveau Gantt (Phase 3).
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut, LayoutList, GanttChartSquare, Cog } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
@@ -36,8 +36,18 @@ function flattenRows(tasks: PlanningTask[], depth: number, collapsed: Set<string
 
 function indexById<T extends { id: string; children?: T[] }>(tasks: T[]): Map<string, T> {
   const m = new Map<string, T>()
-  const walk = (arr: T[]) => { for (const t of arr) { m.set(t.id, t); if (t.children?.length) walk(t.children) } }
+  const ids = new Set<string>()
+  const walk = (arr: T[], depth = 0) => {
+    for (const t of arr) {
+      if (ids.has(t.id)) console.warn(`[indexById] DUPLICATE ID FOUND: ${t.id}`)
+      ids.add(t.id)
+      m.set(t.id, t)
+      if (depth <= 2 && 'title' in t) console.log(`  [${'  '.repeat(depth)}] indexById: ${(t as any).title} (${t.id})`)
+      if (t.children?.length) walk(t.children, depth + 1)
+    }
+  }
   walk(tasks)
+  console.log('[indexById] Total items indexed:', m.size, 'unique IDs:', ids.size)
   return m
 }
 
@@ -112,8 +122,17 @@ export function PlanningGantt({
     [filteredTasks, today, zoom, zoomMultiplier],
   )
   const todayBand = useMemo(() => currentWeekBand(scale, today), [scale, today])
-  const rows = useMemo(() => { const out: Row[] = []; flattenRows(filteredTasks, 0, collapsed, out); return out }, [filteredTasks, collapsed])
-  const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    flattenRows(filteredTasks, 0, collapsed, out)
+    if (out.length > 0 && out.length <= 10) {
+      console.log('[PlanningGantt] rows order:', out.map(r => `${r.task.title}(${r.task.id})`).join(' → '))
+    }
+    return out
+  }, [filteredTasks, collapsed])
+  // CRITICAL FIX: Use filteredTasks for planningById, not planningTasks
+  // This ensures row display order matches the lookup table
+  const planningById = useMemo(() => indexById(filteredTasks), [filteredTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
 
   // Section 1.1 : groupes (lots, et toute tâche à enfants) terminés au sens
@@ -190,6 +209,13 @@ export function PlanningGantt({
   const selectedDepth = selectedId ? rows.find(r => r.task.id === selectedId)?.depth : undefined
   const canAddSubTask = !!onSubTaskAdd && selectedDepth === 1 && !selectedTask?.children?.length
 
+  // DEBUG: Log selected task to trace offset bug
+  useEffect(() => {
+    if (selectedTask) {
+      console.log('[PlanningGantt] selectedTask changed:', { id: selectedTask.id, title: selectedTask.title, progress: selectedTask.progress })
+    }
+  }, [selectedTask?.id, selectedTask?.progress])
+
   // Au chargement (ou changement de zoom), recentre la frise sur aujourd'hui.
   useEffect(() => {
     const el = timelinePaneRef.current
@@ -198,13 +224,26 @@ export function PlanningGantt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom])
 
-  const toggle = (id: string) => setCollapsed(prev => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
+  const toggle = useCallback((id: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
 
-  const handleHover = (task: PlanningTask, e: ReactMouseEvent) => setHover({ task, x: e.clientX, y: e.clientY })
+  const handleSelectTask = useCallback((task: PlanningTask) => {
+    console.log('[Gantt.handleSelectTask] selecting:', { id: task.id, title: task.title })
+    setSelectedId(task.id)
+  }, [])
+
+  const handleHover = useCallback((task: PlanningTask, e: ReactMouseEvent) => {
+    setHover({ task, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const handleLeaveHover = useCallback(() => {
+    setHover(null)
+  }, [])
 
   // Les deux volets scrollent verticalement ensemble ; seul le volet frise scrolle à l'horizontale.
   const syncScroll = (source: 'label' | 'timeline') => (e: React.UIEvent<HTMLDivElement>) => {
@@ -281,7 +320,7 @@ export function PlanningGantt({
       {showListView ? (
         <GanttMobileList
           tasks={filteredTasks}
-          onSelect={t => setSelectedId(t.id)}
+          onSelect={handleSelectTask}
           onShowTimeline={goToGanttView}
         />
       ) : (
@@ -301,7 +340,7 @@ export function PlanningGantt({
               isLot={!!task.children?.length}
               isExpanded={!collapsed.has(task.id)}
               onToggleExpand={() => toggle(task.id)}
-              onSelect={t => setSelectedId(t.id)}
+              onSelect={handleSelectTask}
               highlighted={cp.criticalIds.has(task.id)}
               isCompleted={completedGroupIds.has(task.id)}
             />
@@ -345,9 +384,9 @@ export function PlanningGantt({
               task={task}
               scale={scale}
               today={today}
-              onSelect={t => setSelectedId(t.id)}
+              onSelect={handleSelectTask}
               onHover={handleHover}
-              onLeave={() => setHover(null)}
+              onLeave={handleLeaveHover}
               highlighted={cp.criticalIds.has(task.id)}
             />
           ))}

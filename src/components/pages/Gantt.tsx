@@ -225,12 +225,17 @@ export function Gantt({ onNavigate }: GanttProps) {
     const today = new Date()
     const before = ganttTasks
 
+    // DEBUG: Log the request
+    console.log('[handleProgress] called with:', { id, progress })
+
     // GUARD: Ensure task ID exists in ganttTasks before modifying
     const task = findTaskInList(before, id)
     if (!task) {
       console.warn(`[handleProgress] Task ID not found: ${id}. Aborting progress update.`)
       return
     }
+
+    console.log('[handleProgress] found task:', { id: task.id, title: task.title })
 
     const bumped = mapTaskInList(before, id, t => ({ ...t, progress, status: deriveTaskStatus(progress, t.status) }))
     const rolledUp = recomputeAll(bumped)

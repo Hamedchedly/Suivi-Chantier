@@ -35,7 +35,14 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
         paddingLeft: 10 + depth * 16, paddingRight: 8, borderBottom: '1px solid var(--line)',
         background: highlighted ? 'rgba(220,38,38,.04)' : isLot ? '#f8fafc' : '#fff', cursor: 'pointer',
       }}
-      onClick={() => (isLot && onToggleExpand ? onToggleExpand() : onSelect(task))}
+      onClick={() => {
+        console.log('[GanttRowLabel.onClick] clicked on task:', { id: task.id, title: task.title })
+        if (isLot && onToggleExpand) {
+          onToggleExpand()
+        } else {
+          onSelect(task)
+        }
+      }}
     >
       {isLot ? (
         <span style={{ flexShrink: 0, color: 'var(--muted)' }}>
@@ -76,6 +83,8 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
   prev.isExpanded === next.isExpanded &&
   prev.highlighted === next.highlighted &&
   prev.isCompleted === next.isCompleted &&
+  prev.onSelect === next.onSelect &&
+  prev.onToggleExpand === next.onToggleExpand &&
   sameRenderTask(prev.task, next.task))
 
 interface TimelineProps {
@@ -119,4 +128,7 @@ export const GanttRowTimeline = memo(function GanttRowTimeline({ task, scale, to
   prev.scale.end.getTime() === next.scale.end.getTime() &&
   prev.scale.dayWidth === next.scale.dayWidth &&
   prev.scale.zoom === next.scale.zoom &&
+  prev.onSelect === next.onSelect &&
+  prev.onHover === next.onHover &&
+  prev.onLeave === next.onLeave &&
   sameRenderTask(prev.task, next.task))
