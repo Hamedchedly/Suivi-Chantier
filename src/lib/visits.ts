@@ -114,6 +114,17 @@ export function stateAfterEdit(c: Pick<VisitTaskCheck, 'state' | 'progress' | 'b
   return c.progress === undefined ? 'not_checked' : 'ok'
 }
 
+/** Aggregate subtask progress to parent tasks — mean of children's progress. */
+export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskCheck[] {
+  return tasks.map(t => {
+    if (!t.children?.length) return t
+    const applicable = t.children.filter(c => c.state !== 'na')
+    if (applicable.length === 0) return t
+    const childProgress = applicable.reduce((s, c) => s + (c.progress ?? 0), 0) / applicable.length
+    return { ...t, progress: Math.round(childProgress) }
+  })
+}
+
 export interface VisitZone {
   refId: string            // catalog id (logement / zone)
   label: string
