@@ -63,7 +63,7 @@ export function VisiteSessionView(props: Props) {
         {zones
           .filter(z => z.closedAt === undefined || showCompleted)
           .map(z => {
-            const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.control === 'done') ? 'done' : 'in_progress'
+            const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : 'in_progress'
             const m = ZONE_META[state]
             const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
             return (

@@ -207,6 +207,11 @@ export function Visite() {
     setStack([{ v: 'list' }, entry])
   }
 
+  const handleOpenVisit = (id: string) => {
+    const visit = visits.find(v => v.id === id)
+    if (visit) openVisit(visit)
+  }
+
   /** Every planning task, offered as a candidate blocker. */
   const blockerOptions: BlockerOption[] = flattenLeaves(getGanttTasks()).map(t => ({
     id: t.id, title: t.title, lotId: t.lot_id, logementId: t.logement_id, company: t.company_id,
@@ -618,7 +623,7 @@ export function Visite() {
       <VisiteHome
         visits={visits}
         onCreateVisit={() => push({ v: 'create' })}
-        onOpenVisit={openVisit}
+        onOpenVisit={handleOpenVisit}
       />
 
       {/* Legacy selection UI for now - can be refactored later */}

@@ -21,7 +21,7 @@ export function VisiteZonesList(props: Props) {
     // Filter by state
     if (filter !== 'all') {
       result = result.filter(z => {
-        const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.control === 'done') ? 'done' : z.tasks.some(t => t.control === 'to_review') ? 'to_review' : 'in_progress'
+        const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : z.tasks.some(t => t.state === 'to_review') ? 'to_review' : 'in_progress'
         if (filter === 'todo') return ['not_started', 'in_progress'].includes(state)
         if (filter === 'review') return state === 'to_review'
         if (filter === 'done') return state === 'done'
@@ -89,10 +89,10 @@ export function VisiteZonesList(props: Props) {
       {/* Zones Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
         {filtered.map(z => {
-          const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.control === 'done') ? 'done' : z.tasks.some(t => t.control === 'to_review') ? 'to_review' : 'in_progress'
+          const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : z.tasks.some(t => t.state === 'to_review') ? 'to_review' : 'in_progress'
           const m = ZONE_META[state]
           const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
-          const doneCount = z.tasks.filter(t => t.control === 'done').length
+          const doneCount = z.tasks.filter(t => t.state === 'ok').length
 
           return (
             <button
@@ -106,7 +106,6 @@ export function VisiteZonesList(props: Props) {
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 150ms ease',
-                hover: { borderColor: '#0284c7' },
               }}
               onMouseEnter={(e) => {
                 const el = e.currentTarget
@@ -130,7 +129,7 @@ export function VisiteZonesList(props: Props) {
 
               {/* Metadata */}
               <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
-                {z.surface && <>{z.surface} m² · {z.type}</> || 'Non spécifié'}
+                {z.buildingLabel}
               </div>
 
               {/* Progress bar */}
