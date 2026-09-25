@@ -255,7 +255,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
   // Auto-collapse when task reaches 100% completion
   useEffect(() => {
-    if (task.state === 'ok' && (task.progress ?? 0) === 100) {
+    const shouldCollapse = task.state === 'ok' && (task.progress ?? 0) === 100
+    if (shouldCollapse) {
       setCollapsed(true)
     }
   }, [task.state, task.progress])
