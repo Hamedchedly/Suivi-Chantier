@@ -276,33 +276,45 @@ function EcartAvancementParLot({ ganttTasks, lots }: { ganttTasks: GanttTask[]; 
   const gaps = ganttTasks.map(lot => {
     const expected = calculateExpectedProgress(lot)
     const gap = lot.progress - expected
-    return { lot, expected, gap }
-  })
+    return { lot, expected, gap, status: gap > 5 ? 'ahead' : gap < -5 ? 'behind' : 'ontrack' }
+  }).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
+
+  const hasGaps = gaps.some(g => Math.abs(g.gap) > 5)
 
   return (
     <div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Lot</th>
-            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Réel</th>
-            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Attendu</th>
-            <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Écart</th>
-          </tr>
-        </thead>
-        <tbody>
-          {gaps.map(({ lot, expected, gap }) => (
-            <tr key={lot.id}>
-              <td style={{ padding: '6px 0', color: '#1f2937' }}>{lot.title}</td>
-              <td style={{ padding: '6px 0', textAlign: 'center', color: '#1f2937', fontWeight: 600 }}>{lot.progress}%</td>
-              <td style={{ padding: '6px 0', textAlign: 'center', color: '#64748b' }}>{expected}%</td>
-              <td style={{ padding: '6px 0', textAlign: 'center', fontWeight: 600, color: gap >= 0 ? '#15803d' : '#dc2626' }}>
-                {gap > 0 ? '+' : ''}{gap}%
-              </td>
+      {!hasGaps ? (
+        <p style={pText}>Tous les lots sont dans les temps (écart ≤ 5%).</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Lot</th>
+              <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Réel</th>
+              <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Attendu</th>
+              <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Écart</th>
+              <th style={{ textAlign: 'center', padding: '4px 6px 6px 0', color: '#64748b', fontSize: 11, fontWeight: 600 }}>Statut</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {gaps.filter(g => Math.abs(g.gap) > 5).map(({ lot, expected, gap, status }) => (
+              <tr key={lot.id}>
+                <td style={{ padding: '6px 0', color: '#1f2937', fontWeight: 500 }}>{lot.title}</td>
+                <td style={{ padding: '6px 0', textAlign: 'center', color: '#1f2937', fontWeight: 600 }}>{lot.progress}%</td>
+                <td style={{ padding: '6px 0', textAlign: 'center', color: '#64748b' }}>{expected}%</td>
+                <td style={{ padding: '6px 0', textAlign: 'center', fontWeight: 700, color: gap >= 0 ? '#15803d' : '#dc2626' }}>
+                  {gap > 0 ? '+' : ''}{gap}%
+                </td>
+                <td style={{ padding: '6px 0', textAlign: 'center' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 3, background: status === 'ahead' ? '#dcfce7' : '#fee2e2', color: status === 'ahead' ? '#15803d' : '#dc2626' }}>
+                    {status === 'ahead' ? 'Avance' : 'Retard'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
