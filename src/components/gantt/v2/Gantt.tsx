@@ -130,7 +130,9 @@ export function PlanningGantt({
     }
     return out
   }, [filteredTasks, collapsed])
-  const planningById = useMemo(() => indexById(planningTasks), [planningTasks])
+  // CRITICAL FIX: Use filteredTasks for planningById, not planningTasks
+  // This ensures row display order matches the lookup table
+  const planningById = useMemo(() => indexById(filteredTasks), [filteredTasks])
   const ganttById = useMemo(() => indexById(tasks), [tasks])
 
   // Section 1.1 : groupes (lots, et toute tâche à enfants) terminés au sens
