@@ -1,6 +1,6 @@
 // PlanningGantt — orchestrateur du nouveau Gantt (Phase 3).
 // Consomme PlanningEngine ; n'a besoin d'aucune autre logique de calcul.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { BarChart3, ArrowLeft, Search, X as XIcon, ZoomIn, ZoomOut, LayoutList, GanttChartSquare, Cog } from 'lucide-react'
 import { GanttTask, DelayCause } from '../../../types/gantt'
@@ -222,13 +222,25 @@ export function PlanningGantt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom])
 
-  const toggle = (id: string) => setCollapsed(prev => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
+  const toggle = useCallback((id: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
 
-  const handleHover = (task: PlanningTask, e: ReactMouseEvent) => setHover({ task, x: e.clientX, y: e.clientY })
+  const handleSelectTask = useCallback((task: PlanningTask) => {
+    setSelectedId(task.id)
+  }, [])
+
+  const handleHover = useCallback((task: PlanningTask, e: ReactMouseEvent) => {
+    setHover({ task, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const handleLeaveHover = useCallback(() => {
+    setHover(null)
+  }, [])
 
   // Les deux volets scrollent verticalement ensemble ; seul le volet frise scrolle à l'horizontale.
   const syncScroll = (source: 'label' | 'timeline') => (e: React.UIEvent<HTMLDivElement>) => {
@@ -305,7 +317,7 @@ export function PlanningGantt({
       {showListView ? (
         <GanttMobileList
           tasks={filteredTasks}
-          onSelect={t => setSelectedId(t.id)}
+          onSelect={handleSelectTask}
           onShowTimeline={goToGanttView}
         />
       ) : (
@@ -325,7 +337,7 @@ export function PlanningGantt({
               isLot={!!task.children?.length}
               isExpanded={!collapsed.has(task.id)}
               onToggleExpand={() => toggle(task.id)}
-              onSelect={t => setSelectedId(t.id)}
+              onSelect={handleSelectTask}
               highlighted={cp.criticalIds.has(task.id)}
               isCompleted={completedGroupIds.has(task.id)}
             />
@@ -369,9 +381,9 @@ export function PlanningGantt({
               task={task}
               scale={scale}
               today={today}
-              onSelect={t => setSelectedId(t.id)}
+              onSelect={handleSelectTask}
               onHover={handleHover}
-              onLeave={() => setHover(null)}
+              onLeave={handleLeaveHover}
               highlighted={cp.criticalIds.has(task.id)}
             />
           ))}

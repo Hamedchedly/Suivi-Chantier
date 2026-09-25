@@ -43,6 +43,14 @@ export function GanttDetails({
   const [showHistory, setShowHistory] = useState(false)
   const [depSearch, setDepSearch] = useState('')
   const [subTaskForm, setSubTaskForm] = useState(false)
+
+  // CRITICAL: Monitor mount/unmount to verify key prop works
+  useEffect(() => {
+    console.log(`[GanttDetails.MOUNT] MOUNTED with task ${task.id}`)
+    return () => {
+      console.log(`[GanttDetails.UNMOUNT] UNMOUNTED from task ${task.id}`)
+    }
+  }, []) // Empty dependency = only mount/unmount
   // Feedback visuel UNIQUEMENT pendant le glissement du curseur — la vraie source est task.progress.
   // Quand l'utilisateur relâche (onMouseUp/onTouchEnd/onKeyUp), onProgress('taskId', value) met à jour la source.
   // Dès que task.progress change (après onProgress), ce composant reçoit une nouvelle prop et l'affiche.

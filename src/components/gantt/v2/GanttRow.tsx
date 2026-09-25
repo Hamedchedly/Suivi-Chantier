@@ -76,6 +76,8 @@ export const GanttRowLabel = memo(function GanttRowLabel({ task, depth, isLot, i
   prev.isExpanded === next.isExpanded &&
   prev.highlighted === next.highlighted &&
   prev.isCompleted === next.isCompleted &&
+  prev.onSelect === next.onSelect &&
+  prev.onToggleExpand === next.onToggleExpand &&
   sameRenderTask(prev.task, next.task))
 
 interface TimelineProps {
@@ -119,4 +121,7 @@ export const GanttRowTimeline = memo(function GanttRowTimeline({ task, scale, to
   prev.scale.end.getTime() === next.scale.end.getTime() &&
   prev.scale.dayWidth === next.scale.dayWidth &&
   prev.scale.zoom === next.scale.zoom &&
+  prev.onSelect === next.onSelect &&
+  prev.onHover === next.onHover &&
+  prev.onLeave === next.onLeave &&
   sameRenderTask(prev.task, next.task))
