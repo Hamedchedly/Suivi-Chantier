@@ -15,12 +15,12 @@ export function VisiteV2Home({ visit, zones, lots, onSelectLot, onSummary }: Vis
   // Group lots by zone for this visit
   const zoneLotsMap = new Map<string, string[]>()
   zones.forEach(zone => {
-    if (!zoneLotsMap.has(zone.ref)) {
-      zoneLotsMap.set(zone.ref, [])
+    if (!zoneLotsMap.has(zone.refId)) {
+      zoneLotsMap.set(zone.refId, [])
     }
     zone.tasks.forEach(task => {
-      if (task.lotId && !zoneLotsMap.get(zone.ref)!.includes(task.lotId)) {
-        zoneLotsMap.get(zone.ref)!.push(task.lotId)
+      if (task.lotId && !zoneLotsMap.get(zone.refId)!.includes(task.lotId)) {
+        zoneLotsMap.get(zone.refId)!.push(task.lotId)
       }
     })
   })
@@ -28,7 +28,7 @@ export function VisiteV2Home({ visit, zones, lots, onSelectLot, onSummary }: Vis
   const zone = zones[0] // For now, single zone view
   if (!zone) return <div className="text-center py-12">Aucune zone sélectionnée</div>
 
-  const lotIds = zoneLotsMap.get(zone.ref) || []
+  const lotIds = zoneLotsMap.get(zone.refId) || []
   const uniqueLots = Array.from(new Set(lotIds))
 
   // Calculate overall progress
@@ -41,7 +41,7 @@ export function VisiteV2Home({ visit, zones, lots, onSelectLot, onSummary }: Vis
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-1">Visite chantier</h1>
-        <p className="text-sm text-gray-600">Résidence Gambetta • Logement {zone.ref}</p>
+        <p className="text-sm text-gray-600">Résidence Gambetta • Logement {zone.refId}</p>
       </div>
 
       {/* Overall Progress */}

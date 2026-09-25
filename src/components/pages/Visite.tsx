@@ -619,6 +619,7 @@ export function Visite() {
       <VisiteV2
         visit={active}
         onBack={back}
+        onUpdateVisit={(patch) => updateVisit(active.id, patch)}
       />
     )
   }

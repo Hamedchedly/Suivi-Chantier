@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight, MoreVertical } from 'lucide-react'
 import type { Visit, VisitZone, VisitTaskCheck } from '../../lib/visits'
 import { lotLabel, lotCompany } from '../visite/visiteStyles'
-import type { LotContact, GanttTask } from '../../lib/repo'
+import type { LotContact } from '../../lib/repo'
 
 interface TaskWithSubtasks {
   task: VisitTaskCheck
@@ -42,10 +42,18 @@ export function VisiteV2LotPage({
 
   // Group main tasks with their subtasks
   const tasksMap = new Map<string, TaskWithSubtasks>()
-  lotTasks.forEach(task => {
-    if (!tasksMap.has(task.taskId)) {
-      tasksMap.set(task.taskId, { task, subtasks: [] })
-    }
+  const mainTasks = lotTasks.filter(t => {
+    // A task is "main" if it's not a subtask of another task in this lot
+    // For now, we'll use a simple heuristic: if taskId doesn't contain '-sub-'
+    return !t.taskId.includes('-sub-')
+  })
+  const subTasks = lotTasks.filter(t => t.taskId.includes('-sub-'))
+
+  mainTasks.forEach(task => {
+    tasksMap.set(task.taskId, {
+      task,
+      subtasks: subTasks.filter(st => st.taskId.startsWith(task.taskId + '-sub-'))
+    })
   })
 
   const isLastLot = currentLotIndex >= allLotsInZone.length - 1
@@ -63,7 +71,7 @@ export function VisiteV2LotPage({
         </button>
         <h2 className="text-2xl font-bold text-gray-900">Lot {lotId} — {lotLabel(lots, lotId)}</h2>
         <p className="text-sm text-gray-600 mt-2">
-          {zone.ref} • {lotCompany(lots, lotId) || 'N/A'}
+          {zone.refId} • {lotCompany(lots, lotId) || 'N/A'}
         </p>
       </div>
 
@@ -80,14 +88,28 @@ export function VisiteV2LotPage({
           <div key={task.taskId}>
             {/* Main Task */}
             <div className="bg-white border border-gray-200 rounded-lg p-3 mb-2">
-              <div className="flex justify-between items-start gap-2 mb-3">
+              <div className="flex justify-between items-start gap-2 mb-2">
                 <div className="flex-1">
-                  <p className="font-bold text-gray-900">{task.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-gray-900">{task.title}</p>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                      task.state === 'ok' ? 'bg-green-100 text-green-800' :
+                      task.state === 'to_review' ? 'bg-orange-100 text-orange-800' :
+                      task.state === 'blocked' ? 'bg-red-100 text-red-800' :
+                      task.state === 'na' ? 'bg-gray-100 text-gray-800' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {task.state === 'ok' ? '✓' :
+                       task.state === 'to_review' ? '!' :
+                       task.state === 'blocked' ? '⊗' :
+                       task.state === 'na' ? 'N/A' : '—'}
+                    </span>
+                  </div>
                   <p className="text-xs text-gray-600 mt-1">{task.progress ?? 0}%</p>
                 </div>
                 <button
                   onClick={() => onMenuClick?.(task.taskId)}
-                  className="p-1 hover:bg-gray-100 rounded active:scale-90 transition-all"
+                  className="p-1 hover:bg-gray-100 rounded active:scale-90 transition-all flex-shrink-0"
                 >
                   <MoreVertical className="w-5 h-5 text-gray-400" />
                 </button>
@@ -117,12 +139,26 @@ export function VisiteV2LotPage({
                   <div key={sub.taskId} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
                     <div className="flex justify-between items-start gap-2 mb-2">
                       <div className="flex-1">
-                        <p className="font-semibold text-sm text-gray-800">{sub.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm text-gray-800">{sub.title}</p>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            sub.state === 'ok' ? 'bg-green-100 text-green-700' :
+                            sub.state === 'to_review' ? 'bg-orange-100 text-orange-700' :
+                            sub.state === 'blocked' ? 'bg-red-100 text-red-700' :
+                            sub.state === 'na' ? 'bg-gray-100 text-gray-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {sub.state === 'ok' ? '✓' :
+                             sub.state === 'to_review' ? '!' :
+                             sub.state === 'blocked' ? '⊗' :
+                             sub.state === 'na' ? 'N/A' : '—'}
+                          </span>
+                        </div>
                         <p className="text-xs text-gray-600 mt-1">{sub.progress ?? 0}%</p>
                       </div>
                       <button
                         onClick={() => onMenuClick?.(sub.taskId)}
-                        className="p-1 hover:bg-gray-100 rounded active:scale-90 transition-all"
+                        className="p-1 hover:bg-gray-100 rounded active:scale-90 transition-all flex-shrink-0"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-400" />
                       </button>
