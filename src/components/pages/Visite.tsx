@@ -613,19 +613,24 @@ export function Visite() {
 
   // ── List ───────────────────────────────────────────────────────────────────
   const visitIds = visits.map(v => v.id)
+  const isDeletable = (v: Visit) => v.status === 'en_cours' || v.status === 'terminee'
+
   const leavePicking = () => { setPicking(false); setSelection(EMPTY_SELECTION); setConfirmDelete(false) }
   const deleteSelectedVisits = () => {
-    const removed = visits.filter(v => selection.has(v.id))
-    setVisits(prev => removeSelected(prev, selection))
+    const removed = visits.filter(v => selection.has(v.id) && isDeletable(v))
+    setVisits(prev => prev.filter(v => !removed.find(r => r.id === v.id)))
     // Les réserves émises pendant une session supprimée sont détachées, pas effacées :
     // elles restent des constats de chantier à part entière.
-    setReserves(prev => prev.map(r => (r.visitId && selection.has(r.visitId) ? { ...r, visitId: undefined } : r)))
+    setReserves(prev => prev.map(r => (r.visitId && removed.some(v => v.id === r.visitId) ? { ...r, visitId: undefined } : r)))
     removed.forEach(v => logActivity('visit', `Session du ${fmtFr(v.date)} supprimée`))
-    if (activeId && selection.has(activeId)) setActiveId(null)
+    if (activeId && removed.some(v => v.id === activeId)) setActiveId(null)
     leavePicking()
   }
 
   // Use new VisiteHome component with enhanced UX
+  const deletableVisits = visits.filter(isDeletable)
+  const deletableIds = deletableVisits.map(v => v.id)
+
   return (
     <div style={{ padding: '12px', paddingBottom: '80px' }}>
       <VisiteHome
@@ -634,21 +639,122 @@ export function Visite() {
         onOpenVisit={handleOpenVisit}
       />
 
-      {/* Legacy selection UI for now - can be refactored later */}
+      {/* Show all visits history with selection capability */}
+      {!picking && (
+        <div style={{ marginTop: '24px' }}>
+          <button
+            onClick={() => setPicking(true)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              background: '#fff',
+              color: 'var(--navy)',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}
+          >
+            <History size={16} /> Historique et gestion des visites
+          </button>
+        </div>
+      )}
+
+      {/* Selection mode: show all visits with checkboxes */}
       {picking && (
         <>
-          <SelectionBar
-            active={picking}
-            selection={selection}
-            visibleIds={visitIds}
-            noun="session"
-            feminine
-            onToggleAll={() => setSelection(s => toggleAll(s, visitIds))}
-            onDelete={() => setConfirmDelete(true)}
-            onCancel={leavePicking}
-          />
+          <div style={{ marginTop: '20px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={selection.size === deletableIds.length && deletableIds.length > 0}
+                onChange={() => setSelection(s => toggleAll(s, deletableIds))}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>
+                Sélectionner les sessions supprimables
+              </span>
+              <button
+                onClick={leavePicking}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  background: '#fff',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {deletableVisits.map(v => (
+                <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={selection.has(v.id)}
+                    onChange={() => setSelection(s => toggle(s, v.id))}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{fmtFr(v.date)}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                      {v.zones.length} zones • {v.status === 'en_cours' ? 'En cours' : 'Terminée'}
+                    </div>
+                  </div>
+                </label>
+              ))}
+              {deletableVisits.length === 0 && (
+                <div style={{ padding: '12px', fontSize: '12px', color: 'var(--muted)', textAlign: 'center' }}>
+                  Aucune session supprimable
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selection.size > 0 && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Supprimer {selection.size}
+              </button>
+              <button
+                onClick={() => setSelection(EMPTY_SELECTION)}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: '#fff',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+
           {confirmDelete && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginBottom: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '11px', marginTop: '10px', borderRadius: '10px', border: '1px solid #f3c9c4', background: '#fdecec' }}>
               <span style={{ flex: 1, fontSize: '12px', color: '#7a1c13', minWidth: '160px' }}>
                 Supprimer définitivement {selection.size} session(s), leurs relevés et leurs notes ?
                 Les réserves émises sont conservées.
