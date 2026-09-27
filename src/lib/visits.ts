@@ -303,7 +303,8 @@ export function buildZonesFromPlanning(
       t.children.forEach(child => childIds.add(child.id))
     }
   })
-  const rootTasks = allTasks.filter(t => !childIds.has(t.id))
+  // Lots are the root-level entries in the tasks parameter
+  const lotIds = new Set(tasks.map(t => t.id))
 
   const zones = refs.map(ref => ({
     refId: ref.refId,
@@ -312,7 +313,10 @@ export function buildZonesFromPlanning(
     buildingId: ref.buildingId,
     buildingLabel: ref.buildingLabel,
     override: null,
-    tasks: rootTasks.filter(t => belongs(t, ref.refId) && t.lot_id !== t.id).map(taskCheckFromPlanning),
+    tasks: allTasks
+      .filter(t => !childIds.has(t.id) && !lotIds.has(t.id))  // Not a subtask AND not a lot
+      .filter(t => belongs(t, ref.refId))
+      .map(taskCheckFromPlanning),
   }))
 
   // Filter out zones with only completed tasks if hideCompleted is true
