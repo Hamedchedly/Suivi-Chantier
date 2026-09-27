@@ -30,6 +30,17 @@ export interface BlockerOption {
   company?: string
 }
 
+/** Date utilities */
+const todayIso = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const addDaysIso = (days: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 interface Props {
   zone: VisitZone
   lotId: string
@@ -73,7 +84,6 @@ export function LotControl(props: Props) {
   const pct = tasksWorksProgress(tasks)
   const company = lotCompany(lots, lotId)
 
-  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
   const [addFailed, setAddFailed] = useState(false)
@@ -261,7 +271,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   reserves: Reserve[]
 }) {
   const [panel, setPanel] = useState<Panel>(null)
-  const [userExpanded, setUserExpanded] = useState(false)
+  const [userCollapsed, setUserCollapsed] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string; scope: 'tache_logement' | 'tache_tous' } | null>(null)
@@ -271,14 +281,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const gap = progressGap(task)
 
   const isComplete = (task.progress ?? 0) === 100
-  const collapsed = isComplete && !userExpanded
-
-  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
-  const addDaysToToday = (days: number) => {
-    const d = new Date()
-    d.setDate(d.getDate() + days)
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-  }
+  const hasSubtasks = task.children && task.children.length > 0
+  const collapsed = userCollapsed && (isComplete || !hasSubtasks)
   const submitSubTask = () => {
     if (!subForm || !subForm.title.trim() || !onAddSubTask) return
     onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5), undefined, subForm.scope)
@@ -288,7 +292,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   }
   const submitNote = () => {
     if (!noteForm || !noteForm.text.trim()) return
-    const dueDate = addDaysToToday(noteForm.delayDays)
+    const dueDate = addDaysIso(noteForm.delayDays)
     onAddRemark({
       kind: noteForm.important ? 'action' : 'observation',
       description: noteForm.text.trim(),
@@ -347,11 +351,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
     setPanel(null)
   }
 
-  // P3 — Tâche terminée : affichage compact, dépliable au clic
+  // Collapsed view (without subtasks)
   if (collapsed && !isNa) {
     return (
       <div
-        onClick={() => setUserExpanded(true)}
+        onClick={() => setUserCollapsed(false)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '10px' }}
       >
         <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
@@ -373,11 +377,12 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '10px' }}>
         <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
           {taskTitle(task.title, zone.refId)}
+          {isComplete && <Check size={14} color="#15803d" style={{ marginLeft: '6px', display: 'inline' }} />}
         </span>
-        {/* Replier si la tâche était terminée */}
-        {isComplete && (
-          <button onClick={() => setUserExpanded(false)} title="Replier" style={miniBtn('#15803d', false)}>
-            <Check size={14} />
+        {/* Collapse button if has subtasks */}
+        {hasSubtasks && (
+          <button onClick={() => setUserCollapsed(!userCollapsed)} title={userCollapsed ? "Déplie" : "Replie"} style={miniBtn('var(--navy)', userCollapsed)}>
+            {userCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
         {/* Un seul bouton d'actions : photo / note / sous-tâche / blocages, et
@@ -396,7 +401,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                   onClick={() => { setPanel(null); setNoteForm({ text: '', delayDays: 7, important: false, engagementDate: '', engagementType: 'fin' }) }} />
                 {onAddSubTask && (
                   <MenuItem icon={<Plus size={14} />} label="Ajouter une sous-tâche"
-                    onClick={() => { setPanel(null); setSubForm({ title: '', start: todayStr, duration: '5', scope: 'tache_logement' }) }} />
+                    onClick={() => { setPanel(null); setSubForm({ title: '', start: todayIso(), duration: '5', scope: 'tache_logement' }) }} />
                 )}
                 <MenuItem icon={<Ban size={14} />} label={`Gérer les blocages${blockCount ? ` (${blockCount})` : ''}`} onClick={() => setPanel('blockers')} />
                 <div style={{ borderTop: '1px solid var(--line)' }} />

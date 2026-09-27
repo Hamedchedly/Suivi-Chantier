@@ -114,12 +114,15 @@ export function stateAfterEdit(c: Pick<VisitTaskCheck, 'state' | 'progress' | 'b
   return c.progress === undefined ? 'not_checked' : 'ok'
 }
 
-/** Aggregate subtask progress to parent tasks — mean of children's progress. */
+/** Aggregate subtask progress to parent tasks — mean of children's progress,
+ * with 100% if all applicable children are at 100%. */
 export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskCheck[] {
   return tasks.map(t => {
     if (!t.children?.length) return t
     const applicable = t.children.filter(c => c.state !== 'na')
     if (applicable.length === 0) return t
+    const allComplete = applicable.every(c => (c.progress ?? 0) === 100)
+    if (allComplete) return { ...t, progress: 100 }
     const childProgress = applicable.reduce((s, c) => s + (c.progress ?? 0), 0) / applicable.length
     return { ...t, progress: Math.round(childProgress) }
   })
