@@ -114,8 +114,21 @@ export function stateAfterEdit(c: Pick<VisitTaskCheck, 'state' | 'progress' | 'b
   return c.progress === undefined ? 'not_checked' : 'ok'
 }
 
-/** Aggregate subtask progress to parent tasks — mean of children's progress,
- * with 100% if all applicable children are at 100%. */
+/** Patch une tâche ou sous-tâche n'importe où dans l'arbre, puis recalcule
+ * la progression de ses parents. Fonction unique pour toutes les mises à jour. */
+export function patchTaskInTree(
+  tasks: VisitTaskCheck[], taskId: string, patch: Partial<VisitTaskCheck>
+): VisitTaskCheck[] {
+  const updateTask = (list: VisitTaskCheck[]): VisitTaskCheck[] => list.map(t => {
+    if (t.taskId === taskId) return { ...t, ...patch }
+    if (t.children?.length) return { ...t, children: updateTask(t.children) }
+    return t
+  })
+  return aggregateSubtaskProgress(updateTask(tasks))
+}
+
+/** Agrège la progression des sous-tâches vers les tâches parentes.
+ * Moyenne simple des enfants applicables (state !== 'na'), 100% si tous à 100%. */
 export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskCheck[] {
   return tasks.map(t => {
     if (!t.children?.length) return t

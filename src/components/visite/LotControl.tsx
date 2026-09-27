@@ -271,7 +271,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   reserves: Reserve[]
 }) {
   const [panel, setPanel] = useState<Panel>(null)
-  const [userCollapsed, setUserCollapsed] = useState(false)
+  const [userExpanded, setUserExpanded] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const [subForm, setSubForm] = useState<{ title: string; start: string; duration: string; scope: 'tache_logement' | 'tache_tous' } | null>(null)
@@ -282,7 +282,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
   const isComplete = (task.progress ?? 0) === 100
   const hasSubtasks = task.children && task.children.length > 0
-  const collapsed = userCollapsed && (isComplete || !hasSubtasks)
+  const collapsed = !userExpanded && (isComplete || !hasSubtasks)
   const submitSubTask = () => {
     if (!subForm || !subForm.title.trim() || !onAddSubTask) return
     onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5), undefined, subForm.scope)
@@ -355,7 +355,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   if (collapsed && !isNa) {
     return (
       <div
-        onClick={() => setUserCollapsed(false)}
+        onClick={() => setUserExpanded(true)}
         style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '10px' }}
       >
         <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
@@ -381,8 +381,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         </span>
         {/* Collapse button if has subtasks */}
         {hasSubtasks && (
-          <button onClick={() => setUserCollapsed(!userCollapsed)} title={userCollapsed ? "Déplie" : "Replie"} style={miniBtn('var(--navy)', userCollapsed)}>
-            {userCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          <button onClick={() => setUserExpanded(!userExpanded)} title={userExpanded ? "Replie" : "Déplie"} style={miniBtn('var(--navy)', userExpanded)}>
+            {userExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
         )}
         {/* Un seul bouton d'actions : photo / note / sous-tâche / blocages, et

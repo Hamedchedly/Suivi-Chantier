@@ -11,7 +11,7 @@ import {
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
-  buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, aggregateSubtaskProgress,
+  buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
 import { computeForecasts } from '../../lib/forecast'
@@ -311,7 +311,7 @@ export function Visite() {
             readOnly={isLockedFor(active, me)}
             previousOf={taskId => previousObservation(visits, active, taskId)}
             onPatchTask={(taskId, patch) => updateZone(zone.refId, z => ({
-              ...z, tasks: aggregateSubtaskProgress(z.tasks.map(t => t.taskId === taskId ? { ...t, ...patch } : t)),
+              ...z, tasks: patchTaskInTree(z.tasks, taskId, patch),
             }))}
             onAddRemark={r => addRemark(active, zone, r)}
             onUpdateRemark={updateRemark}
