@@ -448,6 +448,25 @@ export function remainingToControl(v: Visit): VisitZone[] {
   })
 }
 
+/** Count remaining tasks — excluding 100% complete tasks. Used for counter display. */
+export function countRemainingTasks(v: Visit): number {
+  return allChecks(v)
+    .filter(t => t.state !== 'na')
+    .filter(t => (t.progress ?? 0) < 100)
+    .length
+}
+
+/** Count remaining logements — excluding 100% complete zones. Used for counter display. */
+export function countRemainingLogements(v: Visit): number {
+  return v.zones
+    .filter(z => {
+      const tasks = z.tasks.filter(t => t.state !== 'na')
+      if (tasks.length === 0) return false
+      return tasks.some(t => (t.progress ?? 0) < 100)
+    })
+    .length
+}
+
 /** Distinct lot ids touched by the session. */
 export function visitLotIds(v: Visit): string[] {
   return [...new Set(allChecks(v).map(t => t.lotId))]

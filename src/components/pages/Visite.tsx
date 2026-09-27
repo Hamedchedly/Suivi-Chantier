@@ -9,7 +9,7 @@ import {
   VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
-  visitStats, visitChanges, progressGap, type ChangeKind,
+  visitStats, visitChanges, progressGap, countRemainingTasks, countRemainingLogements, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree,
 } from '../../lib/visits'
@@ -1696,8 +1696,8 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
   const idx = zoneRef ? zones.findIndex(z => z.refId === zoneRef) : -1
   const current = idx >= 0 ? zones[idx] : null
   const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
-  const controlled = checks.filter(t => t.state !== 'not_checked').length
-  const closed = zones.filter(z => z.closedAt).length
+  const remainingTasks = countRemainingTasks(visit)
+  const remainingLogements = countRemainingLogements(visit)
   const lotIds = current ? [...new Set(current.tasks.map(t => t.lotId))] : []
   const lotPos = lotId ? lotIds.indexOf(lotId) + 1 : 0
 
@@ -1705,16 +1705,16 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
     <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#02457A', color: '#fff', padding: '7px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', fontWeight: 600 }}>
         {current && <span>{current.buildingLabel} · {current.label}</span>}
-        <span style={{ opacity: .85 }}>Logements {closed}/{zones.length}</span>
+        <span style={{ opacity: .85 }}>Logements {remainingLogements}/{zones.length}</span>
         {lotPos > 0 && <span style={{ opacity: .85 }}>Lot {lotPos}/{lotIds.length}</span>}
-        <span style={{ opacity: .85 }}>Tâches {controlled}/{checks.length}</span>
+        <span style={{ opacity: .85 }}>Tâches {remainingTasks}/{checks.length}</span>
         <div style={{ flex: 1 }} />
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: .85 }}>
           <Clock size={11} /> {fmtTime(visit.startedAt)}
         </span>
       </div>
       <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,.25)', marginTop: '5px', overflow: 'hidden' }}>
-        <div style={{ width: `${checks.length ? Math.round((controlled / checks.length) * 100) : 0}%`, height: '100%', background: '#7ad3ff' }} />
+        <div style={{ width: `${checks.length ? Math.round((remainingTasks / checks.length) * 100) : 0}%`, height: '100%', background: '#7ad3ff' }} />
       </div>
     </div>
   )

@@ -66,7 +66,10 @@ export function ZoneControl(props: Props) {
     }
   }, [zone.refId])
 
-  const [showDoneLots, setShowDoneLots] = useState(false)
+  const [lotExpanded, setLotExpanded] = useState<Record<string, boolean>>({})
+  const toggleLotExpand = (lotId: string) =>
+    setLotExpanded(prev => ({ ...prev, [lotId]: !prev[lotId] }))
+
   const groups = lotGroups(zone)
   const st = ZONE_META[zoneState(zone)]
   const zoneRemarks = visitReserves.filter(r => r.logementId === zone.refId)
@@ -103,7 +106,47 @@ export function ZoneControl(props: Props) {
 
       {(() => {
         const activeLots = groups.filter(g => tasksState(g.tasks) !== 'done')
-        const doneLots = groups.filter(g => tasksState(g.tasks) === 'done')
+        const completeLots = groups.filter(g => tasksState(g.tasks) === 'done')
+
+        const renderCompleteLot = (g: typeof groups[0]) => {
+          const isExpanded = lotExpanded[g.lotId] ?? false
+          const pct = tasksWorksProgress(g.tasks)
+
+          // Compressed view for complete lots (100%)
+          if (!isExpanded) {
+            return (
+              <div key={g.lotId}
+                onClick={() => toggleLotExpand(g.lotId)}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '8px' }}>
+                <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#15803d' }}>
+                  {g.lotId} — {lotLabel(lots, g.lotId)}
+                </span>
+                <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '11px' }}>✓ Terminé</span>
+                <ChevronDown size={13} color="#86efac" />
+              </div>
+            )
+          }
+
+          // Expanded view for complete lots
+          const blocked = g.tasks.filter(t => t.state === 'blocked').length
+          return (
+            <button key={g.lotId} onClick={() => toggleLotExpand(g.lotId)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '13px 14px', borderRadius: '12px', border: '1px solid var(--line)', background: '#f9fafb', cursor: 'pointer', textAlign: 'left', width: '100%', marginBottom: '8px' }}>
+              <ChevronDown size={14} color="var(--navy)" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--navy)' }}>{g.lotId} — {lotLabel(lots, g.lotId)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                  {g.tasks.length} tâche{g.tasks.length > 1 ? 's' : ''} · {lotCompany(lots, g.lotId) ?? '—'}
+                  {blocked > 0 && <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {blocked} bloquée{blocked > 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+              <strong style={{ fontSize: '16px', color: '#15803d' }}>{pct}%</strong>
+              <span style={{ ...badge, background: '#dcfce7', color: '#15803d' }}>✓ Terminé</span>
+            </button>
+          )
+        }
+
         const renderLotBtn = (g: typeof groups[0]) => {
           const gs = ZONE_META[tasksState(g.tasks)]
           const pct = tasksWorksProgress(g.tasks)
@@ -127,6 +170,7 @@ export function ZoneControl(props: Props) {
             </button>
           )
         }
+
         return (
           <>
             <div style={sectionLabel}>Lots en cours ({activeLots.length})</div>
@@ -136,21 +180,12 @@ export function ZoneControl(props: Props) {
               {activeLots.map(renderLotBtn)}
             </div>
 
-            {doneLots.length > 0 && (
+            {completeLots.length > 0 && (
               <div style={{ marginTop: '14px' }}>
-                <button
-                  onClick={() => setShowDoneLots(v => !v)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: '#15803d', fontSize: '12px', fontWeight: 600 }}
-                >
-                  <Check size={13} color="#15803d" />
-                  {doneLots.length} lot{doneLots.length > 1 ? 's' : ''} terminé{doneLots.length > 1 ? 's' : ''}
-                  <ChevronDown size={13} style={{ transform: showDoneLots ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-                </button>
-                {showDoneLots && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', opacity: 0.75 }}>
-                    {doneLots.map(renderLotBtn)}
-                  </div>
-                )}
+                <div style={sectionLabel}>Lots terminés ({completeLots.length})</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                  {completeLots.map(renderCompleteLot)}
+                </div>
               </div>
             )}
           </>
