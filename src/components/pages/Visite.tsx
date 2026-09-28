@@ -1698,6 +1698,7 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
   const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
   const remainingTasks = countRemainingTasks(visit)
   const remainingLogements = countRemainingLogements(visit)
+  const logementCount = zones.filter(z => z.tasks.some(t => t.state !== 'na')).length
   const lotIds = current ? [...new Set(current.tasks.map(t => t.lotId))] : []
   const lotPos = lotId ? lotIds.indexOf(lotId) + 1 : 0
 
@@ -1705,7 +1706,7 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
     <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#02457A', color: '#fff', padding: '7px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', fontWeight: 600 }}>
         {current && <span>{current.buildingLabel} · {current.label}</span>}
-        <span style={{ opacity: .85 }}>Logements {remainingLogements}/{zones.length}</span>
+        <span style={{ opacity: .85 }}>Logements {remainingLogements}/{logementCount}</span>
         {lotPos > 0 && <span style={{ opacity: .85 }}>Lot {lotPos}/{lotIds.length}</span>}
         <span style={{ opacity: .85 }}>Tâches {remainingTasks}/{checks.length}</span>
         <div style={{ flex: 1 }} />
