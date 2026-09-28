@@ -105,8 +105,8 @@ export function ZoneControl(props: Props) {
       <CarriedPoints points={carriedPoints} readOnly={readOnly} onFollowUp={onFollowUp} />
 
       {(() => {
-        const activeLots = groups.filter(g => tasksState(g.tasks) !== 'done')
-        const completeLots = groups.filter(g => tasksState(g.tasks) === 'done')
+        const activeLots = groups.filter(g => tasksState(g.tasks) !== 'done' && tasksWorksProgress(g.tasks) < 100)
+        const completeLots = groups.filter(g => tasksState(g.tasks) === 'done' || tasksWorksProgress(g.tasks) === 100)
 
         const renderCompleteLot = (g: typeof groups[0]) => {
           const isExpanded = lotExpanded[g.lotId] ?? false
