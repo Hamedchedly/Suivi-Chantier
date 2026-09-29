@@ -80,3 +80,23 @@ export function removeState(key: string): void {
   }
   for (const fn of removeListeners) fn(key)
 }
+
+// Migration helper: delete all Reserve/CR data when migrating to Notes system
+export function deleteAllReservesAndCrData(projectId: string): void {
+  const keysToDelete = [
+    `reserve:${projectId}`,
+    `cr_export_config:${projectId}`,
+    `cr_meetings:${projectId}`,
+  ]
+
+  // Also delete any keys containing 'reserve' or 'cr_' or 'follow'
+  const allKeys = Object.keys(localStorage)
+  allKeys.forEach(key => {
+    if (key.includes(projectId) &&
+        (key.includes('reserve') || key.includes('cr_') || key.includes('follow'))) {
+      keysToDelete.push(key)
+    }
+  })
+
+  keysToDelete.forEach(key => removeState(key))
+}
