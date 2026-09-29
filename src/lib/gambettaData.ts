@@ -77,12 +77,9 @@ const gantt: GanttTask[] = [
   ]),
   lot('LOT05', 'LOT 05 — Menuiserie intérieure / isolation intérieure', [
     leaf('LOT05', { id: 'g-LOT05-0', title: 'Doublage intérieur', s: '2026-02-16', e: '2026-03-08', dur: 15, progress: 100 }),
-    leaf('LOT05', { id: 'g-LOT05-1', title: 'TS Doublage Batiment C RDC', s: '2026-02-16', e: '2026-02-17', dur: 2, progress: 100 }),
-    leaf('LOT05', { id: 'g-LOT05-2', title: 'TS Doublage Entrée', s: '2026-09-07', e: '2026-09-08', dur: 2, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-3', title: 'Faux-plafonds', s: '2026-03-02', e: '2026-03-15', dur: 10, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-4', title: 'Portes SS et portes de rangements', s: '2026-03-16', e: '2026-03-22', dur: 5, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-5', title: 'Cloisonnement logement', s: '2026-03-16', e: '2026-03-29', dur: 10, progress: 100 }),
-    leaf('LOT05', { id: 'g-LOT05-6', title: 'TS Cloisonnement logement B R+1', s: '2026-09-07', e: '2026-09-08', dur: 2, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-7', title: 'Claustra bois (local OM / PAC)', s: '2026-03-30', e: '2026-04-05', dur: 5, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-8', title: 'Isolation sous face plancher', s: '2026-04-06', e: '2026-04-19', dur: 10, progress: 0 }),
     leaf('LOT05', { id: 'g-LOT05-9', title: 'Reprise d\'isolation des combles', s: '2026-04-20', e: '2026-04-26', dur: 5, progress: 0 }),
