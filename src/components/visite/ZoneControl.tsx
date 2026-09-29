@@ -109,41 +109,26 @@ export function ZoneControl(props: Props) {
         const completeLots = groups.filter(g => tasksState(g.tasks) === 'done' || tasksWorksProgress(g.tasks) === 100)
 
         const renderCompleteLot = (g: typeof groups[0]) => {
-          const isExpanded = lotExpanded[g.lotId] ?? false
           const pct = tasksWorksProgress(g.tasks)
-
-          // Compressed view for complete lots (100%)
-          if (!isExpanded) {
-            return (
-              <div key={g.lotId}
-                onClick={() => toggleLotExpand(g.lotId)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '8px' }}>
-                <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#15803d' }}>
-                  {g.lotId} — {lotLabel(lots, g.lotId)}
-                </span>
-                <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '11px' }}>✓ Terminé</span>
-                <ChevronDown size={13} color="#86efac" />
-              </div>
-            )
-          }
-
-          // Expanded view for complete lots
-          const blocked = g.tasks.filter(t => t.state === 'blocked').length
           return (
-            <button key={g.lotId} onClick={() => toggleLotExpand(g.lotId)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '13px 14px', borderRadius: '12px', border: '1px solid var(--line)', background: '#f9fafb', cursor: 'pointer', textAlign: 'left', width: '100%', marginBottom: '8px' }}>
-              <ChevronDown size={14} color="var(--navy)" style={{ flexShrink: 0 }} />
+            <div key={g.lotId}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', marginBottom: '8px' }}>
+              <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--navy)' }}>{g.lotId} — {lotLabel(lots, g.lotId)}</div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                  {g.tasks.length} tâche{g.tasks.length > 1 ? 's' : ''} · {lotCompany(lots, g.lotId) ?? '—'}
-                  {blocked > 0 && <span style={{ color: '#b91c1c', fontWeight: 700 }}> · {blocked} bloquée{blocked > 1 ? 's' : ''}</span>}
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#15803d' }}>
+                  {g.lotId} — {lotLabel(lots, g.lotId)}
+                </div>
+                <div style={{ fontSize: '11px', color: '#15803d', marginTop: '2px' }}>
+                  {g.tasks.length} tâche{g.tasks.length > 1 ? 's' : ''} · {pct}%
                 </div>
               </div>
-              <strong style={{ fontSize: '16px', color: '#15803d' }}>{pct}%</strong>
-              <span style={{ ...badge, background: '#dcfce7', color: '#15803d' }}>✓ Terminé</span>
-            </button>
+              <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '11px' }}>✓ Terminé</span>
+              <button
+                onClick={() => onOpenLot(g.lotId)}
+                style={{ background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', color: '#0284c7', fontWeight: 600 }}>
+                Voir tâches →
+              </button>
+            </div>
           )
         }
 
