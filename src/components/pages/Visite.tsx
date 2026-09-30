@@ -6,8 +6,8 @@ import {
 } from 'lucide-react'
 import {
   Visit, VisitZone, VisitKind, ZoneRef, Role, ROLES, Participant, AuditEntry,
-  VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneActualProgress, zoneControlProgress,
-  visitCounts, visitActualProgress, visitControlProgress, remainingToControl, visitLotIds,
+  VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneActualProgress, zoneWorksProgress, zoneControlProgress,
+  visitCounts, visitActualProgress, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, countRemainingTasks, countRemainingLogements, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
@@ -419,9 +419,9 @@ export function Visite() {
         <div style={{ display: 'flex', gap: '14px', marginBottom: '16px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginBottom: '3px' }}>
-              <span>Travaux constatés</span><strong style={{ color: 'var(--navy)', fontSize: '14px' }}>{visitActualProgress(active)}%</strong>
+              <span>Travaux constatés</span><strong style={{ color: 'var(--navy)', fontSize: '14px' }}>{visitWorksProgress(active)}%</strong>
             </div>
-            <Bar value={visitActualProgress(active)} />
+            <Bar value={visitWorksProgress(active)} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginBottom: '3px' }}>
@@ -462,10 +462,10 @@ export function Visite() {
                       <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px' }}>Travaux {zoneActualProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
+                        <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '4px' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <div style={{ flex: 1, height: '6px', background: '#eef2f6', borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', background: '#02457A', width: `${zoneActualProgress(z)}%` }} />
+                            <div style={{ height: '100%', background: '#02457A', width: `${zoneWorksProgress(z)}%` }} />
                           </div>
                           <div style={{ flex: 1, height: '6px', background: '#eef2f6', borderRadius: '2px', overflow: 'hidden' }}>
                             <div style={{ height: '100%', background: '#16a34a', width: `${zoneControlProgress(z)}%` }} />
@@ -1402,7 +1402,7 @@ function Report({ visit, visits, lots, reserves, allReserves, photos, commitment
                         <div key={z.refId} style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '3px solid #e4ecf2' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                             <span style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937' }}>{z.label}</span>
-                            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneActualProgress(z)}% · Contrôle {zoneControlProgress(z)}% · {ZONE_META[zoneState(z)].label}</span>
+                            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}% · {ZONE_META[zoneState(z)].label}</span>
                           </div>
                           {lotIds.map(lotId => {
                             const lotTasks = z.tasks.filter(t => t.lotId === lotId)

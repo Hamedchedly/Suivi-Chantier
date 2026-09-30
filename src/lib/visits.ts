@@ -291,17 +291,17 @@ export interface ZoneRef {
  * seule façon de fabriquer un VisitTaskCheck, jamais une deuxième.
  */
 export function taskCheckFromPlanning(t: GanttTask): VisitTaskCheck {
-  // Planned progress = what % should be done by today based on dates,
-  // not the last recorded progress (which would show old observations).
+  // Planned progress = what % timeline says should be done based on dates.
+  // Do NOT force to 100% just because the date passed — that's unrealistic.
+  // Calculate linear progress based on time elapsed, max at planned_end.
   const today = new Date()
   let plannedProgress: number | undefined
   if (t.planned_start && t.planned_end) {
     if (today <= t.planned_start) plannedProgress = 0
-    else if (today >= t.planned_end) plannedProgress = 100
     else {
       const total = t.planned_end.getTime() - t.planned_start.getTime()
       const elapsed = today.getTime() - t.planned_start.getTime()
-      plannedProgress = Math.round((elapsed / total) * 100)
+      plannedProgress = Math.min(100, Math.round((elapsed / total) * 100))
     }
   }
   return {
