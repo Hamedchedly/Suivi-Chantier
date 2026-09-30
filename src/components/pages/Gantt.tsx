@@ -358,6 +358,7 @@ export function Gantt({ onNavigate }: GanttProps) {
         <LogementMatrix tasks={ganttTasks} />
       ) : (
         <PlanningGantt
+          key={`gantt-${group}`}
           tasks={displayTasks}
           commitments={commitments}
           operationId={getCurrentProjectId() ?? 'current'}

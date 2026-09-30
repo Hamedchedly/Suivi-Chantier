@@ -128,16 +128,27 @@ export function patchTaskInTree(
 }
 
 /** Agrège la progression des sous-tâches vers les tâches parentes.
- * Moyenne simple des enfants applicables (state !== 'na'), 100% si tous à 100%. */
+ * Moyenne simple des enfants applicables (state !== 'na'), 100% si tous à 100%.
+ * Also syncs parent state based on aggregated progress. */
 export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskCheck[] {
   return tasks.map(t => {
     if (!t.children?.length) return t
     const applicable = t.children.filter(c => c.state !== 'na')
     if (applicable.length === 0) return t
     const allComplete = applicable.every(c => (c.progress ?? 0) === 100)
-    if (allComplete) return { ...t, progress: 100 }
-    const childProgress = applicable.reduce((s, c) => s + (c.progress ?? 0), 0) / applicable.length
-    return { ...t, progress: Math.round(childProgress) }
+    const aggregatedProgress = allComplete ? 100 : Math.round(
+      applicable.reduce((s, c) => s + (c.progress ?? 0), 0) / applicable.length
+    )
+
+    // Derive parent state from aggregated progress
+    let derivedState: VisitTaskCheck['state'] = 'not_checked'
+    if (aggregatedProgress === 100) {
+      derivedState = 'done'
+    } else if (aggregatedProgress > 0) {
+      derivedState = 'in_progress'
+    }
+
+    return { ...t, progress: aggregatedProgress, state: derivedState }
   })
 }
 
@@ -373,14 +384,44 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
 }
 
 /** Observed works progress (%) — mean of the observed percentages, na excluded.
+ * Excludes parent tasks that have children (to avoid double-counting).
  * If a task hasn't been observed yet (progress undefined), use plannedProgress instead. */
 export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
-  const applicable = tasks.filter(t => t.state !== 'na')
+  // Identify parents with children
+  const parentsWithChildren = new Set(
+    tasks
+      .filter(t => t.children && t.children.length > 0)
+      .map(t => t.id)
+  )
+
+  // Filter to leaves only (exclude parents with children in the same array)
+  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.id))
   if (applicable.length === 0) return 0
   const sum = applicable.reduce((s, t) => {
     // Use observed progress if available, otherwise use planned progress (no change assumed)
     const progress = t.progress !== undefined ? t.progress : (t.plannedProgress ?? 0)
     return s + progress
+  }, 0)
+  return Math.round(sum / applicable.length)
+}
+
+/** Actual observed works progress (%) — mean of ONLY actually observed progress values.
+ * Does NOT include planned progress fallback; unobserved tasks contribute 0%.
+ * Excludes parent tasks that have children (to avoid double-counting). */
+export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
+  // Identify parents with children
+  const parentsWithChildren = new Set(
+    tasks
+      .filter(t => t.children && t.children.length > 0)
+      .map(t => t.id)
+  )
+
+  // Filter to leaves only (exclude parents with children in the same array)
+  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.id))
+  if (applicable.length === 0) return 0
+  const sum = applicable.reduce((s, t) => {
+    // Only use ACTUAL observed progress, no fallback to planned progress
+    return s + (t.progress ?? 0)
   }, 0)
   return Math.round(sum / applicable.length)
 }

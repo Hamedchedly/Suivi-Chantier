@@ -4,7 +4,7 @@ import {
   Eye, Flag,
 } from 'lucide-react'
 import {
-  VisitZone, lotGroups, tasksState, tasksWorksProgress,
+  VisitZone, lotGroups, tasksState, tasksWorksProgress, tasksActualProgress,
   zoneState, zoneWorksProgress, zoneControlProgress,
 } from '../../lib/visits'
 import { Reserve, ReservePriority, FollowUpStatus, reserveKind } from '../../lib/reserves'
@@ -105,8 +105,8 @@ export function ZoneControl(props: Props) {
       <CarriedPoints points={carriedPoints} readOnly={readOnly} onFollowUp={onFollowUp} />
 
       {(() => {
-        const activeLots = groups.filter(g => tasksState(g.tasks) !== 'done' && tasksWorksProgress(g.tasks) < 100)
-        const completeLots = groups.filter(g => tasksState(g.tasks) === 'done' || tasksWorksProgress(g.tasks) === 100)
+        const activeLots = groups.filter(g => tasksActualProgress(g.tasks) < 100)
+        const completeLots = groups.filter(g => tasksActualProgress(g.tasks) === 100)
 
         const renderCompleteLot = (g: typeof groups[0]) => {
           const pct = tasksWorksProgress(g.tasks)
