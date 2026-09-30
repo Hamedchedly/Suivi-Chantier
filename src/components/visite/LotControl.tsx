@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
-  tasksState, tasksWorksProgress, progressGap, stateAfterEdit,
+  tasksState, tasksActualProgress, progressGap, stateAfterEdit,
 } from '../../lib/visits'
 import { ProgressSpinner } from '../common/ProgressSpinner'
 import { DateCommitment, CommitmentType, latestCommitment, isBroken } from '../../lib/commitments'
@@ -81,7 +81,7 @@ export function LotControl(props: Props) {
   }, [lotId])
 
   const st = ZONE_META[tasksState(tasks)]
-  const pct = tasksWorksProgress(tasks)
+  const pct = tasksActualProgress(tasks)
   const company = lotCompany(lots, lotId)
 
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' } | null>(null)

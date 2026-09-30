@@ -4,7 +4,7 @@ import {
   Eye, Flag,
 } from 'lucide-react'
 import {
-  VisitZone, lotGroups, tasksState, tasksWorksProgress, tasksActualProgress,
+  VisitZone, lotGroups, tasksState, tasksActualProgress,
   zoneState, zoneWorksProgress, zoneControlProgress,
 } from '../../lib/visits'
 import { Reserve, ReservePriority, FollowUpStatus, reserveKind } from '../../lib/reserves'
@@ -109,7 +109,7 @@ export function ZoneControl(props: Props) {
         const completeLots = groups.filter(g => tasksActualProgress(g.tasks) === 100)
 
         const renderCompleteLot = (g: typeof groups[0]) => {
-          const pct = tasksWorksProgress(g.tasks)
+          const pct = tasksActualProgress(g.tasks)
           return (
             <div key={g.lotId}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', marginBottom: '8px' }}>
@@ -134,7 +134,7 @@ export function ZoneControl(props: Props) {
 
         const renderLotBtn = (g: typeof groups[0]) => {
           const gs = ZONE_META[tasksState(g.tasks)]
-          const pct = tasksWorksProgress(g.tasks)
+          const pct = tasksActualProgress(g.tasks)
           const blocked = g.tasks.filter(t => t.state === 'blocked').length
           return (
             <button key={g.lotId} onClick={() => onOpenLot(g.lotId)}
