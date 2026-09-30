@@ -304,11 +304,20 @@ export function taskCheckFromPlanning(t: GanttTask): VisitTaskCheck {
       plannedProgress = Math.min(100, Math.round((elapsed / total) * 100))
     }
   }
+
+  // Initialize state based on seed data progress (if provided)
+  // If progress is already set (from seed data), derive appropriate state
+  let initialState: TaskState = 'not_checked'
+  if (t.progress !== undefined && t.progress > 0) {
+    initialState = t.progress === 100 ? 'ok' : 'to_review'
+  }
+
   return {
     taskId: t.id,
     lotId: t.lot_id,
     title: t.title,
-    state: 'not_checked' as TaskState,
+    state: initialState,
+    progress: t.progress,
     plannedProgress,
     baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
     plannedEnd: isoDay(t.planned_end),
