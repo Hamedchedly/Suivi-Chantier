@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   VisitZone, lotGroups, tasksState, tasksActualProgress,
-  zoneState, zoneWorksProgress, zoneControlProgress,
+  zoneState, zoneActualProgress, zoneControlProgress,
 } from '../../lib/visits'
 import { Reserve, ReservePriority, FollowUpStatus, reserveKind } from '../../lib/reserves'
 import { VisitPhoto } from '../../lib/photoStore'
@@ -90,9 +90,9 @@ export function ZoneControl(props: Props) {
       <div style={{ display: 'flex', gap: '14px', marginBottom: '16px' }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginBottom: '3px' }}>
-            <span>Travaux constatés</span><strong style={{ color: 'var(--navy)' }}>{zoneWorksProgress(zone)}%</strong>
+            <span>Travaux constatés</span><strong style={{ color: 'var(--navy)' }}>{zoneActualProgress(zone)}%</strong>
           </div>
-          <Bar value={zoneWorksProgress(zone)} />
+          <Bar value={zoneActualProgress(zone)} />
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginBottom: '3px' }}>

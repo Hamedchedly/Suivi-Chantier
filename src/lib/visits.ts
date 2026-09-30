@@ -448,6 +448,11 @@ export function zoneWorksProgress(z: VisitZone): number {
   return tasksWorksProgress(z.tasks)
 }
 
+/** Zone progress using ONLY observed values (no planned progress fallback). */
+export function zoneActualProgress(z: VisitZone): number {
+  return tasksActualProgress(z.tasks)
+}
+
 export function zoneControlProgress(z: VisitZone): number {
   return tasksControlProgress(z.tasks)
 }
@@ -479,6 +484,11 @@ export function visitControlProgress(v: Visit): number {
 /** Works progress observed across the whole session. */
 export function visitWorksProgress(v: Visit): number {
   return tasksWorksProgress(allChecks(v))
+}
+
+/** Visit progress using ONLY observed values (no planned progress fallback). */
+export function visitActualProgress(v: Visit): number {
+  return tasksActualProgress(allChecks(v))
 }
 
 /** Zones still needing control: not closed and not fully checked. */

@@ -14,7 +14,7 @@ import {
 } from '../../lib/schedule'
 import { projectFinance, euros } from '../../lib/finance'
 import { isOverdue, reserveKind } from '../../lib/reserves'
-import { visitKindLabel, visitWorksProgress, progressGap } from '../../lib/visits'
+import { visitKindLabel, visitActualProgress, progressGap } from '../../lib/visits'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -182,7 +182,7 @@ export function Home({ onNavigate }: HomeProps) {
                 Dernière visite — {fmtFr(lastClosed.date)}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                Travaux constatés {visitWorksProgress(lastClosed)}%
+                Travaux constatés {visitActualProgress(lastClosed)}%
                 {avgGap !== null && avgGap !== 0 && (
                   <span style={{ color: avgGap < 0 ? 'var(--bad)' : 'var(--ok)', fontWeight: 700 }}>
                     {' '}• écart {avgGap > 0 ? `+${avgGap}` : avgGap} pts vs planning
