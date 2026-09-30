@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   ChevronRight, ChevronLeft, ChevronDown, Camera, Pencil, Trash2, Check, Plus,
-  Eye, Flag,
+  Eye, Flag, X,
 } from 'lucide-react'
 import {
   VisitZone, lotGroups, tasksState, tasksActualProgress, tasksWorksProgress,

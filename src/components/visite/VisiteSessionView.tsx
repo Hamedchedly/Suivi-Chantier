@@ -133,9 +133,8 @@ export function VisiteSessionView(props: Props) {
                   <ChevronRight size={14} color="var(--muted)" />
                 </button>
               )
-              })}
-            </div>
-          )}
+            })}
+          </div>
         </div>
       )}
 
