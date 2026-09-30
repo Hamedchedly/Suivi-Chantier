@@ -386,7 +386,7 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
 /** Observed works progress (%) — mean of the observed percentages, na excluded.
  * Excludes parent tasks that have children (to avoid double-counting).
  * If a task hasn't been observed yet (progress undefined), use plannedProgress instead. */
-export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
+export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
   // Identify parents with children
   const parentsWithChildren = new Set(
     tasks
@@ -397,12 +397,16 @@ export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
   // Filter to leaves only (exclude parents with children in the same array)
   const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.taskId))
   if (applicable.length === 0) return 0
-  const sum = applicable.reduce((s, t) => {
-    // Use observed progress if available, otherwise use planned progress (no change assumed)
-    const progress = t.progress !== undefined ? t.progress : (t.plannedProgress ?? 0)
-    return s + progress
-  }, 0)
+
+  // Simple rule: use observed progress if available, otherwise fallback to 0 (not planned)
+  // This ensures consistency everywhere
+  const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
   return Math.round(sum / applicable.length)
+}
+
+/** @deprecated Use tasksDisplayProgress instead */
+export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
+  return tasksDisplayProgress(tasks)
 }
 
 /** Actual observed works progress (%) — mean of ONLY actually observed progress values.
