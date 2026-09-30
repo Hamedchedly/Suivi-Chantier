@@ -444,20 +444,18 @@ export function Visite() {
 
         {buildings.map(bid => {
           const allZones = active.zones.filter(z => z.buildingId === bid)
-          // Hide completed zones in session view (except if all are completed)
-          const visibleZones = allZones.filter(z => zoneState(z) !== 'done' || allZones.length === 1)
-          if (visibleZones.length === 0 && allZones.length > 0) {
-            return (
-              <div key={bid} style={{ marginBottom: '14px' }}>
-                <div style={sectionLabel}>{allZones[0].buildingLabel} <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 400, marginLeft: '4px' }}>✓ Tous complétés</span></div>
-              </div>
-            )
-          }
+          const activeZones = allZones.filter(z => zoneState(z) !== 'done')
+          const completedZones = allZones.filter(z => zoneState(z) === 'done')
+
           return (
             <div key={bid} style={{ marginBottom: '14px' }}>
-              <div style={sectionLabel}>{visibleZones.length > 0 ? visibleZones[0].buildingLabel : allZones[0].buildingLabel}</div>
+              <div style={sectionLabel}>
+                {allZones[0].buildingLabel}
+                {completedZones.length > 0 && <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 400, marginLeft: '8px' }}>({activeZones.length} restants, {completedZones.length} complétés)</span>}
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {visibleZones.map(z => {
+                {/* Active zones */}
+                {activeZones.map(z => {
                   const m = ZONE_META[zoneState(z)]
                   const carried = carriedOverPoints(reserves, z.refId, active.id).length
                   return (
@@ -481,6 +479,36 @@ export function Visite() {
                         </span>
                       )}
                       <span style={{ ...badge, background: m.bg, color: m.fg }}>{m.label}</span>
+                      <ChevronRight size={14} color="var(--muted)" />
+                    </button>
+                  )
+                })}
+
+                {/* Completed zones - with visual distinction */}
+                {completedZones.map(z => {
+                  const m = ZONE_META.done
+                  const carried = carriedOverPoints(reserves, z.refId, active.id).length
+                  return (
+                    <button key={z.refId} onClick={() => push({ v: 'zone', ref: z.refId })} style={{ ...zoneRow, background: '#f0fdf4', borderColor: '#86efac' }} title="Cliquez pour rouvrir et ajuster">
+                      <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#15803d' }}>{z.label}</div>
+                        <div style={{ fontSize: '10px', color: '#16a34a', marginBottom: '4px' }}>Travaux {zoneWorksProgress(z)}% · Contrôle {zoneControlProgress(z)}%</div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ flex: 1, height: '6px', background: '#dcfce7', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: '#16a34a', width: `${zoneWorksProgress(z)}%` }} />
+                          </div>
+                          <div style={{ flex: 1, height: '6px', background: '#dcfce7', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: '#16a34a', width: `${zoneControlProgress(z)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                      {carried > 0 && (
+                        <span title={`${carried} point(s) non levé(s)`} style={{ ...badge, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <AlertTriangle size={10} />{carried}
+                        </span>
+                      )}
+                      <span style={{ ...badge, background: '#dcfce7', color: '#15803d' }}>✓ {m.label}</span>
                       <ChevronRight size={14} color="var(--muted)" />
                     </button>
                   )
