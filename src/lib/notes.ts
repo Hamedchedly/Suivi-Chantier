@@ -16,6 +16,7 @@ function getLastSyncKey(projectId: string): string {
 export function getAllNotes(): Note[] {
   try {
     const projectId = getCurrentProjectId()
+    if (!projectId) return []
     const key = getStorageKey(projectId)
     const data = localStorage.getItem(key)
     return data ? JSON.parse(data) : []
@@ -28,6 +29,7 @@ export function getAllNotes(): Note[] {
 export function saveNotes(notes: Note[]): void {
   try {
     const projectId = getCurrentProjectId()
+    if (!projectId) throw new Error('No project selected')
     const key = getStorageKey(projectId)
     localStorage.setItem(key, JSON.stringify(notes))
     localStorage.setItem(getLastSyncKey(projectId), new Date().toISOString())

@@ -143,9 +143,9 @@ export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskChec
     // Derive parent state from aggregated progress
     let derivedState: VisitTaskCheck['state'] = 'not_checked'
     if (aggregatedProgress === 100) {
-      derivedState = 'done'
+      derivedState = 'ok'
     } else if (aggregatedProgress > 0) {
-      derivedState = 'in_progress'
+      derivedState = 'to_review'
     }
 
     return { ...t, progress: aggregatedProgress, state: derivedState }
@@ -391,11 +391,11 @@ export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
   const parentsWithChildren = new Set(
     tasks
       .filter(t => t.children && t.children.length > 0)
-      .map(t => t.id)
+      .map(t => t.taskId)
   )
 
   // Filter to leaves only (exclude parents with children in the same array)
-  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.id))
+  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.taskId))
   if (applicable.length === 0) return 0
   const sum = applicable.reduce((s, t) => {
     // Use observed progress if available, otherwise use planned progress (no change assumed)
@@ -413,11 +413,11 @@ export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
   const parentsWithChildren = new Set(
     tasks
       .filter(t => t.children && t.children.length > 0)
-      .map(t => t.id)
+      .map(t => t.taskId)
   )
 
   // Filter to leaves only (exclude parents with children in the same array)
-  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.id))
+  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.taskId))
   if (applicable.length === 0) return 0
   const sum = applicable.reduce((s, t) => {
     // Only use ACTUAL observed progress, no fallback to planned progress

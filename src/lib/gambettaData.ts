@@ -2540,8 +2540,6 @@ const reserves: Reserve[] = [
   },
 ]
 
-]
-
 // ── Bâtiments & zones ────────────────────────────────────────────────────────
 //
 // Structure réelle transmise pour l'opération (bâtiments A, B, C) :

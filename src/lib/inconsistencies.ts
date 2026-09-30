@@ -66,7 +66,7 @@ export function detectInconsistencies(note: Note): Inconsistency[] {
 
   // ❌ Logement validity
   const zoneRefs = getZoneRefs()
-  const validLogementIds = zoneRefs.map(z => z.id)
+  const validLogementIds = zoneRefs.map(z => z.refId)
   note.context.logementIds?.forEach(logementId => {
     if (!validLogementIds.includes(logementId)) {
       issues.push({
