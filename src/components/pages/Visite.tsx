@@ -378,8 +378,11 @@ export function Visite() {
             onBack={back}
             onPrev={idx > 0 ? () => swap({ v: 'zone', ref: active.zones[idx - 1].refId }) : null}
             onCloseZone={() => {
-              updateZone(zone.refId, z => ({ ...z, closedAt: z.closedAt ?? new Date().toISOString() }))
-              if (next) swap({ v: 'zone', ref: next }); else back()
+              updateZone(zone.refId, z => ({ ...z, closedAt: z.closedAt ? undefined : new Date().toISOString() }))
+              // If reopening (clearing closedAt), stay on the zone; if closing, move to next or back
+              if (!zone.closedAt) {
+                if (next) swap({ v: 'zone', ref: next }); else back()
+              }
             }}
           />
         </>

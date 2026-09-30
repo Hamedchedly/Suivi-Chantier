@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Camera, Calendar, AlertTriangle, CheckCircle2, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Plus, Camera, Calendar, AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react'
 import type { Visit, VisitZone, visitCounts as visitCountsType } from '../../lib/visits'
 import {
   ZONE_META, lotLabel, sectionLabel, badge, zoneRow, visitCard,
@@ -98,56 +98,41 @@ export function VisiteSessionView(props: Props) {
         {activeZones.length === 0 && <p style={{ fontSize: '12px', color: 'var(--muted)', padding: '12px 0' }}>Aucun logement à visiter.</p>}
       </div>
 
-      {/* Completed Zones - Collapsible */}
+      {/* Completed Zones - Always Visible */}
       {completedZones.length > 0 && (
         <div style={{ marginBottom: '24px' }}>
-          <button
-            onClick={() => setShowCompleted(!showCompleted)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '8px 0',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '.04em',
-            }}
-          >
-            {showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}
-            Logements terminés ({completedZones.length})
-          </button>
-          {showCompleted && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', opacity: 0.7 }}>
-              {completedZones.map(z => {
-                const state = 'done'
-                const m = ZONE_META[state]
-                const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
-                return (
-                  <button
-                    key={z.refId}
-                    onClick={() => onOpenZone(z.refId)}
-                    style={{
-                      ...zoneRow,
-                      display: 'grid',
-                      gridTemplateColumns: '24px 1fr auto auto',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.dot, justifySelf: 'center' }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Avancement {works}%</div>
-                    </div>
-                    <span style={{ ...badge, background: m.bg, color: m.fg, whiteSpace: 'nowrap' }}>{m.label}</span>
-                    <ChevronRight size={14} color="var(--muted)" />
-                  </button>
-                )
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', fontSize: '12px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            <CheckCircle2 size={14} color="#16a34a" />
+            Logements terminés ({completedZones.length}) — cliquez pour ajuster
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+            {completedZones.map(z => {
+              const state = 'done'
+              const m = ZONE_META[state]
+              const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
+              return (
+                <button
+                  key={z.refId}
+                  onClick={() => onOpenZone(z.refId)}
+                  style={{
+                    ...zoneRow,
+                    display: 'grid',
+                    gridTemplateColumns: '24px 1fr auto auto',
+                    alignItems: 'center',
+                    background: '#f0fdf4',
+                    borderColor: '#86efac',
+                  }}
+                  title="Cliquez pour rouvrir et ajuster"
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: m.dot, justifySelf: 'center' }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--navy)' }}>{z.label}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Avancement {works}%</div>
+                  </div>
+                  <span style={{ ...badge, background: m.bg, color: m.fg, whiteSpace: 'nowrap' }}>{m.label}</span>
+                  <ChevronRight size={14} color="var(--muted)" />
+                </button>
+              )
               })}
             </div>
           )}

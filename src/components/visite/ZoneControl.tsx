@@ -210,8 +210,12 @@ export function ZoneControl(props: Props) {
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
         {onPrev && <button onClick={onPrev} style={{ ...navBtn, flex: '0 0 auto', padding: '14px' }}><ChevronLeft size={16} /> Précédent</button>}
-        <button onClick={onCloseZone} style={{ ...bigBtnInline, flex: 1, padding: '15px', background: zone.closedAt ? 'var(--muted)' : 'var(--ok)' }}>
-          <Check size={17} /> {zone.closedAt ? 'Logement terminé' : 'Terminer'}{isLast ? '' : ' et suivant'}
+        <button onClick={onCloseZone} style={{ ...bigBtnInline, flex: 1, padding: '15px', background: zone.closedAt ? '#dc2626' : 'var(--ok)', cursor: 'pointer', opacity: 1 }}>
+          {zone.closedAt ? (
+            <><X size={17} /> Réouvrir pour ajuster</>
+          ) : (
+            <><Check size={17} /> Terminer{isLast ? '' : ' et suivant'}</>
+          )}
         </button>
       </div>
     </div>
