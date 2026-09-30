@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Visit } from '../../types/visit'
-import { NoteCreate } from '../visite/NoteCreate'
+import { RemarquesVisiteTable } from './RemarquesVisiteTable'
 import { getAllNotes, getNotesByCrNo } from '../../lib/notes'
 import { validateAllNotes, getErrorCount, getWarningCount } from '../../lib/inconsistencies'
 import { getMeetings } from '../../lib/repo'
@@ -69,17 +69,12 @@ export function RemarquesVisite({ visit, crNo }: RemarquesVisiteProps) {
         </div>
       )}
 
-      {/* Quick create */}
-      <div className='bg-white border border-gray-200 rounded-lg p-4'>
-        <h2 className='font-semibold mb-4 text-gray-900'>Nouvelle remarque</h2>
-        <NoteCreate
-          crNo={crNo}
-          meetingDate={meetingDate}
-          onNoteSaved={() => {
-            // Refresh would happen through state management
-          }}
-        />
-      </div>
+      {/* Notes table */}
+      <RemarquesVisiteTable
+        crNo={crNo}
+        meetingDate={meetingDate}
+        notes={notesForThisCr}
+      />
 
       {/* Notes for this CR */}
       <div className='bg-white border border-gray-200 rounded-lg'>
