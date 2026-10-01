@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Search, ChevronRight } from 'lucide-react'
 import type { VisitZone } from '../../lib/visits'
+import { tasksState, tasksWorksProgress, flattenTasksToLeaves } from '../../lib/visits'
 import { ZONE_META, badge, zoneRow } from './visiteStyles'
 
 type FilterType = 'all' | 'todo' | 'review' | 'done'
@@ -21,7 +22,7 @@ export function VisiteZonesList(props: Props) {
     // Filter by state
     if (filter !== 'all') {
       result = result.filter(z => {
-        const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : z.tasks.some(t => t.state === 'to_review') ? 'to_review' : 'in_progress'
+        const state = tasksState(z.tasks)
         if (filter === 'todo') return ['not_started', 'in_progress'].includes(state)
         if (filter === 'review') return state === 'to_review'
         if (filter === 'done') return state === 'done'
@@ -89,10 +90,10 @@ export function VisiteZonesList(props: Props) {
       {/* Zones Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
         {filtered.map(z => {
-          const state = z.tasks.length === 0 ? 'not_started' : z.tasks.every(t => t.state === 'ok') ? 'done' : z.tasks.some(t => t.state === 'to_review') ? 'to_review' : 'in_progress'
+          const state = tasksState(z.tasks)
           const m = ZONE_META[state]
-          const works = z.tasks.length > 0 ? Math.round(z.tasks.reduce((sum, t) => sum + (t.progress ?? 0), 0) / z.tasks.length) : 0
-          const doneCount = z.tasks.filter(t => t.state === 'ok').length
+          const works = tasksWorksProgress(z.tasks)
+          const doneCount = flattenTasksToLeaves(z.tasks).filter(t => t.state === 'ok').length
 
           return (
             <button
