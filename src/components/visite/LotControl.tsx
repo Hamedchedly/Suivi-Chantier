@@ -351,21 +351,27 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
     setPanel(null)
   }
 
-  // Collapsed view (without subtasks)
+  // Collapsed view (without subtasks) — styling based on actual completion
   if (collapsed && !isNa) {
+    const isActuallyComplete = (task.progress ?? 0) === 100
+    const bgColor = isActuallyComplete ? '#f0fdf4' : '#f8fafc'
+    const borderColor = isActuallyComplete ? '#86efac' : '#e2e8f0'
+    const textColor = isActuallyComplete ? '#15803d' : '#64748b'
+    const chevronColor = isActuallyComplete ? '#86efac' : '#cbd5e1'
+
     return (
       <div
         onClick={() => setUserExpanded(true)}
-        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', cursor: 'pointer', marginBottom: '10px' }}
+        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: bgColor, border: `1px solid ${borderColor}`, cursor: 'pointer', marginBottom: '10px' }}
       >
-        <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#15803d' }}>
+        {isActuallyComplete && <Check size={15} color="#15803d" style={{ flexShrink: 0 }} />}
+        <span style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: textColor }}>
           {taskTitle(task.title, zone.refId)}
         </span>
         {photoCount > 0 && <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '9px' }}>{photoCount}📷</span>}
         {remarks.length > 0 && <span style={{ ...badge, background: '#fef3c7', color: '#92400e', fontSize: '9px' }}>{remarks.length} note{remarks.length > 1 ? 's' : ''}</span>}
-        <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>{task.progress ?? 0}%</span>
-        <ChevronDown size={13} color="#86efac" />
+        <span style={{ fontSize: '12px', fontWeight: 700, color: textColor }}>{task.progress ?? 0}%</span>
+        <ChevronDown size={13} color={chevronColor} />
       </div>
     )
   }
@@ -738,10 +744,11 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
       {!collapsed && task.children && task.children.map(subTask => {
         const subPhotoCount = photos.filter((p: VisitPhoto) => p.taskId === subTask.taskId).length
         const subRemarks = reserves.filter((r: Reserve) => r.taskId === subTask.taskId)
-        const handleSubTaskAddPhoto = (file: File) => {
-          // Find the parent callback from the parent LotControl
-          // For now, just use the onAddPhoto from the parent (it needs lotId and taskId)
-          // This is a workaround - we need to pass the parent's onAddPhoto
+        const handleDeleteSubTask = () => {
+          if (!window.confirm(`Supprimer la sous-tâche « ${subTask.title} » ? Cette action ne peut pas être annulée.`)) return
+          // Remove the subtask from parent's children array
+          const updatedChildren = (task.children || []).filter(c => c.taskId !== subTask.taskId)
+          onPatchTask(task.taskId, { children: updatedChildren })
         }
         return (
           <div key={subTask.taskId} style={{ marginLeft: '20px', marginTop: '10px', paddingLeft: '12px', borderLeft: '2px solid #e2e8f0' }}>
@@ -752,6 +759,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               remarks={subRemarks}
               readOnly={readOnly}
               onPatch={patch => onPatchTask(subTask.taskId, patch)}
+              onDeleteSubTask={handleDeleteSubTask}
               onAddRemark={onAddRemark}
               onUpdateRemark={onUpdateRemark}
               onRemoveRemark={onRemoveRemark}
@@ -765,13 +773,14 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
 // ── SubTask Card ──────────────────────────────────────────────────────
 
-function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onAddRemark, onUpdateRemark, onRemoveRemark }: {
+function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onDeleteSubTask, onAddRemark, onUpdateRemark, onRemoveRemark }: {
   task: VisitTaskCheck
   zone: VisitZone
   photoCount: number
   remarks: Reserve[]
   readOnly: boolean
   onPatch: (patch: Partial<VisitTaskCheck>) => void
+  onDeleteSubTask?: () => void
   onAddRemark: (r: RemarkInput) => void
   onUpdateRemark: (id: string, patch: Partial<Reserve>) => void
   onRemoveRemark: (id: string) => void
@@ -794,6 +803,15 @@ function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onAdd
         </span>
         {isComplete && (
           <Check size={13} color="#15803d" />
+        )}
+        {onDeleteSubTask && !readOnly && (
+          <button
+            onClick={onDeleteSubTask}
+            title="Supprimer cette sous-tâche"
+            style={{ background: 'none', border: 'none', padding: '2px 4px', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '2px' }}
+          >
+            <Trash2 size={13} />
+          </button>
         )}
       </div>
 
