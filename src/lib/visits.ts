@@ -382,7 +382,8 @@ export interface LotGroup {
   tasks: VisitTaskCheck[]
 }
 
-/** Group a zone's checks by lot, preserving first-seen lot order. */
+/** Group a zone's checks by lot, preserving first-seen lot order.
+ * Returns top-level tasks only (hierarchy preserved). */
 export function lotGroups(z: VisitZone): LotGroup[] {
   const out: LotGroup[] = []
   for (const t of z.tasks) {
@@ -428,9 +429,12 @@ export function findTaskLotId(zone: VisitZone, taskId: string): string | undefin
   return task?.lotId
 }
 
-/** Qualitative state of a set of checks. Precedence: blocked > to_review > done > in_progress > not_started. */
+/** Qualitative state of a set of checks. Precedence: blocked > to_review > done > in_progress > not_started.
+ * Flattens hierarchy to include all subtasks. */
 export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
-  const applicable = tasks.filter(t => t.state !== 'na')
+  // Flatten hierarchy to include all subtasks
+  const leaves = flattenTasksToLeaves(tasks)
+  const applicable = leaves.filter(t => t.state !== 'na')
   const controlled = applicable.filter(t => t.state !== 'not_checked')
   if (applicable.some(t => t.state === 'blocked')) return 'blocked'
   if (applicable.some(t => t.state === 'to_review')) return 'to_review'
@@ -561,7 +565,8 @@ export function countRemainingTasks(v: Visit): number {
 export function countRemainingLogements(v: Visit): number {
   return v.zones
     .filter(z => {
-      const tasks = z.tasks.filter(t => t.state !== 'na')
+      const leaves = flattenTasksToLeaves(z.tasks)
+      const tasks = leaves.filter(t => t.state !== 'na')
       if (tasks.length === 0) return false
       return tasks.some(t => (t.progress ?? 0) < 100)
     })
