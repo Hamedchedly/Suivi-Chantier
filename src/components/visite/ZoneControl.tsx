@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   VisitZone, lotGroups, tasksState, tasksActualProgress, tasksWorksProgress,
-  zoneState, zoneActualProgress, zoneControlProgress,
+  zoneState, zoneActualProgress, zoneControlProgress, flattenTasksToLeaves,
 } from '../../lib/visits'
 import { Reserve, ReservePriority, FollowUpStatus, reserveKind } from '../../lib/reserves'
 import { VisitPhoto } from '../../lib/photoStore'
@@ -137,7 +137,8 @@ export function ZoneControl(props: Props) {
         const renderLotBtn = (g: typeof groups[0]) => {
           const gs = ZONE_META[tasksState(g.tasks)]
           const pct = tasksWorksProgress(g.tasks)
-          const blocked = g.tasks.filter(t => t.state === 'blocked').length
+          const leaves = flattenTasksToLeaves(g.tasks)
+          const blocked = leaves.filter(t => t.state === 'blocked').length
           return (
             <button key={g.lotId} onClick={() => onOpenLot(g.lotId)}
               style={{ padding: '13px 14px', borderRadius: '12px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
