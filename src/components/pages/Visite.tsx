@@ -9,9 +9,10 @@ import {
   VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneActualProgress, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitActualProgress, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
-  visitStats, visitChanges, progressGap, countRemainingTasks, countRemainingLogements, type ChangeKind,
+  visitStats, visitChanges, progressGap, countRemainingTasks, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree,
+  getLotVerificationState, updateLotVerification, getZoneVerificationState,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
 import { computeForecasts } from '../../lib/forecast'
@@ -321,6 +322,13 @@ export function Visite() {
             prevLot={neighbours.prev}
             nextLot={neighbours.next}
             onGoToLot={id => swap({ v: 'lot', ref: zone.refId, lotId: id })}
+            onLotVerify={(lotId, hadModifications) => {
+              updateZone(zone.refId, z => updateLotVerification(z, lotId, {
+                state: hadModifications ? 'to_review' : 'controlled',
+                wasModified: hadModifications,
+                completedAt: new Date().toISOString(),
+              }))
+            }}
             onAddPlanTask={(title, start, duration, parentTaskId, scope) => {
               const tasks = getGanttTasks()
               const [y, m, d] = start.split('-').map(Number)
@@ -1728,8 +1736,9 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
   const current = idx >= 0 ? zones[idx] : null
   const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
   const remainingTasks = countRemainingTasks(visit)
-  const remainingLogements = countRemainingLogements(visit)
-  const logementCount = zones.filter(z => z.tasks.some(t => t.state !== 'na')).length
+  // OBSOLETE — logement counter removed per requirement
+  // const remainingLogements = countRemainingLogements(visit)
+  // const logementCount = zones.filter(z => z.tasks.some(t => t.state !== 'na')).length
   const lotIds = current ? [...new Set(current.tasks.map(t => t.lotId))] : []
   const lotPos = lotId ? lotIds.indexOf(lotId) + 1 : 0
 
@@ -1737,7 +1746,6 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
     <div style={{ position: 'sticky', top: 0, zIndex: 6, background: '#02457A', color: '#fff', padding: '7px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '11px', fontWeight: 600 }}>
         {current && <span>{current.buildingLabel} · {current.label}</span>}
-        <span style={{ opacity: .85 }}>Logements {remainingLogements}/{logementCount}</span>
         {lotPos > 0 && <span style={{ opacity: .85 }}>Lot {lotPos}/{lotIds.length}</span>}
         <span style={{ opacity: .85 }}>Tâches {remainingTasks}/{checks.length}</span>
         <div style={{ flex: 1 }} />

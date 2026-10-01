@@ -152,6 +152,15 @@ export function aggregateSubtaskProgress(tasks: VisitTaskCheck[]): VisitTaskChec
   })
 }
 
+/** Tracks verification state for a specific lot within a zone (logement) */
+export interface LotVerificationRecord {
+  lotId: string
+  state: 'not_started' | 'in_progress' | 'controlled' | 'to_review'
+  wasModified: boolean         // true if user changed any task progress/state
+  visitedAt?: string          // ISO datetime when lot was first accessed
+  completedAt?: string        // ISO datetime when marked as 'controlled' or 'to_review'
+}
+
 export interface VisitZone {
   refId: string            // catalog id (logement / zone)
   label: string
@@ -162,6 +171,8 @@ export interface VisitZone {
   // Explicit user pin. `null` = derive from tasks; otherwise forces the state.
   override?: 'to_review' | 'blocked' | null
   closedAt?: string        // ISO datetime — "logement terminé", set explicitly
+  // Track lot verification state per logement: controlled, to_review, or not accessed
+  lotVerifications?: LotVerificationRecord[]
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────────
@@ -521,6 +532,7 @@ export function countRemainingTasks(v: Visit): number {
 }
 
 /** Count remaining logements — excluding 100% complete zones. Used for counter display. */
+// OBSOLETE — logement counter removed from TourBar per requirement
 export function countRemainingLogements(v: Visit): number {
   return v.zones
     .filter(z => {
@@ -864,4 +876,41 @@ export function newVisit(i: NewVisitInput): Visit {
     startedAt: now,
     createdAt: now,
   }
+}
+
+// ── Lot Verification Tracking ────────────────────────────────────────────────
+
+/** Get verification state for a specific lot in a zone (logement) */
+export function getLotVerificationState(zone: VisitZone, lotId: string): LotVerificationRecord['state'] {
+  return zone.lotVerifications?.find(v => v.lotId === lotId)?.state ?? 'not_started'
+}
+
+/** Update lot verification record in a zone */
+export function updateLotVerification(
+  zone: VisitZone,
+  lotId: string,
+  updates: Partial<LotVerificationRecord>
+): VisitZone {
+  const existing = zone.lotVerifications?.find(v => v.lotId === lotId)
+  const record: LotVerificationRecord = {
+    lotId,
+    state: updates.state ?? existing?.state ?? 'in_progress',
+    wasModified: updates.wasModified ?? existing?.wasModified ?? false,
+    visitedAt: existing?.visitedAt ?? new Date().toISOString(),
+    completedAt: updates.completedAt ?? existing?.completedAt,
+  }
+
+  const updated = zone.lotVerifications?.filter(v => v.lotId !== lotId) ?? []
+  return { ...zone, lotVerifications: [...updated, record] }
+}
+
+/** Derive zone-level verification state from all lots in the zone */
+export function getZoneVerificationState(zone: VisitZone): ZoneState {
+  const lotStates = zone.lotVerifications?.map(v => v.state) ?? []
+
+  if (lotStates.length === 0) return 'not_started'
+  if (lotStates.every(s => s === 'controlled')) return 'done'
+  if (lotStates.some(s => s === 'to_review')) return 'to_review'
+  if (lotStates.some(s => s === 'in_progress')) return 'in_progress'
+  return 'not_started'
 }

@@ -62,6 +62,8 @@ interface Props {
   prevLot: { lotId: string; label: string } | null
   nextLot: { lotId: string; label: string } | null
   onGoToLot: (lotId: string) => void
+  /** Track lot verification state when navigating away. */
+  onLotVerify?: (lotId: string, hadModifications: boolean) => void
   /** Ajouter une tâche (ou sous-tâche) dans le planning pour ce lot depuis la visite. Renvoie le succès réel. */
   onAddPlanTask?: (title: string, start: string, duration: number, parentTaskId?: string, scope?: 'logement' | 'lot' | 'tache_logement' | 'tache_tous') => boolean
 }
@@ -69,15 +71,17 @@ interface Props {
 export function LotControl(props: Props) {
   const { zone, lotId, tasks, lots, commitments, photos, reserves, blockerOptions,
     readOnly, previousOf, onPatchTask, onAddRemark, onUpdateRemark, onRemoveRemark, onAddPhoto, onBack,
-    prevLot, nextLot, onGoToLot, onAddPlanTask } = props
+    prevLot, nextLot, onGoToLot, onLotVerify, onAddPlanTask } = props
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const [lotModifications, setLotModifications] = useState<Set<string>>(new Set())
 
-  // Scroll to top when changing lots
+  // Scroll to top when changing lots, and reset modifications
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
+    setLotModifications(new Set())
   }, [lotId])
 
   const st = ZONE_META[tasksState(tasks)]
@@ -99,6 +103,21 @@ export function LotControl(props: Props) {
       setAddFailed(true)
       setTimeout(() => setAddFailed(false), 3000)
     }
+  }
+
+  const handlePatchTaskWithTracking = useCallback((taskId: string, patch: Partial<VisitTaskCheck>) => {
+    // Track that this task was modified
+    setLotModifications(prev => new Set(prev).add(taskId))
+    // Call the original patch handler
+    onPatchTask(taskId, patch)
+  }, [onPatchTask])
+
+  const handleGoToLot = (nextLotId: string) => {
+    // Track lot verification state before navigating
+    if (onLotVerify) {
+      onLotVerify(lotId, lotModifications.size > 0)
+    }
+    onGoToLot(nextLotId)
   }
 
   return (
@@ -139,8 +158,8 @@ export function LotControl(props: Props) {
           photoCount={photos.filter(p => p.taskId === t.taskId).length}
           remarks={reserves.filter(r => r.taskId === t.taskId)}
           blockerOptions={blockerOptions.filter(o => o.id !== t.taskId)}
-          onPatch={patch => onPatchTask(t.taskId, patch)}
-          onPatchTask={onPatchTask}
+          onPatch={patch => handlePatchTaskWithTracking(t.taskId, patch)}
+          onPatchTask={handlePatchTaskWithTracking}
           onAddPhoto={file => onAddPhoto(t.lotId, t.taskId, file)}
           onAddRemark={onAddRemark}
           onUpdateRemark={onUpdateRemark}
@@ -220,7 +239,7 @@ export function LotControl(props: Props) {
       {/* Walk the lots without going back to the list each time */}
       <div style={{ marginTop: '20px' }}>
         {nextLot && (
-          <button onClick={() => onGoToLot(nextLot.lotId)}
+          <button onClick={() => handleGoToLot(nextLot.lotId)}
             style={{ ...bigBtnInline, width: '100%', padding: '15px', background: 'var(--ok)', marginBottom: '8px' }}>
             <span style={{ flex: 1, textAlign: 'left' }}>
               <span style={{ display: 'block', fontSize: '10px', opacity: .85, fontWeight: 600 }}>Lot suivant</span>
@@ -231,7 +250,7 @@ export function LotControl(props: Props) {
         )}
         <div style={{ display: 'flex', gap: '8px' }}>
           {prevLot && (
-            <button onClick={() => onGoToLot(prevLot.lotId)}
+            <button onClick={() => handleGoToLot(prevLot.lotId)}
               style={{ ...navBtn, flex: 1, padding: '13px' }}>
               <ChevronLeft size={16} /> {prevLot.lotId}
             </button>
@@ -283,6 +302,12 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const isComplete = (task.progress ?? 0) === 100
   const hasSubtasks = task.children && task.children.length > 0
   const collapsed = !userExpanded && (isComplete || !hasSubtasks)
+
+  // Auto-expand task when modified
+  const onPatchWithAutoExpand = (patch: Partial<VisitTaskCheck>) => {
+    setUserExpanded(true)
+    onPatch(patch)
+  }
   const submitSubTask = () => {
     if (!subForm || !subForm.title.trim() || !onAddSubTask) return
     onAddSubTask(subForm.title.trim(), subForm.start, Math.max(1, parseInt(subForm.duration, 10) || 5), undefined, subForm.scope)
@@ -336,13 +361,13 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const track = `linear-gradient(to right, #02457A 0%, #02457A ${thumb}%, #dbe5ec ${thumb}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
-    onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
+    onPatchWithAutoExpand({ progress, state: stateAfterEdit({ ...task, progress }) })
 
   const patchBlockedBy = (blockedBy: string[]) =>
-    onPatch({ blockedBy: blockedBy.length ? blockedBy : undefined, state: stateAfterEdit({ ...task, blockedBy }) })
+    onPatchWithAutoExpand({ blockedBy: blockedBy.length ? blockedBy : undefined, state: stateAfterEdit({ ...task, blockedBy }) })
 
   const patchBlocks = (blocks: string[]) =>
-    onPatch({ blocks: blocks.length ? blocks : undefined })
+    onPatchWithAutoExpand({ blocks: blocks.length ? blocks : undefined })
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -414,7 +439,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
                 <MenuItem icon={<Pencil size={14} />} label="Éditer le titre" onClick={() => { setPanel(null); setEditForm({ title: task.title, start: '', end: '' }) }} />
                 <MenuItem icon={<Handshake size={14} />} label={`Engagement${task.promisedWeek ? ' ✓' : ''}`} onClick={() => setPanel('engagement')} tint={task.promisedWeek ? '#6d28d9' : undefined} />
                 <MenuItem icon={<CircleSlash size={14} />} label={isNa ? 'Rendre applicable' : 'Marquer N/A'} last
-                  onClick={() => { if (window.confirm(isNa ? 'Rendre la tâche applicable ?' : 'Marquer cette tâche comme non applicable ?')) { onPatch({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' }); setPanel(null) } }} />
+                  onClick={() => { if (window.confirm(isNa ? 'Rendre la tâche applicable ?' : 'Marquer cette tâche comme non applicable ?')) { onPatchWithAutoExpand({ state: isNa ? (task.progress === undefined ? 'not_checked' : 'ok') : 'na' }); setPanel(null) } }} />
               </div>
             )}
           </div>
@@ -432,7 +457,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
             N/A — non concerné par ce logement
           </span>
           {!readOnly && (
-            <button onClick={() => onPatch({ state: task.progress === undefined ? 'not_checked' : 'ok' })}
+            <button onClick={() => onPatchWithAutoExpand({ state: task.progress === undefined ? 'not_checked' : 'ok' })}
               style={{ ...ghostBtn, padding: '6px 10px' }}>
               <RotateCcw size={13} /> Rétablir
             </button>
