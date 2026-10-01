@@ -11,7 +11,7 @@ import {
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
   visitStats, visitChanges, progressGap, countRemainingTasks, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
-  buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree,
+  buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree, findTaskLotId,
   getLotVerificationState, updateLotVerification, getZoneVerificationState,
 } from '../../lib/visits'
 import { flattenLeaves } from '../../lib/schedule'
@@ -311,9 +311,19 @@ export function Visite() {
             blockerOptions={blockerOptions}
             readOnly={isLockedFor(active, me)}
             previousOf={taskId => previousObservation(visits, active, taskId)}
-            onPatchTask={(taskId, patch) => updateZone(zone.refId, z => ({
-              ...z, tasks: patchTaskInTree(z.tasks, taskId, patch),
-            }))}
+            onPatchTask={(taskId, patch) => updateZone(zone.refId, z => {
+              const updatedTasks = patchTaskInTree(z.tasks, taskId, patch)
+              const lotId = findTaskLotId(z, taskId)
+              if (lotId) {
+                // Mark lot as "to_review" with wasModified: true when task is modified
+                return updateLotVerification(
+                  { ...z, tasks: updatedTasks },
+                  lotId,
+                  { state: 'to_review', wasModified: true }
+                )
+              }
+              return { ...z, tasks: updatedTasks }
+            })}
             onAddRemark={r => addRemark(active, zone, r)}
             onUpdateRemark={updateRemark}
             onRemoveRemark={removeRemark}

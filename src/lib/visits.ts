@@ -393,6 +393,41 @@ export function lotGroups(z: VisitZone): LotGroup[] {
   return out
 }
 
+/** Flatten task hierarchy to get all leaves (tasks without children).
+ * Includes subtasks nested in children. */
+export function flattenTasksToLeaves(tasks: VisitTaskCheck[]): VisitTaskCheck[] {
+  const leaves: VisitTaskCheck[] = []
+  const collect = (taskList: VisitTaskCheck[]) => {
+    for (const t of taskList) {
+      if (!t.children || t.children.length === 0) {
+        leaves.push(t)
+      } else {
+        collect(t.children)
+      }
+    }
+  }
+  collect(tasks)
+  return leaves
+}
+
+/** Find a task by ID in the task tree (searches recursively through children). */
+export function findTaskInTree(tasks: VisitTaskCheck[], taskId: string): VisitTaskCheck | undefined {
+  for (const t of tasks) {
+    if (t.taskId === taskId) return t
+    if (t.children?.length) {
+      const found = findTaskInTree(t.children, taskId)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+/** Find the lotId for a specific task in the zone's tasks. */
+export function findTaskLotId(zone: VisitZone, taskId: string): string | undefined {
+  const task = findTaskInTree(zone.tasks, taskId)
+  return task?.lotId
+}
+
 /** Qualitative state of a set of checks. Precedence: blocked > to_review > done > in_progress > not_started. */
 export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
   const applicable = tasks.filter(t => t.state !== 'na')
@@ -407,19 +442,12 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
  * Excludes parent tasks that have children (to avoid double-counting).
  * If a task hasn't been observed yet (progress undefined), use plannedProgress instead. */
 export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
-  // Identify parents with children
-  const parentsWithChildren = new Set(
-    tasks
-      .filter(t => t.children && t.children.length > 0)
-      .map(t => t.taskId)
-  )
-
-  // Filter to leaves only (exclude parents with children in the same array)
-  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.taskId))
+  // Flatten hierarchy to include all subtasks
+  const leaves = flattenTasksToLeaves(tasks)
+  const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
 
-  // Simple rule: use observed progress if available, otherwise fallback to 0 (not planned)
-  // This ensures consistency everywhere
+  // Use observed progress if available, no fallback
   const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
   return Math.round(sum / applicable.length)
 }
@@ -431,17 +459,11 @@ export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
 
 /** Actual observed works progress (%) — mean of ONLY actually observed progress values.
  * Does NOT include planned progress fallback; unobserved tasks contribute 0%.
- * Excludes parent tasks that have children (to avoid double-counting). */
+ * Flattens hierarchy to include all subtasks. */
 export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
-  // Identify parents with children
-  const parentsWithChildren = new Set(
-    tasks
-      .filter(t => t.children && t.children.length > 0)
-      .map(t => t.taskId)
-  )
-
-  // Filter to leaves only (exclude parents with children in the same array)
-  const applicable = tasks.filter(t => t.state !== 'na' && !parentsWithChildren.has(t.taskId))
+  // Flatten hierarchy to include all subtasks
+  const leaves = flattenTasksToLeaves(tasks)
+  const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
   const sum = applicable.reduce((s, t) => {
     // Only use ACTUAL observed progress, no fallback to planned progress
@@ -450,9 +472,12 @@ export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
   return Math.round(sum / applicable.length)
 }
 
-/** Control progress (%) — how much of the tour has been inspected, na excluded. */
+/** Control progress (%) — how much of the tour has been inspected, na excluded.
+ * Flattens hierarchy to include all subtasks. */
 export function tasksControlProgress(tasks: VisitTaskCheck[]): number {
-  const applicable = tasks.filter(t => t.state !== 'na')
+  // Flatten hierarchy to include all subtasks
+  const leaves = flattenTasksToLeaves(tasks)
+  const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
   const controlled = applicable.filter(t => t.state !== 'not_checked').length
   return Math.round((controlled / applicable.length) * 100)
@@ -498,7 +523,7 @@ export function visitCounts(v: Visit): VisitCounts {
   return c
 }
 
-const allChecks = (v: Visit): VisitTaskCheck[] => v.zones.flatMap(z => z.tasks)
+const allChecks = (v: Visit): VisitTaskCheck[] => v.zones.flatMap(z => flattenTasksToLeaves(z.tasks))
 
 /** How far the tour has gone — controlled checks over all applicable ones. */
 export function visitControlProgress(v: Visit): number {
