@@ -316,20 +316,19 @@ export function taskCheckFromPlanning(t: GanttTask): VisitTaskCheck {
     }
   }
 
-  // Initialize state based on seed data progress (if provided)
-  // If progress is already set (from seed data), derive appropriate state
-  let initialState: TaskState = 'not_checked'
-  if (t.progress !== undefined && t.progress > 0) {
-    initialState = t.progress === 100 ? 'ok' : 'to_review'
-  }
+  // CRITICAL FIX: Always start with state='not_checked' and progress=undefined for fresh session.
+  // Seed data progress is planning data, not observation data. Each session starts clean,
+  // forcing the user to actively observe (which populates both state and progress).
+  // plannedProgress provides fallback for UI display, but doesn't mark as 'checked'.
+  // This prevents cascading bugs where unobserved tasks appear complete.
 
   return {
     taskId: t.id,
     lotId: t.lot_id,
     title: t.title,
-    state: initialState,
-    progress: t.progress,
-    plannedProgress,
+    state: 'not_checked',    // Always start unchecked
+    progress: undefined,      // Force observation
+    plannedProgress,          // Used only for display fallback
     baselineEnd: isoDay(t.baseline_end ?? t.planned_end),
     plannedEnd: isoDay(t.planned_end),
     company: t.company_id,
@@ -451,8 +450,11 @@ export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
   const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
 
-  // Use observed progress if available, no fallback
-  const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
+  // Use observed progress if available, fallback to plannedProgress, else 0
+  const sum = applicable.reduce((s, t) => {
+    const value = t.progress !== undefined ? t.progress : (t.plannedProgress ?? 0)
+    return s + value
+  }, 0)
   return Math.round(sum / applicable.length)
 }
 
