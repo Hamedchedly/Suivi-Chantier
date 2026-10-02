@@ -85,7 +85,7 @@ export function LotControl(props: Props) {
   }, [lotId])
 
   const st = ZONE_META[tasksState(tasks)]
-  const pct = tasksWorksProgress(tasks)  // Display works progress (observed + planned fallback)
+  const pct = tasksActualProgress(tasks)  // Use ONLY observed progress, no planned fallback
   const company = lotCompany(lots, lotId)
 
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' } | null>(null)
