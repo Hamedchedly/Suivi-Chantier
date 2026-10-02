@@ -355,8 +355,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const planned = task.plannedProgress            // attendu selon le planning, figé à l'ouverture
   const prev = previous?.progress                 // % constaté à la dernière réunion
 
-  // Display progress = ONLY observed progress, never fallback to planned
-  const displayProgress = task.progress ?? 0
+  // Display progress = observed or previous (from last visit), but NEVER planned as fallback
+  const displayProgress = task.progress ?? prev ?? 0
   const track = `linear-gradient(to right, #02457A 0%, #02457A ${displayProgress}%, #dbe5ec ${displayProgress}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
@@ -814,7 +814,8 @@ function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onDel
 
   const isComplete = (task.progress ?? 0) === 100
   const planned = task.plannedProgress
-  const displayProgress = task.progress ?? 0
+  const prev = undefined  // SubTaskCard doesn't have previous visit data
+  const displayProgress = task.progress ?? prev ?? 0
 
   const patchProgress = (progress: number) =>
     onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
