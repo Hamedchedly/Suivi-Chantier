@@ -354,11 +354,10 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const checked = task.progress !== undefined
   const planned = task.plannedProgress            // attendu selon le planning, figé à l'ouverture
   const prev = previous?.progress                 // % constaté à la dernière réunion
-  // Le curseur démarre là où en était le point (dernière réunion, sinon prévu) :
-  // il ne reste qu'à le pousser à la valeur du jour. Les repères « prévu » et
-  // « réunion préc. » sont posés par-dessus le remplissage.
-  const thumb = task.progress ?? prev ?? planned ?? 0
-  const track = `linear-gradient(to right, #02457A 0%, #02457A ${thumb}%, #dbe5ec ${thumb}%, #dbe5ec 100%)`
+
+  // Display progress = ONLY observed progress, never fallback to planned
+  const displayProgress = task.progress ?? 0
+  const track = `linear-gradient(to right, #02457A 0%, #02457A ${displayProgress}%, #dbe5ec ${displayProgress}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
     onPatchWithAutoExpand({ progress, state: stateAfterEdit({ ...task, progress }) })
@@ -478,20 +477,20 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
               <div style={{
                 height: '100%',
                 background: 'linear-gradient(90deg, #0284c7, #0369a1)',
-                width: `${thumb}%`,
+                width: `${displayProgress}%`,
                 transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
                 borderRadius: '6px'
               }} />
             </div>
             {/* Marks for planned and previous progress */}
-            {planned !== undefined && planned !== thumb && <ProgressMark pct={planned} color="#0284c7" title={`Prévu: ${planned}%`} />}
-            {prev !== undefined && prev !== thumb && <ProgressMark pct={prev} color="#f59e0b" title={`Réunion préc.: ${prev}%`} />}
+            {planned !== undefined && planned !== displayProgress && <ProgressMark pct={planned} color="#0284c7" title={`Prévu: ${planned}%`} />}
+            {prev !== undefined && prev !== displayProgress && <ProgressMark pct={prev} color="#f59e0b" title={`Réunion préc.: ${prev}%`} />}
           </div>
 
           {/* Spinner control */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <ProgressSpinner
-              value={thumb}
+              value={displayProgress}
               onChange={patchProgress}
               disabled={readOnly}
               showButtons="full"
@@ -815,7 +814,7 @@ function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onDel
 
   const isComplete = (task.progress ?? 0) === 100
   const planned = task.plannedProgress
-  const thumb = task.progress ?? planned ?? 0
+  const displayProgress = task.progress ?? 0
 
   const patchProgress = (progress: number) =>
     onPatch({ progress, state: stateAfterEdit({ ...task, progress }) })
@@ -843,7 +842,7 @@ function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onDel
       {/* Progress bar */}
       <div style={{ marginBottom: '8px' }}>
         <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: '4px' }}>
-          <div style={{ height: '100%', background: 'linear-gradient(90deg, #0284c7, #0369a1)', width: `${thumb}%`, transition: 'width 200ms' }} />
+          <div style={{ height: '100%', background: 'linear-gradient(90deg, #0284c7, #0369a1)', width: `${displayProgress}%`, transition: 'width 200ms' }} />
         </div>
       </div>
 
@@ -851,7 +850,7 @@ function SubTaskCard({ task, zone, photoCount, remarks, readOnly, onPatch, onDel
       {!isComplete && (
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
           <ProgressSpinner
-            value={thumb}
+            value={displayProgress}
             onChange={patchProgress}
             disabled={readOnly}
             showButtons="full"
