@@ -441,26 +441,16 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
   return controlled.length === applicable.length ? 'done' : 'in_progress'
 }
 
-/** Observed works progress (%) — mean of the observed percentages, na excluded.
- * Excludes parent tasks that have children (to avoid double-counting).
- * If a task hasn't been observed yet (progress undefined), use plannedProgress instead. */
+/** Observed works progress (%) — mean of ONLY actually observed progress values.
+ * Does NOT include planned progress fallback; unobserved tasks contribute 0%.
+ * Flattens hierarchy to include all subtasks. */
 export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
-  // Flatten hierarchy to include all subtasks
-  const leaves = flattenTasksToLeaves(tasks)
-  const applicable = leaves.filter(t => t.state !== 'na')
-  if (applicable.length === 0) return 0
-
-  // Use observed progress if available, fallback to plannedProgress, else 0
-  const sum = applicable.reduce((s, t) => {
-    const value = t.progress !== undefined ? t.progress : (t.plannedProgress ?? 0)
-    return s + value
-  }, 0)
-  return Math.round(sum / applicable.length)
+  return tasksActualProgress(tasks)
 }
 
 /** @deprecated Use tasksDisplayProgress instead */
 export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
-  return tasksDisplayProgress(tasks)
+  return tasksActualProgress(tasks)
 }
 
 /** Actual observed works progress (%) — mean of ONLY actually observed progress values.
