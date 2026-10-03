@@ -356,7 +356,10 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const prev = previous?.progress                 // % constaté à la dernière réunion
 
   // Display progress = observed or previous (from last visit), but NEVER planned as fallback
-  const displayProgress = task.progress ?? prev ?? 0
+  // For parent tasks, calculate progress from children in real-time (don't rely on stale task.progress)
+  const displayProgress = hasSubtasks && task.children
+    ? tasksActualProgress(task.children)           // Calculate from children
+    : (task.progress ?? prev ?? 0)                 // Use observed/previous for leaf tasks
   const track = `linear-gradient(to right, #02457A 0%, #02457A ${displayProgress}%, #dbe5ec ${displayProgress}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
