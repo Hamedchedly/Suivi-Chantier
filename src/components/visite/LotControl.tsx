@@ -397,7 +397,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
         </span>
         {photoCount > 0 && <span style={{ ...badge, background: '#dcfce7', color: '#15803d', fontSize: '9px' }}>{photoCount}📷</span>}
         {remarks.length > 0 && <span style={{ ...badge, background: '#fef3c7', color: '#92400e', fontSize: '9px' }}>{remarks.length} note{remarks.length > 1 ? 's' : ''}</span>}
-        <span style={{ fontSize: '12px', fontWeight: 700, color: textColor }}>{task.progress ?? 0}%</span>
+        <span style={{ fontSize: '12px', fontWeight: 700, color: textColor }}>{displayProgress}%</span>
         <ChevronDown size={13} color={chevronColor} />
       </div>
     )
