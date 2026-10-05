@@ -299,8 +299,17 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
   const [editForm, setEditForm] = useState<{ title: string; start: string; end: string } | null>(null)
   const gap = progressGap(task)
 
-  const isComplete = (task.progress ?? 0) === 100
   const hasSubtasks = task.children && task.children.length > 0
+  const prev = previous?.progress                 // % constaté à la dernière réunion
+
+  // Display progress = observed or previous (from last visit), but NEVER planned as fallback
+  // For parent tasks, calculate progress from children in real-time (don't rely on stale task.progress)
+  const displayProgress = hasSubtasks && task.children
+    ? tasksActualProgress(task.children)           // Calculate from children
+    : (task.progress ?? prev ?? 0)                 // Use observed/previous for leaf tasks
+
+  // Check completion based on displayed progress (not just task.progress)
+  const isComplete = displayProgress === 100
   // Only collapse tasks at 100% — expand all others by default to show details
   const collapsed = !userExpanded && isComplete
 
@@ -354,13 +363,7 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
   const checked = task.progress !== undefined
   const planned = task.plannedProgress            // attendu selon le planning, figé à l'ouverture
-  const prev = previous?.progress                 // % constaté à la dernière réunion
 
-  // Display progress = observed or previous (from last visit), but NEVER planned as fallback
-  // For parent tasks, calculate progress from children in real-time (don't rely on stale task.progress)
-  const displayProgress = hasSubtasks && task.children
-    ? tasksActualProgress(task.children)           // Calculate from children
-    : (task.progress ?? prev ?? 0)                 // Use observed/previous for leaf tasks
   const track = `linear-gradient(to right, #02457A 0%, #02457A ${displayProgress}%, #dbe5ec ${displayProgress}%, #dbe5ec 100%)`
 
   const patchProgress = (progress: number) =>
