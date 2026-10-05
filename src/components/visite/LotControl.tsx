@@ -301,7 +301,8 @@ function TaskCard({ task, zone, lots, readOnly, commitment, previous, photoCount
 
   const isComplete = (task.progress ?? 0) === 100
   const hasSubtasks = task.children && task.children.length > 0
-  const collapsed = !userExpanded && (isComplete || !hasSubtasks)
+  // Only collapse tasks at 100% — expand all others by default to show details
+  const collapsed = !userExpanded && isComplete
 
   // Auto-expand task when modified
   const onPatchWithAutoExpand = (patch: Partial<VisitTaskCheck>) => {
