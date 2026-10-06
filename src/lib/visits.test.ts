@@ -149,11 +149,11 @@ describe('progress helpers', () => {
   const tasks = [
     check({ taskId: 'a', lotId: 'L05', state: 'ok', progress: 100 }),
     check({ taskId: 'b', lotId: 'L05', state: 'ok', progress: 50 }),
-    check({ taskId: 'c', lotId: 'L05', plannedProgress: 75 }),   // not checked → uses plannedProgress (75%)
+    check({ taskId: 'c', lotId: 'L05', plannedProgress: 75 }),   // not observed → contributes 0%, never falls back to plannedProgress
     check({ taskId: 'd', lotId: 'L05', state: 'na', progress: 100 }), // excluded
   ]
   it('averages observed works progress over applicable tasks', () => {
-    expect(tasksWorksProgress(tasks)).toBe(75)   // (100 + 50 + 75) / 3
+    expect(tasksWorksProgress(tasks)).toBe(50)   // (100 + 50 + 0) / 3 = 50. Unobserved tasks do NOT use plannedProgress
   })
   it('measures the tour separately from the works', () => {
     expect(tasksControlProgress(tasks)).toBe(67) // 2 controlled / 3 applicable
@@ -162,11 +162,11 @@ describe('progress helpers', () => {
     expect(tasksWorksProgress([])).toBe(0)
     expect(tasksControlProgress([check({ taskId: 'x', lotId: 'L05', state: 'na' })])).toBe(0)
   })
-  it('uses plannedProgress for unobserved tasks (bug fix: 100% task shows 100% in rollup)', () => {
-    const tasksWithCompleted = [
+  it('unobserved tasks show 0% progress, not plannedProgress (bug fix: prevent false 100% completion)', () => {
+    const tasksWithUnobserved = [
       check({ taskId: 'a', lotId: 'L05', plannedProgress: 100 }), // 100% in planning, not yet observed
     ]
-    expect(tasksWorksProgress(tasksWithCompleted)).toBe(100) // Should be 100, not 0
+    expect(tasksWorksProgress(tasksWithUnobserved)).toBe(0) // Should be 0 (unobserved), NOT 100 (planned fallback)
   })
 })
 

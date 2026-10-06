@@ -110,8 +110,8 @@ export function ZoneControl(props: Props) {
         const completeLots = groups.filter(g => tasksActualProgress(g.tasks) === 100)
 
         const renderCompleteLot = (g: typeof groups[0]) => {
-          // Display works progress (observed + planned fallback) for UI
-          const pct = tasksWorksProgress(g.tasks)
+          // Display actual observed works progress (no planned progress fallback)
+          const pct = tasksActualProgress(g.tasks)
           return (
             <div key={g.lotId}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', background: '#f0fdf4', border: '1px solid #86efac', marginBottom: '8px' }}>
