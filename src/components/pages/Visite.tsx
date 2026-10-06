@@ -9,7 +9,7 @@ import {
   VISIT_KIND_LABEL, visitKindLabel, zoneState, zoneActualProgress, zoneWorksProgress, zoneControlProgress,
   visitCounts, visitActualProgress, visitWorksProgress, visitControlProgress, remainingToControl, visitLotIds,
   reservesForVisit, generalNotes, notesForCompany, nextZoneRef, previousObservation,
-  visitStats, visitChanges, progressGap, countRemainingTasks, type ChangeKind,
+  visitStats, visitChanges, progressGap, countRemainingTasks, allChecks, type ChangeKind,
   buildZonesFromPlanning, applyVisitToPlanning, applyVisitBlockages, progressObservationsFromVisit, commitmentsFromVisit,
   buildPlanningSnapshot, newVisit, emptyCr, taskCheckFromPlanning, patchTaskInTree, findTaskLotId,
   getLotVerificationState, updateLotVerification, getZoneVerificationState,
@@ -1744,7 +1744,8 @@ function TourBar({ visit, zoneRef, lotId }: { visit: Visit; zoneRef: string | nu
   const zones = visit.zones
   const idx = zoneRef ? zones.findIndex(z => z.refId === zoneRef) : -1
   const current = idx >= 0 ? zones[idx] : null
-  const checks = zones.flatMap(z => z.tasks).filter(t => t.state !== 'na')
+  // Count leaf tasks (same as remainingTasks denominator) for consistent counter
+  const checks = allChecks(visit).filter(t => t.state !== 'na')
   const remainingTasks = countRemainingTasks(visit)
   // OBSOLETE — logement counter removed per requirement
   // const remainingLogements = countRemainingLogements(visit)

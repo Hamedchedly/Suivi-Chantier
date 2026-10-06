@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   VisitZone, VisitTaskCheck, PreviousObservation,
-  tasksState, tasksActualProgress, tasksWorksProgress, progressGap, stateAfterEdit,
+  tasksState, tasksActualProgress, tasksWorksProgress, progressGap, stateAfterEdit, flattenTasksToLeaves,
 } from '../../lib/visits'
 import { ProgressSpinner } from '../common/ProgressSpinner'
 import { DateCommitment, CommitmentType, latestCommitment, isBroken } from '../../lib/commitments'
@@ -87,6 +87,7 @@ export function LotControl(props: Props) {
   const st = ZONE_META[tasksState(tasks)]
   const pct = tasksActualProgress(tasks)  // Use ONLY observed progress, no planned fallback
   const company = lotCompany(lots, lotId)
+  const allTasksFlattened = flattenTasksToLeaves(tasks)
 
   const [addForm, setAddForm] = useState<{ title: string; start: string; duration: string; scope: 'logement' | 'lot' } | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
@@ -130,7 +131,7 @@ export function LotControl(props: Props) {
         <div style={{ minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: '18px' }}>{lotId} — {lotLabel(lots, lotId)}</h2>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-            {company ?? '—'} · {tasks.length} tâche{tasks.length > 1 ? 's' : ''}
+            {company ?? '—'} · {allTasksFlattened.length} tâche{allTasksFlattened.length > 1 ? 's' : ''}
           </div>
         </div>
         <span style={{ ...badge, background: st.bg, color: st.fg }}>{st.label}</span>

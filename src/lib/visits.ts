@@ -533,7 +533,7 @@ export function visitCounts(v: Visit): VisitCounts {
   return c
 }
 
-const allChecks = (v: Visit): VisitTaskCheck[] => v.zones.flatMap(z => flattenTasksToLeaves(z.tasks))
+export const allChecks = (v: Visit): VisitTaskCheck[] => v.zones.flatMap(z => flattenTasksToLeaves(z.tasks))
 
 /** How far the tour has gone — controlled checks over all applicable ones. */
 export function visitControlProgress(v: Visit): number {
@@ -751,7 +751,8 @@ export function statusFor(check: VisitTaskCheck, current: TaskStatus): TaskStatu
 export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] {
   const byId = new Map<string, VisitTaskCheck>()
   for (const c of allChecks(v)) {
-    if (c.state === 'na' || c.state === 'not_checked') continue
+    if (c.state === 'na') continue
+    if (c.progress === undefined) continue
     byId.set(c.taskId, c)
   }
   if (byId.size === 0) return tasks
