@@ -234,7 +234,12 @@ describe('visit aggregation', () => {
   })
   it('separates tour progress from works progress', () => {
     expect(visitControlProgress(v)).toBe(75)  // 3 of 4 checks controlled
-    expect(visitWorksProgress(v)).toBe(45)    // (100 + 50 + 0 + 30) / 4
+    // Hierarchical averaging:
+    // Zone A-101: L05 = 100%
+    // Zone A-102: L06 = (50 + 0) / 2 = 25%
+    // Zone B-201: L07 = 30%
+    // Visit = (100 + 25 + 30) / 3 = 52%
+    expect(visitWorksProgress(v)).toBe(52)
   })
   it('lists remaining zones and touched lots', () => {
     expect(remainingToControl(v).map(z => z.refId)).toEqual(['A-102'])

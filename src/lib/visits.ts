@@ -441,38 +441,75 @@ export function tasksState(tasks: VisitTaskCheck[]): ZoneState {
   return controlled.length === applicable.length ? 'done' : 'in_progress'
 }
 
-/** Observed works progress (%) — mean of ONLY actually observed progress values.
- * Does NOT include planned progress fallback; unobserved tasks contribute 0%.
- * Flattens hierarchy to include all subtasks. */
-export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
-  return tasksActualProgress(tasks)
+/** HIERARCHY-AWARE PROGRESS CALCULATION
+ * Each level averages the level below it:
+ * SubTasks (leaves) → Tasks → Lots → Logements → Zones → Bâtiments → Project
+ *
+ * Core principle: Average only applicable (state !== 'na') leaf tasks.
+ * Each higher level sums its direct children and averages them.
+ */
+
+/** Get average progress for a single task (includes all its subtasks as one unit).
+ * If task has children, return average of children.
+ * If task is leaf, return task.progress ?? 0. */
+export function singleTaskProgress(t: VisitTaskCheck): number {
+  if (!t.children || t.children.length === 0) {
+    return t.progress ?? 0
+  }
+  const applicable = t.children.filter(c => c.state !== 'na')
+  if (applicable.length === 0) return 0
+  const sum = applicable.reduce((s, c) => s + singleTaskProgress(c), 0)
+  return Math.round(sum / applicable.length)
 }
 
-/** @deprecated Use tasksDisplayProgress instead */
+/** Get average progress for a list of top-level tasks in a lot/group.
+ * Each task is counted once (whether it's a parent or leaf).
+ * If a task has children, use average of its children; otherwise use task.progress.
+ * Excludes tasks with state='na'. */
+export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
+  const applicable = tasks.filter(t => t.state !== 'na')
+  if (applicable.length === 0) return 0
+  const sum = applicable.reduce((s, t) => s + singleTaskProgress(t), 0)
+  return Math.round(sum / applicable.length)
+}
+
+/** @deprecated Use tasksActualProgress instead */
 export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
   return tasksActualProgress(tasks)
 }
 
-/** Actual observed works progress (%) — simple average of all leaf task progress.
- * Flattens the task hierarchy to avoid double-counting parent aggregates.
- * Unobserved tasks (progress undefined) contribute 0%. */
-export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
-  const leaves = flattenTasksToLeaves(tasks)
-  const applicable = leaves.filter(t => t.state !== 'na')
-  if (applicable.length === 0) return 0
-  const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
-  return Math.round(sum / applicable.length)
+export function tasksDisplayProgress(tasks: VisitTaskCheck[]): number {
+  return tasksActualProgress(tasks)
 }
 
 /** Control progress (%) — how much of the tour has been inspected, na excluded.
- * Flattens hierarchy to include all subtasks. */
+ * Counts all applicable leaves that have state !== 'not_checked'. */
 export function tasksControlProgress(tasks: VisitTaskCheck[]): number {
-  // Flatten hierarchy to include all subtasks
   const leaves = flattenTasksToLeaves(tasks)
   const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
   const controlled = applicable.filter(t => t.state !== 'not_checked').length
   return Math.round((controlled / applicable.length) * 100)
+}
+
+// ── Lot-level progress (tasks grouped by lotId) ──────────────────────────────
+
+/** Get progress for a specific lot ID within a list of tasks.
+ * Averages all tasks in that lot (treating parents as single units). */
+export function lotProgress(tasks: VisitTaskCheck[], lotId: string): number {
+  const lotTasks = tasks.filter(t => t.lotId === lotId && t.state !== 'na')
+  if (lotTasks.length === 0) return 0
+  const sum = lotTasks.reduce((s, t) => s + singleTaskProgress(t), 0)
+  return Math.round(sum / lotTasks.length)
+}
+
+/** Get progress for all lots in a logement.
+ * Calculates progress for each lot, then averages them. */
+export function logementProgress(tasks: VisitTaskCheck[]): number {
+  const lotIds = [...new Set(tasks.map(t => t.lotId).filter(Boolean))]
+  if (lotIds.length === 0) return 0
+  const sum = lotIds.reduce((s, lotId) => s + lotProgress(tasks, lotId), 0)
+  return Math.round(sum / lotIds.length)
 }
 
 // ── Zone derivation ──────────────────────────────────────────────────────────
@@ -485,13 +522,14 @@ export function zoneState(z: VisitZone): ZoneState {
   return tasksState(z.tasks)
 }
 
-export function zoneWorksProgress(z: VisitZone): number {
-  return tasksWorksProgress(z.tasks)
+/** Zone progress = average of all its lots.
+ * Each lot is: average of its tasks (treating parents as single units). */
+export function zoneActualProgress(z: VisitZone): number {
+  return logementProgress(z.tasks)
 }
 
-/** Zone progress using ONLY observed values (no planned progress fallback). */
-export function zoneActualProgress(z: VisitZone): number {
-  return tasksActualProgress(z.tasks)
+export function zoneWorksProgress(z: VisitZone): number {
+  return zoneActualProgress(z)
 }
 
 export function zoneControlProgress(z: VisitZone): number {
@@ -499,6 +537,7 @@ export function zoneControlProgress(z: VisitZone): number {
 }
 
 // ── Visit aggregation ────────────────────────────────────────────────────────
+// HIERARCHY: Visit → Bâtiments → Logements → Lots → Tasks → SubTasks
 
 export interface VisitCounts {
   total: number
@@ -517,19 +556,22 @@ export function visitCounts(v: Visit): VisitCounts {
 
 export const allChecks = (v: Visit): VisitTaskCheck[] => v.zones.flatMap(z => flattenTasksToLeaves(z.tasks))
 
+/** Visit progress by logement (zone).
+ * Each logement = average of its lots.
+ * Visit = average of its logements. */
+export function visitActualProgress(v: Visit): number {
+  if (v.zones.length === 0) return 0
+  const sum = v.zones.reduce((s, z) => s + zoneActualProgress(z), 0)
+  return Math.round(sum / v.zones.length)
+}
+
+export function visitWorksProgress(v: Visit): number {
+  return visitActualProgress(v)
+}
+
 /** How far the tour has gone — controlled checks over all applicable ones. */
 export function visitControlProgress(v: Visit): number {
   return tasksControlProgress(allChecks(v))
-}
-
-/** Works progress observed across the whole session. */
-export function visitWorksProgress(v: Visit): number {
-  return tasksWorksProgress(allChecks(v))
-}
-
-/** Visit progress using ONLY observed values (no planned progress fallback). */
-export function visitActualProgress(v: Visit): number {
-  return tasksActualProgress(allChecks(v))
 }
 
 /** Zones still needing control: not closed and not fully checked. */
