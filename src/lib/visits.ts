@@ -453,32 +453,14 @@ export function tasksWorksProgress(tasks: VisitTaskCheck[]): number {
   return tasksActualProgress(tasks)
 }
 
-/** Actual observed works progress (%) — mean of ONLY actually observed progress values.
- * Does NOT include planned progress fallback; unobserved tasks contribute 0%.
- * For tasks with children, uses the aggregated parent progress instead of decomposing to leaves. */
+/** Actual observed works progress (%) — simple average of all leaf task progress.
+ * Flattens the task hierarchy to avoid double-counting parent aggregates.
+ * Unobserved tasks (progress undefined) contribute 0%. */
 export function tasksActualProgress(tasks: VisitTaskCheck[]): number {
-  // Filter to applicable tasks
-  const applicable = tasks.filter(t => t.state !== 'na')
+  const leaves = flattenTasksToLeaves(tasks)
+  const applicable = leaves.filter(t => t.state !== 'na')
   if (applicable.length === 0) return 0
-
-  const sum = applicable.reduce((s, t) => {
-    if (t.children && t.children.length > 0 && t.progress !== undefined) {
-      // Task has children AND has aggregated progress — use the aggregated value
-      // Don't decompose it back to leaves
-      return s + t.progress
-    } else if (!t.children || t.children.length === 0) {
-      // Leaf task — use its observed progress directly
-      return s + (t.progress ?? 0)
-    } else {
-      // Task has children but no aggregated progress yet — flatten its children
-      const childLeaves = flattenTasksToLeaves(t.children)
-      const childApplicable = childLeaves.filter(c => c.state !== 'na')
-      if (childApplicable.length === 0) return s
-      const childSum = childApplicable.reduce((cs, c) => cs + (c.progress ?? 0), 0)
-      return s + (childSum / childApplicable.length)
-    }
-  }, 0)
-
+  const sum = applicable.reduce((s, t) => s + (t.progress ?? 0), 0)
   return Math.round(sum / applicable.length)
 }
 
