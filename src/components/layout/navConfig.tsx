@@ -6,10 +6,10 @@ import {
 export type Page =
   | 'home' | 'gantt' | 'visite' | 'cr' | 'entreprises' | 'finances'
   | 'config' | 'rapports' | 'documents' | 'alertes' | 'comptes' | 'projets' | 'moncompte'
-  | 'structure' | 'demandes'
+  | 'structure' | 'demandes' | 'visite2'
 
 /** Pages atteintes depuis la feuille « Plus » — l'onglet reste alors actif. */
-export const GESTION_PAGES: Page[] = ['cr', 'entreprises', 'finances', 'rapports', 'documents', 'structure', 'config']
+export const GESTION_PAGES: Page[] = ['cr', 'entreprises', 'finances', 'rapports', 'documents', 'structure', 'config', 'visite2']
 
 /** Pages de l'espace utilisateur, accessibles par l'icône de compte en haut à droite. */
 export const ACCOUNT_PAGES: Page[] = ['projets', 'moncompte', 'comptes', 'demandes']
@@ -37,6 +37,7 @@ export const GESTION_GROUPS: GestionGroup[] = [
     title: 'Chantier',
     items: [
       { id: 'entreprises', label: 'Entreprises', desc: 'Lots, actions, engagements et historique', icon: Building2 },
+      { id: 'visite2', label: 'Visite v2', desc: 'Nouvelle version de la visite de chantier', icon: ClipboardCheck },
     ],
   },
   {

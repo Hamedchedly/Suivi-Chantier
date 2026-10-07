@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Home } from './components/pages/Home'
 import { Gantt } from './components/pages/Gantt'
 import { Visite } from './components/pages/Visite'
+import { VisiteV2 } from './components/pages/VisiteV2'
 import { CR } from './components/pages/CR'
 import { Entreprises } from './components/pages/Entreprises'
 import { Reports } from './components/pages/Reports'
@@ -48,6 +49,7 @@ const PAGE_ROUTES: Record<Page, string> = {
   home: '/',
   gantt: '/planning',
   visite: '/visite',
+  visite2: '/visite-v2',
   cr: '/cr',
   entreprises: '/entreprises',
   finances: '/finances',
@@ -83,6 +85,7 @@ const setUrlForPage = (page: Page) => {
 const PAGE_META: Partial<Record<Page, { title: string; sub?: string }>> = {
   gantt:    { title: 'Planning', sub: 'Déplacez les barres pour modifier les dates' },
   visite:   { title: 'Visites & réunions', sub: 'Sessions de contrôle terrain' },
+  visite2:  { title: 'Visite v2', sub: 'Tournée par hiérarchie, remarques et clôture' },
   cr:       { title: 'Réserves & réunions', sub: 'Réserves de chantier & relevés de réunions' },
   entreprises: { title: 'Entreprises', sub: 'Lots, actions, engagements et historique' },
   finances: { title: 'Finances', sub: 'Marchés, avenants & situations' },
@@ -189,7 +192,7 @@ export default function App() {
   // Droits d'accès par module. Accueil / Mes opérations / Mon compte sont
   // toujours ouverts ; « Comptes » reste réservé au super-admin.
   const PAGE_FEATURE: Partial<Record<Page, Feature>> = {
-    gantt: 'gantt', visite: 'visite', cr: 'cr', entreprises: 'entreprises',
+    gantt: 'gantt', visite: 'visite', visite2: 'visite', cr: 'cr', entreprises: 'entreprises',
     finances: 'finances', rapports: 'rapports', documents: 'documents', alertes: 'alertes',
     structure: 'structure', config: 'config',
   }
@@ -469,6 +472,7 @@ export default function App() {
           )}
           {allowed('gantt') && page === 'gantt'    && <Gantt onNavigate={go} />}
           {allowed('visite') && page === 'visite'   && <Visite />}
+          {allowed('visite') && page === 'visite2'  && <VisiteV2 />}
           {allowed('cr') && page === 'cr'       && <CR />}
           {allowed('entreprises') && page === 'entreprises' && <Entreprises />}
           {allowed('finances') && page === 'finances' && <Finances />}
