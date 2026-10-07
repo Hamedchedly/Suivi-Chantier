@@ -752,7 +752,8 @@ export function applyVisitToPlanning(tasks: GanttTask[], v: Visit): GanttTask[] 
   const byId = new Map<string, VisitTaskCheck>()
   for (const c of allChecks(v)) {
     if (c.state === 'na') continue
-    if (c.progress === undefined) continue
+    // Skip not_checked: if a task was never controlled, don't apply its observation
+    if (c.state === 'not_checked') continue
     byId.set(c.taskId, c)
   }
   if (byId.size === 0) return tasks
