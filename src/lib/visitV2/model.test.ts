@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import type { GanttTask } from '../../types/gantt'
 import {
   type V2Task, type V2Unit, type V2Session,
   taskProgress, lotProgress, unitProgress, buildTree, projectProgress,
   openSession, patchTask, addRemark, patchRemark, logementCounter, taskCounter,
-  snapshotProgress, detectIssues, mergeSessions,
+  snapshotProgress, detectIssues, mergeSessions, applySessionToPlanning,
 } from './model'
 
 const leaf = (id: string, progress?: number, extra: Partial<V2Task> = {}): V2Task =>
@@ -77,16 +78,40 @@ describe('compteurs figés', () => {
   })
 
   it('une régression de 100 % réajoute la tâche au compteur', () => {
-    const baseline = { 't:a': 100, 't:b': 100 }
+    const baseline = { 't:U1:a': 100, 't:U1:b': 100 }
     const s = session([unit('U1', [leaf('a', 60), leaf('b', 100)])], { baseline })
     expect(taskCounter(s)).toEqual({ remaining: 1, total: 2 })
   })
 
   it('patchTask met à jour la feuille ciblée', () => {
     const units = [unit('U1', [leaf('a', 0), leaf('b', 0)])]
-    const next = patchTask(units, 'b', { progress: 70 })
+    const next = patchTask(units, 'U1', 'b', { progress: 70 })
     expect(next[0].tasks[1].progress).toBe(70)
     expect(next[0].tasks[0].progress).toBe(0)
+  })
+
+  it('une tâche partagée entre logements ne se modifie que dans le logement visé', () => {
+    const units = [unit('U1', [leaf('shared', 0)]), unit('U2', [leaf('shared', 0)])]
+    const next = patchTask(units, 'U1', 'shared', { progress: 80 })
+    expect(next[0].tasks[0].progress).toBe(80)
+    expect(next[1].tasks[0].progress).toBe(0)
+    const s = session(next)
+    expect(unitProgress(next[1])).toBe(0)
+    expect(taskCounter(s)).toEqual({ remaining: 2, total: 2 })
+  })
+
+  it('le planning reçoit la moyenne des observations d une tâche partagée', () => {
+    const s = session([
+      unit('U1', [leaf('shared', 80)]),
+      unit('U2', [leaf('shared', 20)]),
+    ])
+    const dates = { planned_start: new Date(2026, 0, 1), planned_end: new Date(2026, 0, 10), planned_duration: 10, is_milestone: false }
+    const planningTask = {
+      id: 'shared', lot_id: 'L1', title: 'x', status: 'not-started', progress: 0, ...dates,
+    } as unknown as GanttTask
+    const lot = { id: 'L1', title: 'Lot', lot_id: 'L1', status: 'not-started', progress: 0, ...dates, children: [planningTask] } as unknown as GanttTask
+    const out = applySessionToPlanning([lot], s)
+    expect(out[0].children?.[0].progress).toBe(50)
   })
 })
 
@@ -111,10 +136,10 @@ describe('remarques', () => {
 
 describe('incohérences', () => {
   it('signale une régression sans commentaire, pas une régression commentée', () => {
-    const baseline = { 't:a': 100, 't:b': 100 }
+    const baseline = { 't:U1:a': 100, 't:U1:b': 100 }
     const s = session([unit('U1', [leaf('a', 40), leaf('b', 40, { comment: 'mur refait' })])], { baseline })
     const keys = detectIssues(s).map(i => i.key)
-    expect(keys).toEqual(['t-regress:a'])
+    expect(keys).toEqual(['t-regress:U1:a'])
   })
 
   it('signale une remarque sans lot et une échéance dépassée', () => {
@@ -125,8 +150,8 @@ describe('incohérences', () => {
   })
 
   it('les clés acceptées sont marquées', () => {
-    const baseline = { 't:a': 100 }
-    const s = session([unit('U1', [leaf('a', 10)])], { baseline, acknowledged: ['t-regress:a'] })
+    const baseline = { 't:U1:a': 100 }
+    const s = session([unit('U1', [leaf('a', 10)])], { baseline, acknowledged: ['t-regress:U1:a'] })
     expect(detectIssues(s)[0].acknowledged).toBe(true)
   })
 })

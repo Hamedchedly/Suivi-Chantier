@@ -161,10 +161,20 @@ export function allLeaves(units: V2Unit[]): V2Task[] {
   return units.flatMap(u => leafTasks(u.tasks))
 }
 
+/**
+ * Une tâche du planning peut concerner plusieurs logements : chaque occurrence
+ * (logement × tâche) est une ligne indépendante, avec sa propre valeur observée.
+ */
+export interface LeafInstance { unitId: string; task: V2Task }
+
+export function leafInstances(units: V2Unit[]): LeafInstance[] {
+  return units.flatMap(u => leafTasks(u.tasks).map(task => ({ unitId: u.id, task })))
+}
+
 export interface Counter { remaining: number; total: number }
 
 const unitKey = (id: string) => `u:${id}`
-const taskKey = (id: string) => `t:${id}`
+const taskKey = (unitId: string, taskId: string) => `t:${unitId}:${taskId}`
 
 /** Un élément est compté tant qu'il n'était pas terminé à l'ouverture, ou qu'il régresse. */
 export function isCounted(baseline: number | undefined, now: number): boolean {
@@ -187,7 +197,7 @@ export function logementCounter(s: V2Session): Counter {
 /** « Tâches X/Y » — tâches feuilles encore à compter. */
 export function taskCounter(s: V2Session): Counter {
   return counter(
-    allLeaves(s.units).map(t => ({ key: taskKey(t.id), now: taskProgress(t) })),
+    leafInstances(s.units).map(i => ({ key: taskKey(i.unitId, i.task.id), now: taskProgress(i.task) })),
     s.baseline,
   )
 }
@@ -199,9 +209,9 @@ export function snapshotProgress(units: V2Unit[]): Record<string, number> {
     const p = unitProgress(u)
     if (p !== null) out[unitKey(u.id)] = Math.round(p)
   }
-  for (const t of allLeaves(units)) {
-    const p = taskProgress(t)
-    if (p !== null) out[taskKey(t.id)] = Math.round(p)
+  for (const i of leafInstances(units)) {
+    const p = taskProgress(i.task)
+    if (p !== null) out[taskKey(i.unitId, i.task.id)] = Math.round(p)
   }
   return out
 }
@@ -286,14 +296,15 @@ export function openSession(input: {
   }
 }
 
+/** Modifie une tâche dans un seul logement : les autres occurrences du planning restent intactes. */
 export function patchTask(
-  units: V2Unit[], taskId: string, patch: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>,
+  units: V2Unit[], unitId: string, taskId: string, patch: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>,
 ): V2Unit[] {
   const update = (list: V2Task[]): V2Task[] => list.map(t => {
     if (t.id === taskId) return { ...t, ...patch }
     return t.children?.length ? { ...t, children: update(t.children) } : t
   })
-  return units.map(u => ({ ...u, tasks: update(u.tasks) }))
+  return units.map(u => (u.id === unitId ? { ...u, tasks: update(u.tasks) } : u))
 }
 
 export function addRemark(
@@ -348,12 +359,12 @@ export function detectIssues(s: V2Session): (Issue & { acknowledged: boolean })[
       issues.push({ key: `r-late:${r.id}`, severity: 'warning', message: `Remarque ${r.number} : échéance ${r.dueDate} dépassée`, remarkId: r.id })
     }
   }
-  for (const t of allLeaves(s.units)) {
-    const base = s.baseline[taskKey(t.id)]
+  for (const { unitId, task: t } of leafInstances(s.units)) {
+    const base = s.baseline[taskKey(unitId, t.id)]
     const now = taskProgress(t)
     if (base !== undefined && Math.round(base) === 100 && now !== null && Math.round(now) < 100 && !t.comment?.trim()) {
       issues.push({
-        key: `t-regress:${t.id}`, severity: 'warning',
+        key: `t-regress:${unitId}:${t.id}`, severity: 'warning',
         message: `${t.title} : régression de 100 % sans commentaire`, taskId: t.id,
       })
     }
@@ -368,11 +379,15 @@ export function detectIssues(s: V2Session): (Issue & { acknowledged: boolean })[
  * les parents et lots via recomputeAll (pipeline unique de planning.ts).
  */
 export function applySessionToPlanning(tasks: GanttTask[], s: V2Session): GanttTask[] {
-  const observed = new Map<string, number>()
-  for (const t of allLeaves(s.units)) {
+  // Une tâche du planning observée dans plusieurs logements reçoit la moyenne de ses observations.
+  const byTask = new Map<string, number[]>()
+  for (const { task: t } of leafInstances(s.units)) {
     if (t.na || t.progress === undefined) continue
-    observed.set(t.id, Math.max(0, Math.min(100, Math.round(t.progress))))
+    const list = byTask.get(t.id) ?? []
+    list.push(Math.max(0, Math.min(100, Math.round(t.progress))))
+    byTask.set(t.id, list)
   }
+  const observed = new Map([...byTask].map(([id, vals]) => [id, Math.round(mean(vals) as number)]))
   if (observed.size === 0) return tasks
 
   const applyLeaf = (t: GanttTask): GanttTask => {

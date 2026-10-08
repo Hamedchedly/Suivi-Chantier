@@ -191,6 +191,8 @@ function NewSession({ previous, onCreate, onCancel }: {
 
 // ── Session ─────────────────────────────────────────────────────────────────
 
+type PatchTask = (unitId: string, taskId: string, p: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>) => void
+
 type Tab = 'tournee' | 'remarques' | 'incoherences' | 'cloture'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'tournee', label: 'Tournée' },
@@ -268,8 +270,8 @@ function TourTab({ session, onChange, flush, readOnly }: {
     setUnitId(id)
   }
 
-  const patch = (taskId: string, p: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>) =>
-    onChange({ ...session, units: patchTask(session.units, taskId, p) })
+  const patch: PatchTask = (unitId, taskId, p) =>
+    onChange({ ...session, units: patchTask(session.units, unitId, taskId, p) })
 
   const unitButton = (u: V2Unit, indent: number) => (
     <button key={u.id} onClick={() => selectUnit(u.id)}
@@ -320,7 +322,7 @@ function TourTab({ session, onChange, flush, readOnly }: {
 function UnitPanel({ session, unit, patch, flush, readOnly }: {
   session: V2Session
   unit: V2Unit
-  patch: (taskId: string, p: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>) => void
+  patch: PatchTask
   flush: () => void
   readOnly: boolean
 }) {
@@ -360,7 +362,7 @@ function UnitPanel({ session, unit, patch, flush, readOnly }: {
             {open && (
               <div style={{ marginTop: 10 }}>
                 {g.tasks.map(t => (
-                  <TaskRow key={t.id} task={t} depth={0} session={session} patch={patch} readOnly={readOnly} />
+                  <TaskRow key={t.id} unitId={unit.id} task={t} depth={0} session={session} patch={patch} readOnly={readOnly} />
                 ))}
               </div>
             )}
@@ -371,16 +373,17 @@ function UnitPanel({ session, unit, patch, flush, readOnly }: {
   )
 }
 
-function TaskRow({ task, depth, session, patch, readOnly }: {
+function TaskRow({ unitId, task, depth, session, patch, readOnly }: {
+  unitId: string
   task: V2Task
   depth: number
   session: V2Session
-  patch: (taskId: string, p: Partial<Pick<V2Task, 'progress' | 'na' | 'comment'>>) => void
+  patch: PatchTask
   readOnly: boolean
 }) {
   const p = taskProgress(task)
   const hasChildren = !!task.children?.length
-  const base = session.baseline[`t:${task.id}`]
+  const base = session.baseline[`t:${unitId}:${task.id}`]
   const regressed = base !== undefined && Math.round(base) === 100 && p !== null && Math.round(p) < 100
 
   return (
@@ -398,29 +401,29 @@ function TaskRow({ task, depth, session, patch, readOnly }: {
           <>
             <label style={{ fontSize: 12, display: 'flex', gap: 4, alignItems: 'center' }}>
               <input type="checkbox" disabled={readOnly} checked={task.na}
-                onChange={e => patch(task.id, { na: e.target.checked, progress: e.target.checked ? undefined : task.progress })} />
+                onChange={e => patch(unitId, task.id, { na: e.target.checked, progress: e.target.checked ? undefined : task.progress })} />
               N/A
             </label>
             <input type="number" min={0} max={100} step={5} disabled={readOnly || task.na}
               value={task.progress ?? ''} placeholder="—" style={{ ...input, width: 72 }}
               onChange={e => {
                 const raw = e.target.value
-                if (raw === '') return patch(task.id, { progress: undefined })
-                patch(task.id, { progress: Math.max(0, Math.min(100, Number(raw))), na: false })
+                if (raw === '') return patch(unitId, task.id, { progress: undefined })
+                patch(unitId, task.id, { progress: Math.max(0, Math.min(100, Number(raw))), na: false })
               }} />
             <input type="range" min={0} max={100} step={5} disabled={readOnly || task.na}
               value={task.progress ?? 0} style={{ width: 120 }}
-              onChange={e => patch(task.id, { progress: Number(e.target.value), na: false })} />
+              onChange={e => patch(unitId, task.id, { progress: Number(e.target.value), na: false })} />
           </>
         )}
       </div>
       {regressed && (
         <input placeholder="Motif de la régression (obligatoire)" value={task.comment ?? ''} disabled={readOnly}
-          onChange={e => patch(task.id, { comment: e.target.value })}
+          onChange={e => patch(unitId, task.id, { comment: e.target.value })}
           style={{ ...input, width: '100%', marginTop: 6, border: '1px solid #f59e0b' }} />
       )}
       {hasChildren && task.children!.map(c => (
-        <TaskRow key={c.id} task={c} depth={depth + 1} session={session} patch={patch} readOnly={readOnly} />
+        <TaskRow key={c.id} unitId={unitId} task={c} depth={depth + 1} session={session} patch={patch} readOnly={readOnly} />
       ))}
     </div>
   )
