@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { getCurrentProjectId, getGanttTasks, saveGanttTasks, getZoneRefs, getUnits, getTaskUnits } from '../../lib/repo'
+import {
+  getCurrentProjectId, getGanttTasks, saveGanttTasks, getZoneRefs, getUnits, getTaskUnits,
+  getProgressHistory, saveProgressHistory, getActualDateOverrides,
+} from '../../lib/repo'
 import { taskConcernsUnit } from '../../lib/units'
 import type { GanttTask } from '../../types/gantt'
 import {
@@ -7,9 +10,10 @@ import {
   REMARK_STATUS_LABEL, REMARK_PRIORITY_LABEL,
   buildTree, buildingProgress, nodeProgress, projectProgress, unitProgress, lotGroups, lotProgress,
   taskProgress, isComplete, logementCounter, taskCounter, unitsFromPlanning, openSession, patchTask,
-  addRemark, patchRemark, detectIssues, applySessionToPlanning, allLeaves, type ChildNode,
+  addRemark, patchRemark, detectIssues, allLeaves, type ChildNode,
 } from '../../lib/visitV2/model'
 import { loadCache, saveCache, pushSession, pullSessions, type SyncResult } from '../../lib/visitV2/store'
+import { syncSessionToPlanning } from '../../lib/visitV2/planningSync'
 
 const pct = (p: number | null) => (p === null ? '—' : `${Math.round(p)} %`)
 const todayLocal = () => new Date().toLocaleDateString('sv-SE')
@@ -47,14 +51,21 @@ export function VisiteV2() {
     saveCache(projectId, list)
   }
 
-  // Envoi distant de la session modifiée : appelé à la sortie d'un lot, d'un logement,
-  // de la page, ou à la clôture.
+  // Écriture du planning et envoi distant de la session modifiée : appelé à la sortie
+  // d'un lot, d'un logement, de la page, ou à la clôture.
   const flush = () => {
     const id = dirty.current
     if (!id) return
     const s = latest.current.find(x => x.id === id)
     dirty.current = null
-    if (s) pushSession(projectId, s).then(setSync)
+    if (!s) return
+    const synced = syncSessionToPlanning({
+      tasks: getGanttTasks(), history: getProgressHistory(), overrides: getActualDateOverrides(),
+      session: s, now: new Date(),
+    })
+    saveGanttTasks(synced.tasks)
+    saveProgressHistory(synced.history)
+    pushSession(projectId, s).then(setSync)
   }
 
   const commit = (next: V2Session) => {
@@ -332,7 +343,7 @@ function UnitPanel({ session, unit, patch, flush, readOnly }: {
 
   const isOpen = (lotId: string, p: number | null) => openOverride[lotId] ?? !isComplete(p)
   const toggle = (lotId: string, p: number | null) => {
-    if (!isOpen(lotId, p)) flush()
+    flush()
     setOpenOverride(prev => ({ ...prev, [lotId]: !isOpen(lotId, p) }))
   }
 
@@ -580,7 +591,6 @@ function CloseTab({ session, onChange, flush }: {
     if (!window.confirm(`Clôturer la session ? ${observed} avancement(s) seront reportés au planning.`)) return
     const closed: V2Session = { ...session, status: 'close', closedAt: new Date().toISOString() }
     onChange(closed)
-    saveGanttTasks(applySessionToPlanning(getGanttTasks(), closed))
     flush()
   }
 

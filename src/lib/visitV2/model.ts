@@ -378,8 +378,11 @@ export function detectIssues(s: V2Session): (Issue & { acknowledged: boolean })[
  * Applique les avancements observés aux feuilles du planning, puis remonte
  * les parents et lots via recomputeAll (pipeline unique de planning.ts).
  */
-export function applySessionToPlanning(tasks: GanttTask[], s: V2Session): GanttTask[] {
-  // Une tâche du planning observée dans plusieurs logements reçoit la moyenne de ses observations.
+/**
+ * Avancement observé par tâche du planning. Une tâche observée dans plusieurs
+ * logements reçoit la moyenne de ses observations. Les N/A et les non renseignées sont ignorées.
+ */
+export function observedPlanningProgress(s: V2Session): Map<string, number> {
   const byTask = new Map<string, number[]>()
   for (const { task: t } of leafInstances(s.units)) {
     if (t.na || t.progress === undefined) continue
@@ -387,7 +390,12 @@ export function applySessionToPlanning(tasks: GanttTask[], s: V2Session): GanttT
     list.push(Math.max(0, Math.min(100, Math.round(t.progress))))
     byTask.set(t.id, list)
   }
-  const observed = new Map([...byTask].map(([id, vals]) => [id, Math.round(mean(vals) as number)]))
+  return new Map([...byTask].map(([id, vals]) => [id, Math.round(mean(vals) as number)]))
+}
+
+/** Applique les observations aux feuilles du planning, puis remonte parents et lots (pipeline recomputeAll). */
+export function applySessionToPlanning(tasks: GanttTask[], s: V2Session): GanttTask[] {
+  const observed = observedPlanningProgress(s)
   if (observed.size === 0) return tasks
 
   const applyLeaf = (t: GanttTask): GanttTask => {
