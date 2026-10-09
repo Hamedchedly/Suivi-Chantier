@@ -43,6 +43,7 @@ export function VisiteV2() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [sync, setSync] = useState<SyncResult | 'idle'>('idle')
+  const [pending, setPending] = useState(false)
   const dirty = useRef<string | null>(null)
 
   const replaceAll = (list: V2Session[]) => {
@@ -58,6 +59,7 @@ export function VisiteV2() {
     if (!id) return
     const s = latest.current.find(x => x.id === id)
     dirty.current = null
+    setPending(false)
     if (!s) return
     const synced = syncSessionToPlanning({
       tasks: getGanttTasks(), history: getProgressHistory(), overrides: getActualDateOverrides(),
@@ -75,6 +77,7 @@ export function VisiteV2() {
       ? latest.current.map(s => (s.id === stamped.id ? stamped : s))
       : [stamped, ...latest.current])
     dirty.current = stamped.id
+    setPending(true)
   }
 
   useEffect(() => {
@@ -115,7 +118,10 @@ export function VisiteV2() {
         ) : (
           <button style={btnPrimary} onClick={() => setCreating(true)}>+ Nouvelle session</button>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>{SYNC_LABEL[sync]}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: pending ? '#b45309' : 'var(--muted)' }}>
+          {pending ? 'Modifications en attente d’envoi' : SYNC_LABEL[sync]}
+        </span>
+        {pending && <button style={btnGhost} onClick={flush}>Envoyer maintenant</button>}
       </div>
 
       {creating && !active && (
@@ -270,15 +276,22 @@ function TourTab({ session, onChange, flush, readOnly }: {
   flush: () => void
   readOnly: boolean
 }) {
-  const tree = buildTree(session.units)
   const [unitId, setUnitId] = useState<string | null>(
     (session.units.find(u => u.tasks.length > 0) ?? session.units[0])?.id ?? null,
   )
+  const [onlyTodo, setOnlyTodo] = useState(false)
   const unit = session.units.find(u => u.id === unitId) ?? null
+  const shown = onlyTodo ? session.units.filter(u => !isComplete(unitProgress(u))) : session.units
+  const tree = buildTree(shown)
+  const idx = shown.findIndex(u => u.id === unitId)
 
   const selectUnit = (id: string) => {
     if (id !== unitId) flush()
     setUnitId(id)
+  }
+  const step = (delta: number) => {
+    const next = shown[idx + delta]
+    if (next) selectUnit(next.id)
   }
 
   const patch: PatchTask = (unitId, taskId, p) =>
@@ -314,18 +327,30 @@ function TourTab({ session, onChange, flush, readOnly }: {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 260px) 1fr', gap: 14, alignItems: 'start' }}>
-      <div style={{ ...card, padding: 8 }}>
-        {tree.map(b => (
-          <div key={b.id} style={{ marginBottom: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, padding: '4px 8px' }}>
-              {b.label} · {pct(buildingProgress(b))}
-            </div>
-            {b.children.map(childNode)}
-          </div>
-        ))}
+    <div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+        <label style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={onlyTodo} onChange={e => setOnlyTodo(e.target.checked)} />
+          Reste à faire seulement
+        </label>
+        <button style={btnGhost} disabled={idx <= 0} onClick={() => step(-1)}>← Précédent</button>
+        <button style={btnGhost} disabled={idx < 0 || idx >= shown.length - 1} onClick={() => step(1)}>Suivant →</button>
       </div>
-      <div>{unit && <UnitPanel key={unit.id} session={session} unit={unit} patch={patch} flush={flush} readOnly={readOnly} />}</div>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ ...card, padding: 8, flex: '0 0 240px', maxWidth: '100%' }}>
+          {tree.map(b => (
+            <div key={b.id} style={{ marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, padding: '4px 8px' }}>
+                {b.label} · {pct(buildingProgress(b))}
+              </div>
+              {b.children.map(childNode)}
+            </div>
+          ))}
+        </div>
+        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          {unit && <UnitPanel key={unit.id} session={session} unit={unit} patch={patch} flush={flush} readOnly={readOnly} />}
+        </div>
+      </div>
     </div>
   )
 }
@@ -415,13 +440,23 @@ function TaskRow({ unitId, task, depth, session, patch, readOnly }: {
                 onChange={e => patch(unitId, task.id, { na: e.target.checked, progress: e.target.checked ? undefined : task.progress })} />
               N/A
             </label>
-            <input type="number" min={0} max={100} step={5} disabled={readOnly || task.na}
+            <input data-task-input type="number" min={0} max={100} step={5} disabled={readOnly || task.na}
               value={task.progress ?? ''} placeholder="—" style={{ ...input, width: 72 }}
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const all = Array.from(document.querySelectorAll<HTMLInputElement>('input[data-task-input]:not(:disabled)'))
+                all[all.indexOf(e.currentTarget) + 1]?.focus()
+              }}
               onChange={e => {
                 const raw = e.target.value
                 if (raw === '') return patch(unitId, task.id, { progress: undefined })
                 patch(unitId, task.id, { progress: Math.max(0, Math.min(100, Number(raw))), na: false })
               }} />
+            {[0, 50, 100].map(v => (
+              <button key={v} disabled={readOnly || task.na} style={{ ...btnGhost, padding: '3px 7px', fontSize: 12 }}
+                onClick={() => patch(unitId, task.id, { progress: v, na: false })}>{v}</button>
+            ))}
             <input type="range" min={0} max={100} step={5} disabled={readOnly || task.na}
               value={task.progress ?? 0} style={{ width: 120 }}
               onChange={e => patch(unitId, task.id, { progress: Number(e.target.value), na: false })} />
@@ -469,17 +504,25 @@ function RemarksTab({ session, onChange, readOnly }: {
   }
 
   const edit = (r: V2Remark, p: Partial<V2Remark>) => onChange(patchRemark(session, r.id, p, now()))
+  const [showAll, setShowAll] = useState(false)
+  const rows = showAll ? session.remarks : session.remarks.filter(r => r.status !== 'fait' && r.status !== 'obsolete')
 
   return (
     <div style={{ ...card, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <label style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
+          Afficher aussi les remarques closes
+        </label>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
+        <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
           <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 12 }}>
             <th>N°</th><th>Description</th><th>Lot</th><th>Logement</th><th>Priorité</th><th>Statut</th><th>Délai</th><th>Entreprises</th>
           </tr>
         </thead>
         <tbody>
-          {session.remarks.map(r => (
+          {rows.map(r => (
             <tr key={r.id} style={{ borderTop: '1px solid var(--line)' }}>
               <td style={{ padding: '6px 4px', fontWeight: 700 }}>{r.number}</td>
               <td><input value={r.description} disabled={readOnly} style={{ ...input, width: 240 }} onChange={e => edit(r, { description: e.target.value })} /></td>
@@ -543,7 +586,7 @@ function RemarksTab({ session, onChange, readOnly }: {
           )}
         </tbody>
       </table>
-      {session.remarks.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Aucune remarque. Les remarques ouvertes des sessions précédentes sont reportées automatiquement.</p>}
+      {rows.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Aucune remarque ouverte. Les remarques ouvertes des sessions précédentes sont reportées automatiquement.</p>}
     </div>
   )
 }
