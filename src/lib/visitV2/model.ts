@@ -344,6 +344,7 @@ export interface Issue {
   severity: 'error' | 'warning'
   message: string
   taskId?: string
+  unitId?: string
   remarkId?: string
 }
 
@@ -365,11 +366,42 @@ export function detectIssues(s: V2Session): (Issue & { acknowledged: boolean })[
     if (base !== undefined && Math.round(base) === 100 && now !== null && Math.round(now) < 100 && !t.comment?.trim()) {
       issues.push({
         key: `t-regress:${unitId}:${t.id}`, severity: 'warning',
-        message: `${t.title} : régression de 100 % sans commentaire`, taskId: t.id,
+        message: `${t.title} : régression de 100 % sans commentaire`, taskId: t.id, unitId,
       })
     }
   }
   return issues.map(i => ({ ...i, acknowledged: s.acknowledged.includes(i.key) }))
+}
+
+/** Évolution de chaque logement depuis la photo de la session précédente, pour la synthèse de clôture. */
+export interface UnitChange {
+  unitId: string
+  label: string
+  buildingLabel: string
+  now: number | null
+  before: number | null
+  delta: number | null
+  remainingTasks: number
+}
+
+export function unitChanges(s: V2Session): UnitChange[] {
+  return s.units.map(u => {
+    const now = unitProgress(u)
+    const before = s.baseline[unitKey(u.id)] ?? null
+    const nowRounded = now === null ? null : Math.round(now)
+    return {
+      unitId: u.id,
+      label: u.label,
+      buildingLabel: u.buildingLabel,
+      now: nowRounded,
+      before,
+      delta: nowRounded !== null && before !== null ? nowRounded - before : null,
+      remainingTasks: leafTasks(u.tasks).filter(t => {
+        const p = taskProgress(t)
+        return p !== null && Math.round(p) < 100
+      }).length,
+    }
+  })
 }
 
 // ── Clôture : retour vers le planning ───────────────────────────────────────

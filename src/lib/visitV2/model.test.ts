@@ -4,7 +4,7 @@ import {
   type V2Task, type V2Unit, type V2Session,
   taskProgress, lotProgress, unitProgress, buildTree, projectProgress,
   openSession, patchTask, addRemark, patchRemark, logementCounter, taskCounter,
-  snapshotProgress, detectIssues, mergeSessions, applySessionToPlanning,
+  snapshotProgress, detectIssues, mergeSessions, applySessionToPlanning, unitChanges,
 } from './model'
 
 const leaf = (id: string, progress?: number, extra: Partial<V2Task> = {}): V2Task =>
@@ -165,3 +165,20 @@ describe('fusion local / distant', () => {
     expect(merged[0].kindLabel).toBe('Réunion')
   })
 })
+
+describe('synthèse de clôture par logement', () => {
+  it('compare chaque logement à la photo précédente', () => {
+    const previous = session([unit('U1', [leaf('a', 40)]), unit('U2', [leaf('b', 100)])], { id: 'S0', status: 'close' })
+    const current = session([unit('U1', [leaf('a', 70)]), unit('U2', [leaf('b', 100)])], { baseline: snapshotProgress(previous.units) })
+    const [u1, u2] = unitChanges(current)
+    expect(u1).toMatchObject({ now: 70, before: 40, delta: 30, remainingTasks: 1 })
+    expect(u2).toMatchObject({ now: 100, before: 100, delta: 0, remainingTasks: 0 })
+  })
+
+  it('sans photo précédente, aucune évolution n est calculée', () => {
+    const [u1] = unitChanges(session([unit('U1', [leaf('a', 10)])]))
+    expect(u1.before).toBeNull()
+    expect(u1.delta).toBeNull()
+  })
+})
+

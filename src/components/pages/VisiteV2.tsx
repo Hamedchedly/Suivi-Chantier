@@ -10,7 +10,7 @@ import {
   REMARK_STATUS_LABEL, REMARK_PRIORITY_LABEL,
   buildTree, buildingProgress, nodeProgress, projectProgress, unitProgress, lotGroups, lotProgress,
   taskProgress, isComplete, logementCounter, taskCounter, unitsFromPlanning, openSession, patchTask,
-  addRemark, patchRemark, detectIssues, allLeaves, type ChildNode,
+  addRemark, patchRemark, detectIssues, allLeaves, unitChanges, type ChildNode, type Issue,
 } from '../../lib/visitV2/model'
 import { loadCache, saveCache, pushSession, pullSessions, type SyncResult } from '../../lib/visitV2/store'
 import { syncSessionToPlanning } from '../../lib/visitV2/planningSync'
@@ -224,7 +224,16 @@ function SessionView({ session, onChange, flush }: {
   flush: () => void
 }) {
   const [tab, setTab] = useState<Tab>('tournee')
+  const [focusUnit, setFocusUnit] = useState<string | undefined>(undefined)
   const readOnly = session.status === 'close'
+  const openIssue = (i: Issue) => {
+    if (i.unitId) {
+      setFocusUnit(i.unitId)
+      setTab('tournee')
+    } else {
+      setTab('remarques')
+    }
+  }
   const lc = logementCounter(session)
   const tc = taskCounter(session)
   const openIssues = detectIssues(session).filter(i => !i.acknowledged).length
@@ -251,9 +260,9 @@ function SessionView({ session, onChange, flush }: {
         ))}
       </div>
 
-      {tab === 'tournee' && <TourTab session={session} onChange={onChange} flush={flush} readOnly={readOnly} />}
+      {tab === 'tournee' && <TourTab session={session} onChange={onChange} flush={flush} readOnly={readOnly} initialUnitId={focusUnit} />}
       {tab === 'remarques' && <RemarksTab session={session} onChange={onChange} readOnly={readOnly} />}
-      {tab === 'incoherences' && <IssuesTab session={session} onChange={onChange} />}
+      {tab === 'incoherences' && <IssuesTab session={session} onChange={onChange} onOpen={openIssue} />}
       {tab === 'cloture' && <CloseTab session={session} onChange={onChange} flush={flush} />}
     </div>
   )
@@ -270,14 +279,15 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
 
 // ── Tournée : arbre bâtiment › zone › logement, puis lots, tâches, sous-tâches ──
 
-function TourTab({ session, onChange, flush, readOnly }: {
+function TourTab({ session, onChange, flush, readOnly, initialUnitId }: {
   session: V2Session
   onChange: (s: V2Session) => void
   flush: () => void
   readOnly: boolean
+  initialUnitId?: string
 }) {
   const [unitId, setUnitId] = useState<string | null>(
-    (session.units.find(u => u.tasks.length > 0) ?? session.units[0])?.id ?? null,
+    initialUnitId ?? (session.units.find(u => u.tasks.length > 0) ?? session.units[0])?.id ?? null,
   )
   const [onlyTodo, setOnlyTodo] = useState(false)
   const unit = session.units.find(u => u.id === unitId) ?? null
@@ -593,7 +603,11 @@ function RemarksTab({ session, onChange, readOnly }: {
 
 // ── Incohérences ────────────────────────────────────────────────────────────
 
-function IssuesTab({ session, onChange }: { session: V2Session; onChange: (s: V2Session) => void }) {
+function IssuesTab({ session, onChange, onOpen }: {
+  session: V2Session
+  onChange: (s: V2Session) => void
+  onOpen: (i: Issue) => void
+}) {
   const issues = detectIssues(session)
   const open = issues.filter(i => !i.acknowledged)
   const accepted = issues.filter(i => i.acknowledged)
@@ -605,6 +619,7 @@ function IssuesTab({ session, onChange }: { session: V2Session; onChange: (s: V2
       {open.map(i => (
         <div key={i.key} style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, borderLeft: `3px solid ${i.severity === 'error' ? '#dc2626' : '#f59e0b'}` }}>
           <span style={{ flex: 1, fontSize: 13 }}>{i.message}</span>
+          <button style={btnGhost} onClick={() => onOpen(i)}>Voir</button>
           <button style={btnGhost} onClick={() => accept(i.key)}>Accepter</button>
         </div>
       ))}
@@ -645,6 +660,29 @@ function CloseTab({ session, onChange, flush }: {
         <li>Remarques ouvertes (reportées à la prochaine session) : <b>{openRemarks}</b></li>
         <li>Incohérences non acceptées : <b>{openIssues}</b></li>
       </ul>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 14 }}>
+        <thead>
+          <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 12 }}>
+            <th style={{ padding: '6px 4px' }}>Bâtiment</th><th>Logement</th>
+            <th style={{ textAlign: 'right' }}>Avant</th><th style={{ textAlign: 'right' }}>Maintenant</th>
+            <th style={{ textAlign: 'right' }}>Évolution</th><th style={{ textAlign: 'right' }}>Tâches restantes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {unitChanges(session).map(c => (
+            <tr key={c.unitId} style={{ borderTop: '1px solid var(--line)' }}>
+              <td style={{ padding: '6px 4px' }}>{c.buildingLabel}</td>
+              <td>{c.label}</td>
+              <td style={{ textAlign: 'right' }}>{c.before === null ? '—' : `${c.before} %`}</td>
+              <td style={{ textAlign: 'right', fontWeight: 700 }}>{c.now === null ? '—' : `${c.now} %`}</td>
+              <td style={{ textAlign: 'right', color: c.delta && c.delta < 0 ? '#dc2626' : c.delta && c.delta > 0 ? '#15803d' : 'inherit' }}>
+                {c.delta === null ? '—' : `${c.delta > 0 ? '+' : ''}${c.delta} pts`}
+              </td>
+              <td style={{ textAlign: 'right' }}>{c.remainingTasks}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {readOnly ? (
         <p style={{ fontSize: 13, color: 'var(--muted)' }}>Session clôturée le {session.closedAt?.slice(0, 10)}.</p>
       ) : (
